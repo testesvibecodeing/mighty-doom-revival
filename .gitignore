@@ -38,6 +38,16 @@ venv/
 node_modules/
 .env
 
+# Revival server local/runtime data
+server/runtime/
+server/data/*
+!server/data/README.md
+server/config/revival.json
+server/config/packs.json
+server/config/events.json
+server/.env
+reports/
+
 # IDE / OS
 .vscode/
 .idea/
