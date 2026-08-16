@@ -1,23 +1,50 @@
 # Mighty DOOM Revival
 
-Projeto pessoal de **preservação e interoperabilidade** do cliente Android de Mighty DOOM com um servidor independente/self-hosted.
-
-> **Não afiliado à Bethesda, ZeniMax, Microsoft, id Software ou Alpha Dog Games.**
+> ## ⚖️ AVISO LEGAL — LEIA ANTES DE USAR
 >
-> Este repositório **não distribui o APK oficial, assets, código descompilado ou outros arquivos proprietários do jogo**. O APK e os dados necessários à interoperabilidade permanecem locais/efêmeros.
+> **Este é um projeto independente, não comercial, de preservação, pesquisa e interoperabilidade de software descontinuado.**
+>
+> Mighty DOOM, DOOM, Bethesda, ZeniMax, Microsoft, id Software, Alpha Dog Games, personagens, artes, músicas, logos e demais elementos relacionados pertencem aos seus respectivos titulares. **Este projeto não é oficial, não é afiliado, patrocinado ou endossado por qualquer desses titulares e não reivindica propriedade sobre o jogo ou suas marcas.**
+>
+> O repositório público deve conter somente código independente do servidor, ferramentas e documentação. **Não é permitido publicar aqui o APK oficial, APK patchado, assets do jogo, músicas, vídeos, código proprietário descompilado, dumps proprietários, credenciais ou conteúdo confidencial.** O usuário deve fornecer localmente sua própria cópia legitimamente obtida, e qualquer patch deve ser produzido localmente para uso do próprio usuário.
+>
+> O projeto adota como pilares: **preservação, interoperabilidade, clean-room, ausência de redistribuição do cliente, ausência de exploração comercial e ausência de falsa afiliação.**
+>
+> A legislação brasileira possui regras relevantes sobre cópia de salvaguarda e integração tecnicamente necessária de programas legitimamente adquiridos para uso exclusivo do usuário (Lei nº 9.609/1998, art. 6º, I e IV). Nos Estados Unidos, 17 U.S.C. § 117 e a atual 37 C.F.R. § 201.40 contêm limitações/exceções relevantes a programas e, em condições específicas, a jogos cujo suporte externo de servidor foi descontinuado. **Essas normas não são uma autorização irrestrita para redistribuição, operação comercial ou qualquer forma de servidor público.**
+>
+> **Os termos/EULA publicados pela ZeniMax/Bethesda também contêm restrições contratuais a engenharia reversa, modificação e emulação de serviço. Por isso, não afirmamos que exista imunidade jurídica automática ou que qualquer uso seja válido em toda jurisdição.** O projeto busca a postura técnica e operacional mais conservadora possível.
+>
+> ### 📚 [Leia a Política Legal de Preservação e a análise completa das leis, riscos, limites, DMCA, marcas e procedimento para titulares de direitos](docs/LEGAL-PRESERVATION.md)
+>
+> **Política de retorno do serviço oficial:** se o suporte oficial necessário ao gameplay voltar a funcionar de forma efetiva, ou se um representante verificável do titular solicitar análise/suspensão em razão da restauração oficial, novos releases de substituição serão suspensos e o acesso público ao projeto poderá ser arquivado ou tornado privado durante a avaliação. Consulte a política completa no documento legal acima.
 
-## Objetivo
+---
 
-Fazer o cliente final do Mighty DOOM voltar a funcionar com uma infraestrutura controlada pelo usuário e, progressivamente, recuperar todos os fluxos ainda presentes no cliente 1.13.1:
+## Sobre o projeto
 
-- progressão, capítulos, inventário, armas, gear e slayers;
+Mighty DOOM Revival é um projeto pessoal de **preservação e interoperabilidade** do cliente Android de Mighty DOOM com um servidor independente/self-hosted.
+
+O objetivo técnico é permitir que uma cópia fornecida localmente pelo próprio usuário possa conversar com uma implementação independente dos serviços que deixaram de existir, preservando os fluxos ainda presentes no cliente 1.13.1.
+
+O projeto busca restaurar progressivamente:
+
+- progressão e capítulos;
+- inventário, armas, gear, launchers, ultimates e Slayers;
 - quests, recompensas diárias/idle, inbox e reward tracks;
-- eventos e temporadas/battle pass que possam ser reconstruídos a partir dos dados preservados;
+- eventos e temporadas/battle pass preserváveis;
 - loja Revival configurável;
-- pacotes personalizados adquiridos **somente com moedas/recursos internos do jogo**;
+- pacotes adquiridos **somente com moedas/recursos internos do jogo**;
+- persistência local/self-hosted;
 - nenhuma compra com cartão, Google Play Billing ou dinheiro real no servidor Revival.
 
-Acompanhe o trabalho em [`docs/ROADMAP-100-PERCENT.md`](docs/ROADMAP-100-PERCENT.md) e [`docs/ENDPOINT-MATRIX.md`](docs/ENDPOINT-MATRIX.md).
+Documentação principal:
+
+- [`docs/LEGAL-PRESERVATION.md`](docs/LEGAL-PRESERVATION.md) — política legal, preservação e direitos de terceiros;
+- [`docs/ROADMAP-100-PERCENT.md`](docs/ROADMAP-100-PERCENT.md) — roadmap;
+- [`docs/ENDPOINT-MATRIX.md`](docs/ENDPOINT-MATRIX.md) — matriz de compatibilidade;
+- [`docs/APK-PATCH.md`](docs/APK-PATCH.md) — patcher;
+- [`docs/SERVER.md`](docs/SERVER.md) — servidor;
+- [`server/README.md`](server/README.md) — backend Revival.
 
 ## Cliente alvo
 
@@ -26,25 +53,22 @@ Acompanhe o trabalho em [`docs/ROADMAP-100-PERCENT.md`](docs/ROADMAP-100-PERCENT
 - Engine: Unity 2021.3.25f1 / IL2CPP / ARM64
 - API observada: HTTPS + JSON
 - API version: `x-ubu-apiversion: 24.0.0`
-- SHA-256 da cópia alvo do APK: `519bfbb18c5bbab78f450b549777774e7d0ed78cd8b42cc25c7a2d3167669f35`
+- SHA-256 da cópia alvo estudada: `519bfbb18c5bbab78f450b549777774e7d0ed78cd8b42cc25c7a2d3167669f35`
 
 ## Estrutura
 
 ```text
 mighty-doom-revival/
-├── .github/workflows/
-│   ├── analyze-official-apk.yml
-│   └── server-ci.yml
+├── README.md
 ├── docs/
+│   ├── LEGAL-PRESERVATION.md
 │   ├── APK-PATCH.md
 │   ├── SERVER.md
 │   ├── ENDPOINT-MATRIX.md
 │   └── ROADMAP-100-PERCENT.md
-├── input/                  # APK local; ignorado pelo Git
-├── output/                 # APK patchado; ignorado pelo Git
+├── input/                  # arquivo local do usuário; ignorado pelo Git
+├── output/                 # saída local; ignorada pelo Git
 ├── scripts/
-│   ├── fetch-uptodown-apk.py
-│   ├── fetch-community-gamedata.py
 │   ├── analyze_apk.py
 │   ├── analyze-official-apk.bat / .sh
 │   ├── patch_apk.py
@@ -52,44 +76,44 @@ mighty-doom-revival/
 │   ├── setup-patcher-tools.bat / .sh
 │   ├── setup-server.bat / .sh
 │   ├── start-server.bat / .sh
-│   ├── install.sh          # instalador completo para VPS Ubuntu/Debian
-│   └── uninstall.sh        # desinstalador (remove só o que é deste projeto)
+│   ├── install.sh
+│   └── uninstall.sh
 └── server/
-    ├── src/                # servidor Revival próprio
-    ├── config/             # packs, eventos e configuração
-    ├── data/               # game-data local; ignorado pelo Git
+    ├── src/
+    ├── config/
+    ├── data/               # dados locais; ignorados pelo Git
     └── runtime/            # SQLite; ignorado pelo Git
 ```
 
-## 1. Obter e validar o APK
+## 1. Regra de ouro: o cliente não pertence a este repositório
 
-Quem já possui a cópia pode colocá-la em:
+O repositório **não deve ser usado como fonte de distribuição do jogo**.
+
+Para pesquisa/interoperabilidade, trabalhe somente com uma cópia que você possua legitimamente e mantenha-a localmente em:
 
 ```text
 input/mighty-doom.apk
 ```
 
-Para reproduzir a pesquisa a partir da página informada da Uptodown, existe um downloader local que resolve o fluxo atual do site e **recusa o arquivo se o SHA-256 não corresponder ao alvo**:
+Arquivos `*.apk`, `*.xapk`, `*.apks` e diretórios de extração são bloqueados pelo `.gitignore`.
 
-```bash
-python scripts/fetch-uptodown-apk.py --output input/mighty-doom.apk
-```
+**Não publique o arquivo de entrada nem o APK gerado pelo patcher em GitHub Releases, Pages, site público, CDN ou outro espelho mantido por este projeto.**
 
-No Windows também existe o fluxo em um clique:
+## 2. Analisar uma cópia local
+
+Windows:
 
 ```bat
 scripts\analyze-official-apk.bat
 ```
 
-No Linux/Mac, o equivalente é:
+Linux/Mac:
 
 ```bash
 ./scripts/analyze-official-apk.sh
 ```
 
-O APK nunca é adicionado ao Git. O workflow de análise também apaga o binário antes de publicar qualquer artifact.
-
-## 2. Analisar o APK
+Ou diretamente:
 
 ```bash
 python scripts/analyze_apk.py input/mighty-doom.apk \
@@ -97,26 +121,27 @@ python scripts/analyze_apk.py input/mighty-doom.apk \
   --md-out reports/apk-1.13.1.md
 ```
 
-O relatório é sanitizado e contém apenas metadados úteis à interoperabilidade: hash, estrutura Unity/IL2CPP, Addressables e offsets de strings de endpoint conhecidas. Assets e código proprietário não são exportados.
+O relatório deve conter apenas metadados úteis à interoperabilidade. Não commite assets ou código proprietário extraído.
 
-## 3. Servidor Revival próprio
+## 3. Servidor Revival
 
-A implementação principal está em `server/`. A implementação comunitária `dannyhpy/mightydoom-gameserver` continua sendo referência importante de protocolo, mas não é necessária como runtime do projeto.
+A implementação principal está em `server/`.
 
-No Windows:
+### Windows
 
 ```bat
 scripts\setup-server.bat
+scripts\start-server.bat
 ```
 
-No Linux/Mac:
+### Linux/Mac
 
 ```bash
 ./scripts/setup-server.sh
 ./scripts/start-server.sh
 ```
 
-Ou manualmente:
+### Manual
 
 ```bash
 cd server
@@ -135,77 +160,50 @@ Health check:
 GET http://127.0.0.1:8080/revival/health
 ```
 
-O servidor já tem base para autenticação local, SQLite, categorias de recursos, moedas/energia, inventário/slots, starter bundle, entrega de game data, loja configurável, compras por moeda interna, agenda de eventos e estado persistente. Endpoints ainda desconhecidos podem ser registrados pelo `RESEARCH_MODE` durante a fase de compatibilidade.
+O servidor possui fundação para:
 
-Veja [`server/README.md`](server/README.md).
+- autenticação local;
+- SQLite;
+- moedas e energia;
+- inventário e slots;
+- starter bundle;
+- entrega de game data;
+- loja configurável;
+- compras por moeda interna;
+- eventos e estado persistente;
+- progressão;
+- research mode para endpoints ainda não mapeados.
 
-## 3b. Deploy em produção (VPS Ubuntu)
+## 4. Deploy self-hosted
 
-Como este repositório é público, a forma recomendada de colocar o Revival Server no ar é uma VPS Ubuntu com HTTPS de verdade, usando o instalador [`scripts/install.sh`](scripts/install.sh). Ele é idempotente (pode rodar de novo a cada `git pull`) e faz tudo sozinho:
+Para a postura jurídica mais conservadora, a recomendação do projeto é **self-hosted, pessoal, privado e não comercial**.
 
-- instala Node.js 24 LTS (precisa de `node:sqlite`), se ainda não existir;
-- **detecta o reverse proxy**: se a VPS já tem um `nginx` servindo 80/443 (mesmo que seja de outros projetos), o Revival vira apenas mais um site dele (arquivo próprio em `sites-available` + certbot para o domínio); senão instala/usa o Caddy;
-- escolhe o **perfil de recursos** conforme a RAM da VPS (ver tabela abaixo) e otimiza o serviço `systemd` para ele;
-- prepara `server/.env` e os `config/*.json` a partir dos `.example`;
-- roda a suíte de testes do servidor como gate de deploy (aborta se algo quebrar);
-- sobe o servidor como serviço `systemd` (reinício automático, limites de RAM/CPU do perfil);
-- ativa HTTPS automático via Let's Encrypt (nginx+certbot ou Caddy) para o domínio informado;
-- valida `http://127.0.0.1:8080/revival/health` e depois `https://SEU_DOMINIO/revival/health` antes de terminar;
-- serve o **site** (`server/public`) no próprio domínio: `https://SEU_DOMINIO/` abre o `index.html`, que mostra dados reais do servidor (status, jogadores, pacotes, eventos, uptime, APK) e tem fundo interativo em three.js;
-- imprime no final um **link temporário de upload do APK** (24h) para publicar o APK patcheado no download do site, e logo abaixo o link para **eliminar esse upload imediatamente** (opcional). Rodar o instalador de novo gera um link novo e invalida os anteriores.
-
-### Perfis de recursos (otimização por RAM da VPS)
-
-O instalador pergunta o perfil (com detecção automática pelo padrão) ou aceita via variável: `RAM_PROFILE=1gb sudo -E ./scripts/install.sh`. A escolha fica salva em `deploy/.install-state` e é reaproveitada nas atualizações.
-
-| Perfil | VPS indicada | Heap do Node (`--max-old-space-size`) | `MemoryHigh` (soft) | `MemoryMax` (limite rígido) | `TasksMax` | `UV_THREADPOOL` |
-| --- | --- | --- | --- | --- | --- | --- |
-| `1gb` | ~1–2 GB RAM (ex.: 2 GB/1 vCPU) | 256 MB | 384 MB | **512 MB** | 256 | 2 |
-| `4gb` | ~4 GB RAM | 768 MB | 1 GB | **1536 MB** | 512 | 4 |
-| `8gb` | 8 GB ou mais | 2048 MB | 2 GB | **3 GB** | 1024 | 4 |
-
-O que cada limite faz:
-
-- **Heap do Node**: teto do coletor de lixo do V8 — acima disso o Node morre com OOM do heap. Calibrado sobrando espaço para o `global-metadata`/GameData em RAM.
-- **`MemoryHigh`**: a partir daí o kernel começa a reclaimar memória do serviço (pressiona o GC) antes de qualquer coisa pior acontecer.
-- **`MemoryMax`**: limite rígido do cgroup — se o serviço estourar (vazamento), o kernel mata **só o jogo**, nunca o nginx nem os outros projetos da VPS.
-- **`TasksMax`**: teto de threads/processos do serviço.
-- **`UV_THREADPOOL`**: threads de I/O (SQLite/arquivos) — 2 já sobra para 1 vCPU.
-
-Todos os perfis também aplicam `LimitNOFILE=16384`. Em VPS do perfil `1gb` sem swap, o instalador imprime o aviso e o comando para criar swap (o que separa um pico de tráfego de um OOM-kill).
-
-**Seguro para VPS compartilhada com outros projetos:** se Node.js, Caddy ou certbot já estiverem instalados (por exemplo, por outro projeto na mesma VPS), o instalador nunca os reinstala nem passa a "possuí-los". Com nginx, ele nunca edita o `nginx.conf` nem sites de outros projetos: escreve **um** arquivo próprio (`/etc/nginx/sites-available/mighty-doom-revival`) e o certbot `--nginx` edita só esse arquivo ao ativar o HTTPS; o reload (não restart) do nginx não derruba conexões dos outros sites. Com Caddy, nunca sobrescreve `/etc/caddy/Caddyfile` — só acrescenta a linha `import` e escreve o domínio em arquivo próprio dentro de `/etc/caddy/conf.d/`. A renovação do certificado fica automática (timer do certbot ou cron próprio em `/etc/cron.d/certbot-renew`, instalado só se a VPS não tiver nenhum). Cada decisão sobre o que pertence a este projeto é registrada permanentemente em `deploy/.install-state` (local, não versionado) e documentada com o prefixo `[OWNERSHIP]` em `deploy/logs/install-<timestamp>.log`, incluindo um resumo de propriedade ao final da execução.
-
-Pré-requisitos:
-
-- VPS Ubuntu 22.04+ (ou Debian) com acesso root/sudo;
-- um domínio/subdomínio com registro DNS `A` apontando para o IP público da VPS;
-- portas `80` e `443` liberadas no firewall do provedor (security group) além do `ufw`.
-
-Instalação (primeira vez):
+Em VPS Ubuntu/Debian:
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git
+sudo apt-get update
+sudo apt-get install -y git
 git clone https://github.com/testesvibecodeing/mighty-doom-revival.git
 cd mighty-doom-revival
 sudo ./scripts/install.sh
 ```
 
-O script pergunta o domínio HTTPS (ex: `d.seudominio.com.br`). Para rodar sem prompt interativo, informe-o antes:
+Com domínio definido:
 
 ```bash
 DOMAIN=d.seudominio.com.br sudo -E ./scripts/install.sh
 ```
 
-Ao final ele imprime o `REVIVAL_ADMIN_TOKEN` gerado (guarde-o — autoriza `POST /revival/reload`) e os comandos úteis para inspecionar os serviços:
+O instalador prepara Node.js quando necessário, serviço systemd, reverse proxy compatível, HTTPS e health check.
+
+Comandos úteis:
 
 ```bash
 systemctl status mighty-doom-revival
-systemctl status nginx   # ou: systemctl status caddy, dependendo do proxy detectado
 journalctl -u mighty-doom-revival -f
 ```
 
-Atualizar o servidor em produção depois de mudanças no código:
+Atualização:
 
 ```bash
 cd mighty-doom-revival
@@ -213,63 +211,31 @@ git pull
 sudo ./scripts/install.sh
 ```
 
-Se `server/data/game-data.json` ainda não existir na VPS, o serviço sobe mesmo assim (`game_data_loaded: false`); depois de colocar o arquivo real, reinicie:
-
-```bash
-sudo systemctl restart mighty-doom-revival
-```
-
-Por fim, use o domínio configurado (`https://d.seudominio.com.br`) em `scripts\patch-apk.bat`, no Windows, para gerar o APK apontando para o seu Revival Server.
-
-### Desinstalar
-
-Para remover o Revival Server desta VPS, use o par do instalador: [`scripts/uninstall.sh`](scripts/uninstall.sh). Ele só remove o que pertence a este projeto: o serviço `systemd`, o site próprio no proxy (o arquivo do Caddy em `/etc/caddy/conf.d/` **ou** o site do nginx em `sites-available` + symlink + o certificado Let's Encrypt do domínio) e, se fomos nós que criamos, o cron de renovação do certbot. Ele **nunca** remove/para o nginx, nunca apaga `/etc/caddy/Caddyfile`, nunca mexe em sites de outros domínios/projetos e nunca remove um cron de renovação que possa estar servindo certificados de outros projetos.
+Desinstalação:
 
 ```bash
 sudo ./scripts/uninstall.sh
 ```
 
-Ele mostra e pede confirmação antes de remover (use `-y`/`--yes` para pular o prompt em automação). Por padrão **preserva** Node.js, Caddy e os arquivos locais (`server/.env`, `server/config/*.json`, `server/data/`, `server/runtime/`), mesmo que este instalador os tenha criado. Duas flags opcionais liberam uma limpeza mais completa, sempre respeitando o que é (ou não) deste projeto:
+> **Importante:** qualquer recurso de upload/local transfer existente no projeto deve ser usado somente em ambiente privado/controlado. A política pública do projeto proíbe transformar o site/repositório em distribuidor do APK proprietário ou de uma cópia modificada dele.
 
-```bash
-# Também remove Node.js/Caddy/certbot via apt, mas SÓ os que scripts/install.sh
-# registrou como instalados por ele (deploy/.install-state). Se já existiam
-# antes deste projeto, ou se há outros sites/certificados dependendo deles,
-# ficam preservados mesmo com esta flag.
-sudo ./scripts/uninstall.sh --purge-packages
+## 5. Game data
 
-# Também apaga server/.env, server/config/*.json, server/data/ e
-# server/runtime/ (inclui o banco SQLite com progresso de jogadores).
-sudo ./scripts/uninstall.sh --purge-data
-```
-
-Toda a execução (o que foi removido e o que foi preservado, e por quê) fica registrada em `deploy/logs/uninstall-<timestamp>.log`.
-
-## 4. Game data
-
-A compatibilidade completa depende dos dados que o cliente espera receber de `/game/player/game-data-token` + `/data`.
-
-O arquivo local esperado é:
+O servidor pode depender de dados de jogo esperados pelo cliente em:
 
 ```text
 server/data/game-data.json
 ```
 
-Ele não é commitado. O servidor indexa recursos por `rid/id` e `tag` e reconhece moedas, armas, equipamentos, launchers, energia, ultimates, slayers, entitlements e cosméticos.
+Esse conteúdo permanece local e fora do Git.
 
-Existe um **snapshot comunitário público** de GameData que pode ser usado apenas como bootstrap/comparação enquanto validamos a cópia final contra o cliente 1.13.1. Para importá-lo localmente:
+O backend indexa recursos por `rid/id` e `tag`, permitindo trabalhar com moedas, armas, equipamentos, launchers, energia, ultimates, Slayers, entitlements e cosméticos sem espalhar hardcodes desnecessários.
 
-```bash
-python scripts/fetch-community-gamedata.py
-```
+O material usado para pesquisa deve ser limitado ao necessário para interoperabilidade e não deve transformar este repositório em espelho de conteúdo proprietário.
 
-O script valida a estrutura JSON, mostra o SHA-256 e contagens das coleções, mas mantém o arquivo em `server/data/`, fora do Git. A fonte comunitária não é tratada como oficial: qualquer divergência será resolvida a favor do comportamento observado no APK alvo.
+## 6. Loja Revival — sem dinheiro real
 
-Quando o game data possui o bundle `starter`, o registro do Revival pode conceder os recursos dele e equipar automaticamente os slots `slot_primary_weapon` e `slot_slayer`, sem hardcode de IDs.
-
-## 5. Loja Revival: sem dinheiro real
-
-Pacotes ficam em `server/config/packs.json`.
+Pacotes ficam na configuração local do servidor.
 
 Exemplo conceitual:
 
@@ -287,75 +253,151 @@ Exemplo conceitual:
 }
 ```
 
-O backend rejeita configuração de pacote com `price`, `iap` ou `real_money`. A compra debita moedas internas de forma transacional e pode conceder moedas, energia, armas, gear, launchers, ultimates, slayers, entitlements ou cosméticos. As rotas de IAP real ficam deliberadamente desativadas.
+O backend rejeita configuração de pacote com `price`, `iap` ou `real_money`.
 
-## 6. Eventos e battle pass
+A política do projeto é clara:
 
-`server/config/events.json` suporta:
+- sem venda de APK;
+- sem assinatura para jogar;
+- sem Google Play Billing;
+- sem venda de moedas por dinheiro real;
+- sem venda de itens por dinheiro real;
+- sem acesso pago a conteúdo protegido.
+
+## 7. Eventos e Battle Pass
+
+O servidor possui estrutura para:
 
 - evento sempre ativo;
-- janela de início/fim;
-- estado independente por jogador;
-- canais de game mode, store offer e battle pass;
-- `args` serializados para o formato esperado pela agenda do cliente.
+- janelas de início/fim;
+- estado por jogador;
+- game mode/store offer/battle pass;
+- reativação de conteúdo preservável;
+- rotação própria em ambiente self-hosted.
 
-A estrutura está pronta para receber as definições reais conforme forem identificadas no APK/game data. Isso permitirá reativar eventos preservados e também montar rotações próprias sem depender dos servidores oficiais.
+Tudo deve permanecer independente de serviços oficiais e sem exploração comercial de conteúdo de terceiros.
 
-A parte de **claim de missões, tiers, temporadas e progressão completa de battle pass ainda precisa ser validada e implementada** antes de considerarmos esse módulo compatível.
+## 8. Patch local do APK
 
-## 7. Patch do APK
-
-No Windows:
+### Windows
 
 ```bat
 scripts\patch-apk.bat
 ```
 
-No Linux/Mac:
+### Linux/Mac
 
 ```bash
 ./scripts/patch-apk.sh
 ```
 
-O patcher atual desmonta, ajusta configuração de rede/TLS, recompila, alinha e assina uma cópia local. A alteração do hostname dentro do Unity Addressables ainda está limitada até identificarmos e reserializarmos corretamente o objeto do bundle no APK alvo.
+O patcher trabalha sobre **arquivo fornecido pelo próprio usuário** e gera a saída localmente.
 
-A próxima etapa técnica após a análise real é remover essa limitação e aceitar qualquer hostname HTTPS sem corromper o bundle.
+O fluxo de design do projeto é:
 
-Veja [`docs/APK-PATCH.md`](docs/APK-PATCH.md).
+```text
+cópia legítima do usuário
+        ↓
+patch local de interoperabilidade
+        ↓
+cópia modificada mantida pelo próprio usuário
+        ↓
+servidor independente/self-hosted
+```
 
-## 8. Docker
+E não:
 
-A base também inclui `server/Dockerfile` e `docker-compose.yml` para o backend. Os dados SQLite, configs locais e `game-data.json` ficam fora do Git.
+```text
+repositório/site público
+        ↓
+download de APK proprietário modificado
+```
 
-## Segurança do repositório
+Consulte [`docs/APK-PATCH.md`](docs/APK-PATCH.md).
 
-O `.gitignore` bloqueia APK/XAPK/APKS/AAB, dumps, conteúdo descompilado, game data local, banco SQLite, chaves privadas, certificados pessoais e configs locais.
+## 9. Clean-room e pesquisa
+
+Contribuições ao servidor devem ser código original do projeto.
+
+Não envie pull requests contendo:
+
+- trechos copiados de código proprietário;
+- assets do cliente;
+- código descompilado integral;
+- segredos comerciais;
+- credenciais;
+- dados privados;
+- arquivos obtidos por vazamento.
+
+O comportamento externo necessário à compatibilidade pode ser documentado e reimplementado com código próprio, dentro dos limites jurídicos aplicáveis.
+
+## 10. Marcas e identidade visual
+
+O nome `Mighty DOOM` é usado somente para identificar o software alvo da preservação/interoperabilidade.
+
+Não use este projeto para:
+
+- fingir ser site oficial;
+- se passar pela Bethesda/ZeniMax/Microsoft/id/Alpha Dog;
+- vender serviços usando marcas de terceiros;
+- remover avisos de titularidade;
+- criar falsa impressão de patrocínio ou endosso.
+
+Prefira uma identidade gráfica própria para `Revival` e mantenha a não afiliação visível.
+
+## 11. Contato de titulares e retorno do serviço oficial
+
+Se você representa de forma verificável um titular de direitos e acredita que material deste repositório excede sua finalidade declarada, entre em contato com o mantenedor pelo GitHub ou utilize os canais oficiais de remoção da plataforma.
+
+O mantenedor analisará prontamente a solicitação e suspenderá material contestado quando apropriado durante a avaliação.
+
+Se o serviço oficial necessário ao gameplay for efetivamente restaurado, o projeto suspenderá novos releases de substituição e revisará a necessidade de continuar público. O repositório poderá ser **arquivado ou tornado privado** conforme descrito em [`docs/LEGAL-PRESERVATION.md`](docs/LEGAL-PRESERVATION.md).
+
+## 12. Segurança do repositório
+
+O `.gitignore` deve bloquear:
+
+- APK/XAPK/APKS/AAB;
+- dumps;
+- conteúdo descompilado;
+- game data local;
+- SQLite;
+- certificados e chaves privadas;
+- tokens;
+- configs locais com segredos.
+
+Antes de tornar um fork público, consulte o checklist jurídico completo em [`docs/LEGAL-PRESERVATION.md`](docs/LEGAL-PRESERVATION.md).
 
 ## Referências técnicas
 
-- `dannyhpy/mightydoom-gameserver` — implementação comunitária usada como referência de protocolo
-- `CTRQuko/mightydoom-preservation` — pesquisa comunitária de preservação
-- `OyunErbabi/GameData.json` — snapshot comunitário opcional para comparação/bootstrapping
-- Obtainium — referência para o fluxo atual de download da Uptodown
+- `dannyhpy/mightydoom-gameserver` — referência comunitária de protocolo;
+- `CTRQuko/mightydoom-preservation` — pesquisa comunitária de preservação.
 
-## Status
+## Referências legais oficiais
 
-- [x] downloader local com validação SHA-256
-- [x] análise estática sanitizada
-- [x] patcher Windows inicial
-- [x] servidor Revival próprio
-- [x] SQLite/persistência
-- [x] categorias de recursos + starter bundle
-- [x] base de loja somente com moeda interna
-- [x] base de eventos/battle pass
-- [x] importador opcional de GameData comunitário
-- [x] IAP real desativado
-- [x] Docker/base de deploy
-- [ ] executar análise do APK alvo em ambiente com runner disponível
-- [ ] patch bundle-aware de hostname arbitrário
-- [ ] conectar o APK ao servidor Revival
-- [ ] validar GameData contra o cliente 1.13.1
-- [ ] mapear schemas reais endpoint por endpoint
-- [ ] restaurar capítulos/progressão completa
-- [ ] restaurar eventos/battle passes disponíveis
-- [ ] validar 100% dos fluxos acessíveis no cliente 1.13.1
+A análise detalhada, links oficiais e limitações estão em:
+
+### **[`docs/LEGAL-PRESERVATION.md`](docs/LEGAL-PRESERVATION.md)**
+
+Entre as fontes oficiais documentadas estão:
+
+- Lei nº 9.609/1998 — Software;
+- Lei nº 9.610/1998 — Direitos Autorais;
+- Lei nº 9.279/1996 — Marcas/Propriedade Industrial;
+- 17 U.S.C. § 117;
+- U.S. Copyright Office — Section 1201 / 37 C.F.R. § 201.40;
+- GitHub DMCA/Trademark/Acceptable Use Policies;
+- Mobile EULA e Terms of Service publicados pela ZeniMax/Bethesda.
+
+## Status técnico
+
+Consulte a fonte atualizada:
+
+- [`docs/ROADMAP-100-PERCENT.md`](docs/ROADMAP-100-PERCENT.md)
+- [`docs/ENDPOINT-MATRIX.md`](docs/ENDPOINT-MATRIX.md)
+
+---
+
+### Nota final
+
+**Jogo descontinuado não significa domínio público.** A defesa deste projeto não se baseia em chamar o software de `abandonware`, mas em manter uma arquitetura de preservação/interoperabilidade cuidadosamente limitada: código independente, cópia local do próprio usuário, patch local, ausência de redistribuição, ausência de monetização e respeito explícito aos titulares.
