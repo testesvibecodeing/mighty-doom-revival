@@ -46,6 +46,31 @@ def _all_official_raw_refs(path: Path) -> int:
     return total
 
 
+def _zero_crc_after_mutation(decoded: Path, candidate: Path, rel: str) -> dict:
+    """Make any mutated Addressables bundle loadable by clearing its catalog CRC.
+
+    Both the normal typetree patch and the structured raw-string fallback can
+    rewrite a bundle. Addressables validates the build-time CRC stored in
+    catalog.json for either kind of mutation, so the CRC must be cleared after
+    the final mutation stage rather than only after typetree reserialization.
+    """
+    catalog = decoded / "assets" / "aa" / "catalog.json"
+    if not catalog.is_file():
+        raise RawStringPatchError(
+            f"{rel}: bundle foi alterado mas assets/aa/catalog.json não existe "
+            "para zerar o m_Crc; o APK carregado rejeitaria o bundle por CRC."
+        )
+
+    crc_result = zero_catalog_crc(catalog, candidate)
+    if not crc_result.get("zeroed") and not crc_result.get("already_zero"):
+        raise RawStringPatchError(
+            f"{rel}: falha ao zerar o m_Crc no catalog.json "
+            f"({crc_result.get('error', 'erro desconhecido')}); "
+            "a Unity recusaria carregar o bundle alterado."
+        )
+    return crc_result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--decoded", required=True)
@@ -98,27 +123,6 @@ def main() -> int:
             result = patch_bundle(candidate, host)
             result["path"] = rel
 
-            # A reserialized bundle no longer matches the build-time CRC kept
-            # in the Addressables catalog; Unity refuses to load it at runtime
-            # ("CRC Mismatch"). Zero the catalog's m_Crc for this bundle so
-            # the engine skips validation. A failure here means a patched
-            # bundle that cannot load, so it must block the pipeline.
-            if result.get("changed"):
-                catalog = decoded / "assets" / "aa" / "catalog.json"
-                if not catalog.is_file():
-                    raise RawStringPatchError(
-                        f"{rel}: bundle foi reserializado mas assets/aa/catalog.json não existe "
-                        "para zerar o m_Crc; o APK carregado rejeitaria o bundle por CRC."
-                    )
-                crc_result = zero_catalog_crc(catalog, candidate)
-                result["catalog_crc"] = crc_result
-                if not crc_result.get("zeroed") and not crc_result.get("already_zero"):
-                    raise RawStringPatchError(
-                        f"{rel}: falha ao zerar o m_Crc no catalog.json "
-                        f"({crc_result.get('error', 'erro desconhecido')}); "
-                        "a Unity recusaria carregar o bundle reserializado."
-                    )
-
             # Stage 2: if official host bytes remain, only patch them when they
             # are provably Unity serialized UTF-8 strings with length/alignment.
             remaining_raw = _all_official_raw_refs(candidate)
@@ -130,6 +134,14 @@ def main() -> int:
                 result["changed"] = bool(result.get("changed") or raw_result.get("changed"))
                 result["verified"] = bool(result.get("verified") or raw_result.get("verified"))
                 result["replacements"] = int(result.get("replacements", 0)) + int(raw_result.get("replacements", 0))
+
+            # IMPORTANT: either stage can mutate the bundle. Addressables keeps
+            # the original build CRC in catalog.json, and Unity rejects any
+            # mutated bundle with "CRC Mismatch" unless that value is cleared.
+            # Do this only after all mutation stages so the raw-string fallback
+            # is covered too.
+            if result.get("changed"):
+                result["catalog_crc"] = _zero_crc_after_mutation(decoded, candidate, rel)
 
             final_raw = _all_official_raw_refs(candidate)
             result["remaining_official_raw_references"] = final_raw
