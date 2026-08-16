@@ -52,6 +52,7 @@ export function loadRuntimeConfig () {
     api_version: '24.0.0',
     client_version: '1.13.1',
     game_data_token: 'revival-local-game-data',
+    auto_starter_bundle: true,
     initial_resources: []
   })
   const packs = readJson(packsPath, { packs: [] })
@@ -71,10 +72,22 @@ export function loadRuntimeConfig () {
 
 export function resolveResource (ref, runtime) {
   if (Number.isInteger(ref)) return ref
+
   if (typeof ref === 'string') {
     const id = runtime.index.byTag.get(ref)
     if (Number.isInteger(id)) return id
   }
+
+  if (ref && typeof ref === 'object') {
+    if (Number.isInteger(ref.rid)) return ref.rid
+    if (Number.isInteger(ref.id)) return ref.id
+    if (typeof ref.tag === 'string') {
+      const id = runtime.index.byTag.get(ref.tag)
+      if (Number.isInteger(id)) return id
+    }
+    if (ref.resource !== undefined) return resolveResource(ref.resource, runtime)
+  }
+
   throw new Error(`Resource não resolvido: ${JSON.stringify(ref)}`)
 }
 
