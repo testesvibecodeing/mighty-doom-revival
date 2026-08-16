@@ -100,13 +100,26 @@ def write_network_security(decoded: Path, host: str, ca: Path | None) -> None:
 
 def find_host_occurrences(root: Path) -> list[dict[str, object]]:
     hits: list[dict[str, object]] = []
-    search_root = root / "assets" / "aa"
-    if not search_root.exists():
-        return hits
 
-    for path in search_root.rglob("*"):
-        if not path.is_file():
+    candidates: list[Path] = []
+    addressables = root / "assets" / "aa"
+    if addressables.exists():
+        candidates.extend(p for p in addressables.rglob("*") if p.is_file())
+
+    # The backend hostname is a plain C# string literal, so IL2CPP builds
+    # commonly bake it into global-metadata.dat's string-literal table
+    # instead of (or in addition to) an Addressables bundle. A same-length
+    # swap there is safe: the literal's byte length is recorded in a
+    # separate metadata table, not derived from the string bytes
+    # themselves, so overwriting N bytes with N different bytes doesn't
+    # shift anything else in the file.
+    candidates.extend(root.rglob("global-metadata.dat"))
+
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen:
             continue
+        seen.add(path)
         try:
             data = path.read_bytes()
         except OSError:
@@ -202,8 +215,8 @@ def main() -> int:
 
     if not hits:
         print(
-            "\nERRO: nenhum hostname conhecido foi encontrado em assets/aa/. "
-            "Precisamos analisar este APK antes de recompilar.",
+            "\nERRO: nenhum hostname conhecido foi encontrado em assets/aa/ nem em "
+            "global-metadata.dat. Precisamos analisar este APK antes de recompilar.",
             file=sys.stderr,
         )
         return 3

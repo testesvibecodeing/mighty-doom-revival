@@ -167,15 +167,18 @@ def analyze(apk: Path) -> dict[str, object]:
             ),
         }
 
-        # Endpoint strings are expected in Unity Addressables. XML/JSON/TXT are
-        # also cheap and useful to scan. Native .so files are intentionally not
-        # scanned here; deeper IL2CPP analysis is a separate phase.
+        # Endpoint strings are expected in Unity Addressables and in the
+        # IL2CPP metadata string-literal table (global-metadata.dat), since a
+        # hardcoded backend hostname is just a C# string literal. XML/JSON/TXT
+        # are also cheap and useful to scan. Native .so files are intentionally
+        # not scanned here; deeper IL2CPP code analysis is a separate phase.
         candidates = [
             x for x in infos
             if x.filename.startswith("assets/aa/")
             or x.filename.endswith(".xml")
             or x.filename.endswith(".json")
             or x.filename.endswith(".txt")
+            or x.filename.endswith("global-metadata.dat")
         ]
 
         hits: list[dict[str, object]] = []

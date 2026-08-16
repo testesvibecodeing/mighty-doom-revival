@@ -22,6 +22,18 @@ def make_tree(root: Path) -> Path:
     bundle.write_bytes(
         b"UnityFS\x00synthetic\x00https://" + OFFICIAL_HOST.encode("ascii") + b"/game/auth/register\x00tail"
     )
+
+    # Real 1.13.1 APKs carry the hostname as an IL2CPP string-literal inside
+    # global-metadata.dat, not inside an Addressables bundle. Cover that path
+    # too so the scanner/patcher stay honest about where the real client
+    # actually stores it.
+    metadata_dir = decoded / "assets" / "bin" / "Data" / "Managed" / "Metadata"
+    metadata_dir.mkdir(parents=True)
+    metadata = metadata_dir / "global-metadata.dat"
+    metadata.write_bytes(
+        b"\xaf\x1b\xb1\xfa" + b"\x00" * 60 + OFFICIAL_HOST.encode("ascii") + b"\x00" * 60
+    )
+
     manifest = decoded / "AndroidManifest.xml"
     manifest.write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -59,7 +71,9 @@ def main() -> int:
         root = Path(tmp)
         decoded = make_tree(root)
         bundle = decoded / "assets" / "aa" / "synthetic.bundle"
-        original_size = bundle.stat().st_size
+        metadata = decoded / "assets" / "bin" / "Data" / "Managed" / "Metadata" / "global-metadata.dat"
+        original_bundle_size = bundle.stat().st_size
+        original_metadata_size = metadata.stat().st_size
         report = root / "report.json"
 
         success = run_patch(decoded, TEST_HOST, report)
@@ -69,13 +83,21 @@ def main() -> int:
             raise AssertionError(f"Patch seguro falhou com código {success.returncode}")
 
         data = bundle.read_bytes()
-        assert bundle.stat().st_size == original_size
+        assert bundle.stat().st_size == original_bundle_size
         assert OFFICIAL_HOST.encode("ascii") not in data
         assert TEST_HOST.encode("ascii") in data
 
+        metadata_data = metadata.read_bytes()
+        assert metadata.stat().st_size == original_metadata_size
+        assert OFFICIAL_HOST.encode("ascii") not in metadata_data
+        assert TEST_HOST.encode("ascii") in metadata_data
+
         payload = json.loads(report.read_text(encoding="utf-8"))
         assert payload["status"] == "ok"
-        assert payload["binary_patched_files"] == ["assets/aa/synthetic.bundle"]
+        assert payload["binary_patched_files"] == [
+            "assets/aa/synthetic.bundle",
+            "assets/bin/Data/Managed/Metadata/global-metadata.dat",
+        ]
 
         tree = ET.parse(decoded / "AndroidManifest.xml")
         app = tree.getroot().find("application")
@@ -89,11 +111,14 @@ def main() -> int:
         root = Path(tmp)
         decoded = make_tree(root)
         bundle = decoded / "assets" / "aa" / "synthetic.bundle"
-        before = bundle.read_bytes()
+        metadata = decoded / "assets" / "bin" / "Data" / "Managed" / "Metadata" / "global-metadata.dat"
+        bundle_before = bundle.read_bytes()
+        metadata_before = metadata.read_bytes()
         report = root / "report.json"
         blocked = run_patch(decoded, "doom.example.com", report)
         assert blocked.returncode == 4
-        assert bundle.read_bytes() == before
+        assert bundle.read_bytes() == bundle_before
+        assert metadata.read_bytes() == metadata_before
         payload = json.loads(report.read_text(encoding="utf-8"))
         assert payload["status"] == "needs_bundle_aware_patch"
 
