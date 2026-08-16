@@ -49,6 +49,9 @@ jobs:
       - name: Patcher bundle-aware logic regression
         run: python scripts/test_patch_unity_bundle.py
 
+      - name: Final APK endpoint verification regression
+        run: python scripts/test_verify_patched_apk.py
+
       - name: Standalone health smoke
         working-directory: server
         env:
