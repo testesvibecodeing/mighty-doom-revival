@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
 function pathFromEnv (name, fallback) {
   const configured = process.env[name]
-  return configured ? resolve(process.cwd(), configured) : resolve(ROOT, fallback)
+  if (!configured) return resolve(ROOT, fallback)
+  return isAbsolute(configured) ? configured : resolve(ROOT, configured)
 }
 
 function readJson (path, fallback) {
