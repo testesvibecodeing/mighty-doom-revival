@@ -30,7 +30,9 @@ mighty-doom-revival/
 └── scripts/
     ├── analyze_apk.py
     ├── patch_apk.py
-    └── patch-apk.bat
+    ├── patch-apk.bat
+    ├── setup-server.bat
+    └── setup-server.sh
 ```
 
 ## 1. Obter o APK
@@ -64,17 +66,26 @@ O analisador procura, sem extrair conteúdo proprietário para o Git:
 
 Depois de recebermos e analisarmos a cópia local do APK, vamos registrar apenas hashes, offsets/nomes técnicos e documentação necessária para interoperabilidade.
 
-## 3. Servidor comunitário
+## 3. Preparar o servidor comunitário
 
-A implementação comunitária que estamos usando como referência é:
+A implementação comunitária usada como referência é `dannyhpy/mightydoom-gameserver`, no GitLab. Ela usa Node.js/Koa e suporta SQLite. A versão atual requer **Node.js >= 24** e **npm >= 11**.
 
-```text
-https://gitlab.com/dannyhpy/mightydoom-gameserver
+### Windows
+
+```bat
+scripts\setup-server.bat
 ```
 
-Ela usa Node.js/Koa e suporta SQLite. A versão atual requer **Node.js >= 24** e **npm >= 11**.
+### Linux/VPS
 
-Instalação básica em Linux/Windows:
+```bash
+chmod +x scripts/setup-server.sh
+./scripts/setup-server.sh
+```
+
+Os scripts clonam o upstream em `server/community`, instalam dependências, adicionam `better-sqlite3` e executam as migrations.
+
+Instalação manual equivalente:
 
 ```bash
 git clone https://gitlab.com/dannyhpy/mightydoom-gameserver.git server/community
@@ -152,6 +163,7 @@ Não serão adicionados ao repositório:
 
 - [x] Repositório inicial
 - [x] Documentação de servidor
+- [x] Setup automático do servidor (Windows/Linux)
 - [x] Analisador local de APK
 - [x] Patcher Windows inicial
 - [ ] Validar contra o APK oficial 1.13.1 build 84862
