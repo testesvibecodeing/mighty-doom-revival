@@ -61,6 +61,12 @@ function debitCosts (repo, userId, costs) {
   return true
 }
 
+function setItemLevel (repo, userId, itemId, level) {
+  if (typeof repo.updateItemLevel === 'function') return repo.updateItemLevel(userId, itemId, level)
+  const result = repo.db.prepare('UPDATE items SET level = ? WHERE user_id = ? AND id = ?').run(level, userId, itemId)
+  if (result.changes !== 1) throw new Error('item-update-failed')
+}
+
 function wireItem (item) {
   const result = { uid: item.id, rid: item.rid, level: item.level }
   if (item.tier !== null && item.tier !== undefined) result.tier = item.tier
@@ -86,7 +92,7 @@ function upgradeItemTo (repo, userId, itemId, targetLevel, runtime) {
     if (costs.length === 0) return { ok: false, reason: 'upgrade-cost-empty', level }
     if (!debitCosts(repo, userId, costs)) return { ok: false, reason: 'funds', level }
     spent.push(...costs)
-    repo.updateItemLevel(userId, itemId, level)
+    setItemLevel(repo, userId, itemId, level)
   }
   return { ok: true, item: wireItem(repo.itemById(userId, itemId)), spent }
 }
