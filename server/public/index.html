@@ -1,222 +1,391 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#081119">
-  <meta name="description" content="Revival — infraestrutura comunitária, independente e self-hosted para interoperabilidade com uma cópia local do cliente de Mighty DOOM.">
-  <title>Revival — infraestrutura comunitária self-hosted</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230b1721'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%236fe0d0'/%3E%3Ccircle cx='15' cy='20' r='4' fill='%238f8cff'/%3E%3Ccircle cx='49' cy='18' r='4' fill='%238f8cff'/%3E%3Ccircle cx='48' cy='47' r='4' fill='%238f8cff'/%3E%3Cpath d='M18 22l8 6m12-1l8-6m-9 17l8 7' stroke='%236fe0d0' stroke-width='3' fill='none'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/assets/css/revival.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080403">
+<meta name="description" content="Mighty DOOM Revival: servidor privado de preservação do Mighty DOOM. 100% offline, progressão completa, eventos e battle pass sem pay-to-win.">
+<title>Mighty DOOM Revival</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+<style>
+:root{
+  --bg:#070302;--panel:#0c0806;--text:#f1e8db;--muted:#a59688;
+  --line:rgba(255,93,21,.34);--orange:#ff7a0a;--red:#df311e;--green:#41e85b;
+  --max:1480px;--topbar-h:clamp(66px,8vw,86px);
+  --shell-pad:clamp(14px,4vw,28px);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--topbar-h) + 12px)}
+body{margin:0;background:#050201;color:var(--text);font-family:Rajdhani,sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
+button{font:inherit}
+img{display:block;max-width:100%}
+
+/* fundo three.js visível pelas seções (fundos em rgba, nunca opacos) */
+#hell-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.noise{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E")}
+.vignette{position:fixed;inset:0;z-index:89;pointer-events:none;background:radial-gradient(circle at center,transparent 38%,rgba(0,0,0,.28) 68%,rgba(0,0,0,.78) 100%)}
+
+/* ---------- topbar ---------- */
+.topbar{position:fixed;inset:0 0 auto;z-index:100;height:var(--topbar-h);background:linear-gradient(180deg,rgba(4,3,2,.97),rgba(8,4,3,.82));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,76,12,.18)}
+.topbar-inner{height:100%;max-width:var(--max);margin:auto;padding:0 var(--shell-pad);display:grid;grid-template-columns:minmax(150px,230px) 1fr minmax(200px,250px);align-items:center;gap:clamp(10px,2vw,28px)}
+.brand{width:max-content;display:flex;flex-direction:column;transform:skew(-4deg);filter:drop-shadow(0 0 18px rgba(255,70,0,.25))}
+.brand small{margin-left:12px;margin-bottom:-4px;font:400 clamp(10px,1.4vw,14px)/1 'Black Ops One';letter-spacing:.16em;color:#ff3b28}
+.brand b{font:400 clamp(26px,4vw,40px)/.8 'Black Ops One';letter-spacing:-.05em;background:linear-gradient(#ff351f 0 10%,#ff9705 42%,#ffd63d 68%,#ff8600 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.nav{display:flex;justify-content:center;gap:clamp(14px,2.6vw,44px);height:100%}
+.nav a{position:relative;display:flex;align-items:center;font-weight:700;text-transform:uppercase;font-size:clamp(12px,1.5vw,15px)}
+.nav a:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--orange),transparent);transform:scaleX(0);transition:.25s}
+@media(hover:hover){
+  .nav a:hover{color:#ffb12a}
+  .nav a:hover:after{transform:scaleX(1)}
+}
+.nav a.active{color:#ffb12a}
+.nav a.active:after{transform:scaleX(1)}
+.server-chip{justify-self:end;min-width:0;max-width:250px;padding:10px 18px 9px;border:1px solid rgba(255,255,255,.11);background:linear-gradient(180deg,rgba(19,18,16,.9),rgba(7,8,8,.94));clip-path:polygon(6% 0,94% 0,100% 25%,100% 75%,94% 100%,6% 100%,0 75%,0 25%)}
+.server-chip small{display:block;margin-bottom:6px;color:#aaa29a;text-transform:uppercase;font-size:11px;letter-spacing:.08em;white-space:nowrap}
+.chip-row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;color:var(--green);font-size:13px}
+.chip-row strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip-row span:last-child{white-space:nowrap;font-size:11px;color:#8f9a90}
+.status-dot{width:11px;height:11px;border-radius:50%;background:#999;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
+.status-dot.online{background:var(--green);box-shadow:0 0 0 3px rgba(65,232,91,.13),0 0 18px rgba(65,232,91,.75);animation:beat 2.4s infinite}
+.status-dot.offline{background:#ee493b;box-shadow:0 0 0 3px rgba(238,73,59,.11),0 0 18px rgba(238,73,59,.55)}
+@keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+.mobile-menu{display:none;width:44px;height:44px;border:1px solid var(--line);background:#120a07;color:#ff8b24;place-items:center}
+
+/* ---------- hero ---------- */
+.hero{position:relative;z-index:2;min-height:calc(100svh);padding-top:var(--topbar-h);overflow:hidden;display:flex}
+@supports not (min-height:100svh){.hero{min-height:100vh}}
+.hero-media{position:absolute;inset:var(--topbar-h) 0 0;overflow:hidden}
+.hero-media img{width:100%;height:100%;object-fit:cover;object-position:center 38%;filter:contrast(1.18) saturate(1.28) brightness(.62);opacity:.4;transform:scale(1.06);animation:drift 14s ease-in-out infinite alternate}
+@keyframes drift{to{transform:scale(1.09) translate3d(1.2%,-.5%,0)}}
+.hero-media:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(3,1,1,.96) 0%,rgba(5,2,1,.9) 16%,rgba(5,2,1,.6) 38%,rgba(5,2,1,.12) 62%,rgba(4,2,1,.3) 100%),linear-gradient(180deg,rgba(0,0,0,.14),transparent 55%,rgba(7,3,2,.9) 100%)}
+.hero-inner{position:relative;z-index:4;width:min(var(--max),calc(100% - 2*var(--shell-pad)));margin:auto;padding:clamp(28px,6vh,70px) 0 clamp(28px,6vh,50px);display:flex;align-items:center;flex:1}
+.hero-copy{width:min(560px,100%)}
+.logo-block{width:max-content;max-width:100%;display:flex;flex-direction:column;margin-bottom:clamp(12px,2.5vh,20px);transform:skew(-4deg);filter:drop-shadow(0 9px 0 rgba(55,5,0,.4)) drop-shadow(0 0 26px rgba(255,72,0,.28))}
+.logo-block .small{margin-left:clamp(30px,7vw,67px);margin-bottom:-9px;color:#f13d2b;font:400 clamp(20px,4.5vw,36px)/.9 'Black Ops One'}
+.logo-block .big{font:400 clamp(52px,11vw,104px)/.78 'Black Ops One';letter-spacing:-.06em;background:linear-gradient(#ff3e20 5%,#ff9707 42%,#ffd231 66%,#ff7b00 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo-block .sub{margin-top:10px;margin-left:clamp(34px,8vw,72px);color:#ff3d2b;font-size:clamp(12px,2.2vw,19px);font-weight:700;letter-spacing:.17em}
+.hero h1{margin:0 0 10px;font-size:clamp(20px,3.4vw,27px);line-height:1.15;text-transform:uppercase;letter-spacing:.035em}
+.hero p{max-width:520px;margin:0;color:#c0b6ac;font-size:clamp(15px,2vw,17px);line-height:1.6}
+.actions{display:flex;flex-wrap:wrap;gap:14px;margin:clamp(16px,3vh,24px) 0 clamp(14px,2.5vh,20px)}
+.btn{min-height:58px;padding:12px 24px;display:inline-flex;align-items:center;justify-content:center;gap:14px;border:1px solid rgba(255,255,255,.12);text-transform:uppercase;font-weight:700;transition:.22s;clip-path:polygon(3% 0,97% 0,100% 20%,100% 80%,97% 100%,3% 100%,0 80%,0 20%);cursor:pointer}
+.btn-primary{background:linear-gradient(180deg,rgba(180,29,8,.94),rgba(91,8,4,.96));border-color:#ff4b1a;box-shadow:inset 0 0 24px rgba(255,108,0,.12),0 0 24px rgba(255,46,0,.15)}
+.btn-secondary{background:linear-gradient(180deg,rgba(18,18,17,.94),rgba(7,7,7,.96))}
+@media(hover:hover){.btn:not(.disabled):hover{transform:translateY(-2px);border-color:#ff9d27;color:#ffcb78}}
+.btn.disabled{opacity:.6;filter:saturate(.55);cursor:not-allowed}
+.badges{display:flex;flex-wrap:wrap;gap:10px 18px;margin:5px 0 clamp(14px,2.5vh,20px);color:#ff4f2e;font-size:12px;font-weight:600}
+.badges span{display:inline-flex;gap:7px;align-items:center}
+.connect{max-width:520px;min-height:68px;display:grid;grid-template-columns:1fr auto 48px;align-items:center;gap:14px;padding:12px 12px 12px 20px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(14,14,13,.95),rgba(6,7,7,.96));clip-path:polygon(2% 0,98% 0,100% 20%,100% 80%,98% 100%,2% 100%,0 80%,0 20%)}
+.connect small{display:block;margin-bottom:4px;color:#918a82;text-transform:uppercase;font-size:11px}
+.connect strong{display:block;font-size:clamp(12px,1.8vw,14px);color:#d9d2c7;word-break:break-all}
+.connect-state{display:flex;align-items:center;gap:6px;color:#89918a;font-size:11px;font-weight:700;white-space:nowrap}
+.connect-state.online{color:var(--green)}
+.connect-state.offline{color:#ef493c}
+.terminal-btn{width:44px;height:44px;border:1px solid rgba(255,255,255,.16);background:#151515;color:#ddd;cursor:pointer;display:grid;place-items:center}
+@media(hover:hover){.terminal-btn:hover{border-color:#ff9d27;color:#ffb12a}}
+.specs{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:12px;color:#8e8983;font-size:13px}
+.specs span{display:inline-flex;align-items:center;gap:8px}
+.hero-fade{position:absolute;left:0;right:0;bottom:0;height:180px;z-index:3;background:linear-gradient(transparent,rgba(7,3,2,.85) 95%);pointer-events:none}
+
+/* ---------- ao vivo ---------- */
+.live{position:relative;z-index:3;padding:clamp(46px,8vh,90px) 0 clamp(40px,7vh,80px);background:linear-gradient(180deg,rgba(7,3,2,.88),rgba(9,4,3,.92))}
+.shell{width:min(var(--max),calc(100% - 2*var(--shell-pad)));margin:auto}
+.section-title{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;margin-bottom:clamp(14px,3vh,18px)}
+.section-title h2{margin:0;color:#ff3a29;font-size:clamp(15px,2.4vw,20px);letter-spacing:.06em;text-align:center;white-space:nowrap}
+.wing{height:1px;background:linear-gradient(90deg,transparent,rgba(255,89,21,.55))}
+.wing:last-child{background:linear-gradient(90deg,rgba(255,89,21,.55),transparent)}
+.live-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(18px,3vw,28px);align-items:start}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,158px),1fr));gap:12px}
+.stat{min-height:96px;padding:16px 18px;border:1px solid rgba(255,95,17,.32);background:linear-gradient(135deg,rgba(29,18,12,.9),rgba(10,9,8,.95));clip-path:polygon(4% 0,96% 0,100% 12%,100% 88%,96% 100%,4% 100%,0 88%,0 12%)}
+.stat small{display:block;margin-bottom:8px;color:#9c8f83;text-transform:uppercase;font-size:11px;letter-spacing:.1em}
+.stat-value{font:700 clamp(19px,2.6vw,26px)/1 Rajdhani,sans-serif;color:#ffe9cf;word-break:break-word}
+.stat-value.ok{color:var(--green)}
+.stat-value.warn{color:#ffb12a}
+.stat .pulse{display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px rgba(65,232,91,.8);animation:beat 2s infinite}
+
+.terminal{overflow:hidden;border:1px solid rgba(255,93,21,.34);background:rgba(5,5,5,.96);box-shadow:0 25px 70px rgba(0,0,0,.45)}
+.terminal-top{min-height:46px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.08);background:#10100f}
+.terminal-top span{width:9px;height:9px;border-radius:50%;background:#7d150f}
+.terminal-top span:nth-child(2){background:#a14508}
+.terminal-top span:nth-child(3){background:#355f23}
+.terminal-top b{margin-left:auto;color:#7f7770;font-size:11px;letter-spacing:.14em}
+.terminal pre{margin:0;min-height:300px;padding:clamp(16px,2.5vw,28px);overflow:auto;color:#ff714a;font:clamp(11.5px,1.4vw,14px)/1.8 Consolas,'Cascadia Mono',monospace;background:linear-gradient(rgba(255,0,0,.018) 1px,transparent 1px);background-size:100% 25px}
+
+/* ---------- recursos ---------- */
+.feature-strip{position:relative;z-index:3;padding:clamp(30px,5vh,55px) 0;background:rgba(7,3,2,.86)}
+.grid-features{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:14px}
+.card{min-height:122px;padding:18px;display:flex;align-items:center;gap:16px;border:1px solid rgba(255,95,17,.4);background:linear-gradient(135deg,rgba(29,18,12,.9),rgba(10,9,8,.95));clip-path:polygon(4% 0,96% 0,100% 12%,100% 88%,96% 100%,4% 100%,0 88%,0 12%);transition:.25s}
+@media(hover:hover){.card:hover{transform:translateY(-4px);border-color:#ff7b18;box-shadow:0 15px 38px rgba(0,0,0,.4)}}
+.icon{flex:0 0 50px;width:50px;height:50px;display:grid;place-items:center;border-radius:50%;font-size:25px;color:#ff7d15;border:1px solid rgba(255,130,31,.4);background:radial-gradient(circle,#5b1708,#170705 72%)}
+.card h3{margin:0 0 6px;color:#fff3c6;font-size:15px;text-transform:uppercase}
+.card p{margin:0;color:#b8aca0;font-size:13px;line-height:1.4}
+
+/* ---------- download ---------- */
+.content{position:relative;z-index:3;padding:clamp(50px,9vh,90px) 0;background:linear-gradient(180deg,rgba(9,4,3,.92),rgba(10,5,4,.88))}
+.two-col{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(28px,5vw,70px);align-items:center}
+.eyebrow{color:#ff5f27;font-size:13px;font-weight:700;letter-spacing:.2em}
+.content h2{margin:10px 0 20px;font:400 clamp(30px,5.4vw,48px)/1.05 'Black Ops One';color:#f0e8de}
+.content h2 span{color:#ff7a15}
+.content p{color:#a99e93;font-size:clamp(15px,1.9vw,17px);line-height:1.7}
+.steps{margin:28px 0}
+.step{display:grid;grid-template-columns:54px 1fr;align-items:center;min-height:52px;border-bottom:1px solid rgba(255,255,255,.07)}
+.step b{color:#ff5a2e;font-size:18px}
+.step span{color:#d2c8be}
+.download-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:28px}
+.btn.large{min-height:72px;justify-content:flex-start;text-align:left}
+.btn.large span{display:flex;flex-direction:column;align-items:flex-start;text-transform:none}
+.btn.large small{margin-top:3px;color:#ac9f92;font-size:11px}
+.upload-card{padding:clamp(20px,3vw,30px);border:1px solid rgba(255,95,17,.32);background:linear-gradient(160deg,rgba(26,15,10,.94),rgba(9,6,5,.96));clip-path:polygon(3% 0,97% 0,100% 8%,100% 92%,97% 100%,3% 100%,0 92%,0 8%)}
+.upload-card h3{margin:0 0 10px;font:400 clamp(18px,2.6vw,24px)/1.15 'Black Ops One';color:#ffb96a;text-transform:uppercase}
+.upload-card ol{margin:0 0 14px;padding-left:20px;color:#b8aca0;font-size:14.5px;line-height:1.8}
+.upload-card code{font:13px/1.6 Consolas,monospace;color:#ffb12a;word-break:break-all}
+.upload-card .note{margin:12px 0 0;color:#8f867c;font-size:13px;line-height:1.6;border-top:1px solid rgba(255,255,255,.07);padding-top:12px}
+
+/* ---------- faq ---------- */
+.faq{position:relative;z-index:3;padding:clamp(46px,8vh,85px) 0;background:rgba(6,3,2,.9)}
+.faq .shell{max-width:900px}
+.faq-head{text-align:center;margin-bottom:30px}
+.faq-head h2{margin:10px 0 0;font:400 clamp(28px,5vw,42px)/1 'Black Ops One'}
+.faq details{border:1px solid rgba(255,95,25,.22);background:rgba(12,8,6,.95);margin-bottom:12px}
+.faq summary{cursor:pointer;padding:18px 20px;font-weight:700;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary:before{content:"+ ";color:#ff5a2e}
+.faq details[open] summary:before{content:"− "}
+.faq details p{margin:0;padding:0 20px 20px;color:#a99e93;line-height:1.6}
+.faq code{color:#ffb12a}
+
+/* ---------- footer / toast ---------- */
+footer{position:relative;z-index:3;background:rgba(5,2,1,.92);border-top:1px solid rgba(255,81,15,.18)}
+.footer-inner{min-height:120px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;padding:28px 0}
+.footer-inner strong{color:#ff8e20}
+.footer-inner p{margin:5px 0 0;color:#80786f}
+.footer-links{display:flex;gap:18px;flex-wrap:wrap}
+.legal{border-top:1px solid rgba(255,255,255,.06);padding:15px 24px;text-align:center;color:#675f58;font-size:12px}
+.toast{position:fixed;right:22px;bottom:22px;z-index:200;display:flex;gap:10px;align-items:center;min-width:min(280px,calc(100vw - 44px));max-width:380px;padding:14px 16px;border:1px solid rgba(255,101,25,.5);background:rgba(12,8,6,.96);transform:translateY(30px);opacity:0;pointer-events:none;transition:.25s}
+.toast.show{transform:none;opacity:1}
+.toast i{color:#ff7e21}
+.reveal{opacity:0;transform:translateY(24px);transition:.7s}
+.reveal.visible{opacity:1;transform:none}
+
+/* ---------- responsivo ---------- */
+@media(max-width:1180px){
+  .topbar-inner{grid-template-columns:minmax(140px,190px) 1fr minmax(180px,210px)}
+  .hero-copy{width:min(560px,60vw)}
+  .live-grid{grid-template-columns:1fr}
+}
+@media(max-width:920px){
+  .topbar{height:var(--topbar-h)}
+  .topbar-inner{grid-template-columns:1fr auto}
+  .server-chip{display:none}
+  .mobile-menu{display:grid}
+  .nav{position:fixed;top:var(--topbar-h);left:12px;right:12px;height:auto;padding:10px;flex-direction:column;gap:0;background:rgba(8,5,4,.98);border:1px solid var(--line);opacity:0;visibility:hidden;transform:translateY(-10px);transition:.22s;z-index:99}
+  .nav.open{opacity:1;visibility:visible;transform:none}
+  .nav a{padding:13px 10px}
+  .hero-copy{width:100%}
+  .hero-media img{object-position:64% 40%}
+  .hero-media:after{background:linear-gradient(180deg,rgba(3,1,1,.1) 0%,rgba(5,2,1,.45) 34%,rgba(5,2,1,.94) 70%,rgba(7,3,2,.97) 100%)}
+  .hero-inner{padding-top:clamp(48vh,58vh,62vh);align-items:flex-end}
+  .two-col{grid-template-columns:1fr;gap:30px}
+  .terminal pre{min-height:240px}
+}
+@media(max-width:640px){
+  .actions{flex-direction:column}
+  .btn{width:100%}
+  .connect{grid-template-columns:1fr 44px}
+  .connect-state{display:none}
+  .download-row{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,132px),1fr))}
+  .stat{min-height:84px;padding:13px 14px}
+  .step{grid-template-columns:40px 1fr;min-height:46px}
+  .upload-card ol{padding-left:16px}
+  .footer-inner{flex-direction:column;align-items:flex-start}
+  .toast{right:12px;bottom:12px}
+}
+@media(hover:none){
+  .btn,.card{transition:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .reveal{opacity:1;transform:none}
+  .hero-media img{animation:none}
+}
+</style>
 </head>
 <body>
-  <canvas id="networkCanvas" aria-hidden="true"></canvas>
-  <div class="ambient-grid" aria-hidden="true"></div>
+<canvas id="hell-canvas" aria-hidden="true"></canvas><div class="noise" aria-hidden="true"></div><div class="vignette" aria-hidden="true"></div>
 
-  <svg class="icon-sprite" aria-hidden="true">
-    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
-    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></symbol>
-    <symbol id="i-patch" viewBox="0 0 24 24"><path d="M14.5 5.5l4 4M13 7l4 4M4 20l5.5-1.5L19 9l-4-4-9.5 9.5L4 20z"/></symbol>
-    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.8-2.9 8.2-7 10-4.1-1.8-7-5.2-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></symbol>
-    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4l4 4 4-4M5 19h14"/></symbol>
-    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6M9 16h6"/></symbol>
-    <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-3 17.5c.5.1.7-.2.7-.5v-2c-2.8.6-3.4-1.2-3.4-1.2-.5-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 0 1.6 1.1 1.6 1.1.9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.7-1.3-2.3-.3-4.7-1.1-4.7-5A3.9 3.9 0 0 1 7 7.7c-.1-.3-.5-1.3.1-2.7 0 0 .8-.3 2.8 1a9.7 9.7 0 0 1 5 0c2-1.3 2.8-1 2.8-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.7 5 .4.3.7.9.7 1.8V20c0 .3.2.6.7.5A9 9 0 0 0 12 3z"/></symbol>
-    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8"/><path d="M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></symbol>
-    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4L3 20h18L12 4z"/><path d="M12 9v5M12 17h.01"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
-    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></symbol>
-  </svg>
-
-  <header class="topbar" id="topbar">
-    <div class="shell topbar-inner">
-      <a class="brand" href="#inicio" aria-label="Revival">
-        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-        <span class="brand-word"><strong>REVIVAL</strong><small>community infrastructure</small></span>
-      </a>
-
-      <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir navegação" aria-expanded="false"><span></span><span></span></button>
-
-      <nav class="nav" id="nav" aria-label="Navegação principal">
-        <a href="#como-funciona">Como funciona</a>
-        <a href="#patcher">Patcher</a>
-        <a href="#self-hosted">Self-hosted</a>
-        <a href="#instancia">Instância</a>
-        <a href="#documentacao">Documentação</a>
-        <a href="#faq">FAQ</a>
-      </nav>
-
-      <div class="instance-chip">
-        <span class="instance-dot" id="statusDot"></span>
-        <div><small>esta instância</small><strong id="statusText">VERIFICANDO</strong></div>
+<header class="topbar" id="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#inicio"><small>MIGHTY</small><b>DOOM</b></a>
+    <button class="mobile-menu" id="mobileMenu" aria-label="Abrir menu"><i class="fa-solid fa-bars"></i></button>
+    <nav class="nav" id="nav" aria-label="Navegação principal">
+      <a class="active" href="#inicio">Início</a>
+      <a href="#status">Ao vivo</a>
+      <a href="#recursos">Recursos</a>
+      <a href="#download">Download</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contato">Contato</a>
+    </nav>
+    <div class="server-chip">
+      <small>Status do servidor</small>
+      <div class="chip-row">
+        <span class="status-dot" id="statusDot"></span>
+        <strong id="statusText">VERIFICANDO</strong>
         <span id="statusUptime">--</span>
       </div>
     </div>
-  </header>
+  </div>
+</header>
 
-  <main>
-    <section class="hero section" id="inicio">
-      <div class="shell hero-grid">
-        <div class="hero-copy reveal">
-          <div class="kicker"><span></span> infraestrutura independente · self-hosted</div>
-          <h1>Seu servidor.<br>Sua instalação.<br><em>Sua comunidade.</em></h1>
-          <p class="hero-lead">
-            Revival é uma infraestrutura comunitária e independente para servidores administrados pelos próprios usuários.
-            <strong>Não é um produto oficial nem possui afiliação com os titulares do jogo.</strong>
-          </p>
-
-          <div class="hero-actions">
-            <a class="button primary" href="#como-funciona">Entender o fluxo <svg><use href="#i-arrow"/></svg></a>
-            <a class="button secondary" id="githubHero" href="#" target="_blank" rel="noopener"><svg><use href="#i-github"/></svg> Ver projeto</a>
+<main>
+  <section class="hero" id="inicio">
+    <div class="hero-media"><img src="assets/img/mighty-doom-hero.png" alt="Mighty DOOM" fetchpriority="high"></div>
+    <div class="hero-inner">
+      <div class="hero-copy reveal">
+        <div class="logo-block">
+          <span class="small">MIGHTY</span>
+          <span class="big">DOOM</span>
+          <span class="sub">REVIVAL SERVER</span>
+        </div>
+        <h1>O clássico ressuscitou.<br>100% offline. 100% seu.</h1>
+        <p>Reviva toda a ação, progressão, eventos e recompensas do Mighty DOOM em um servidor controlado por você. Sem pay-to-win e sem depender dos serviços oficiais encerrados.</p>
+        <div class="actions">
+          <a class="btn btn-primary" id="apkTop" href="#download"><i class="fa-solid fa-download"></i><span>Baixar APK</span></a>
+          <a class="btn btn-secondary" href="#download"><i class="fa-solid fa-server"></i>Guia do servidor</a>
+        </div>
+        <div class="badges">
+          <span><i class="fa-solid fa-skull"></i>Revival privado</span>
+          <span><i class="fa-regular fa-calendar-days"></i>Eventos completos</span>
+          <span><i class="fa-solid fa-shield-halved"></i>Sem pay-to-win</span>
+          <span><i class="fa-solid fa-trophy"></i>Seu progresso</span>
+        </div>
+        <div class="connect">
+          <div>
+            <small>Conecte ao seu servidor</small>
+            <strong id="serverUrl">https://seu-servidor.com</strong>
           </div>
-
-          <div class="compatibility-note">
-            <svg><use href="#i-shield"/></svg>
-            <p>Servidor comunitário independente compatível com uma cópia local do cliente de <strong>Mighty DOOM</strong>. A referência ao nome é exclusivamente descritiva para interoperabilidade.</p>
-          </div>
+          <div class="connect-state" id="connectState"><span>AGUARDANDO</span><i class="fa-solid fa-signal"></i></div>
+          <button class="terminal-btn" id="copyBtn" aria-label="Copiar endereço do servidor"><i class="fa-solid fa-terminal"></i></button>
         </div>
-
-        <div class="hero-visual reveal" aria-label="Diagrama da infraestrutura Revival">
-          <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
-          <div class="node-cloud" aria-hidden="true"><i class="node n1"></i><i class="node n2"></i><i class="node n3"></i><i class="node n4"></i><i class="node n5"></i><i class="node n6"></i></div>
-          <div class="core-card"><div class="core-logo"><span class="core-dot"></span><b>REV</b></div><strong>Revival instance</strong><small>controlada pelo administrador</small></div>
-          <div class="flow-card flow-client"><span class="flow-icon"><svg><use href="#i-patch"/></svg></span><div><small>cliente</small><strong>cópia local</strong></div></div>
-          <div class="flow-card flow-server"><span class="flow-icon"><svg><use href="#i-server"/></svg></span><div><small>backend</small><strong>self-hosted</strong></div></div>
-          <div class="flow-card flow-data"><span class="flow-icon"><svg><use href="#i-lock"/></svg></span><div><small>dados</small><strong>na sua instância</strong></div></div>
-          <div class="instance-panel"><div><small>endereço desta instância</small><strong id="serverUrl">--</strong></div><button id="copyBtn" type="button" aria-label="Copiar endereço"><svg><use href="#i-copy"/></svg></button></div>
+        <div class="specs">
+          <span><i class="fa-brands fa-android"></i>Android 10+</span>
+          <span><i class="fa-solid fa-gamepad"></i>ARM64</span>
+          <span id="specSize"><i class="fa-solid fa-hard-drive"></i>~587 MB</span>
+          <span id="specVersion"><i class="fa-solid fa-code-branch"></i>v1.13.1</span>
         </div>
       </div>
-
-      <div class="shell trust-row">
-        <div><span>01</span><p>código independente</p></div><div><span>02</span><p>patch gerado localmente</p></div><div><span>03</span><p>servidor sob seu controle</p></div><div><span>04</span><p>sem download automático de terceiros</p></div>
-      </div>
-    </section>
-
-    <section class="section workflow" id="como-funciona">
-      <div class="shell">
-        <div class="section-heading reveal"><div><span class="eyebrow">Fluxo de interoperabilidade</span><h2>Como funciona</h2></div><p>O projeto central fornece o servidor, o patcher e a documentação. O cliente permanece sob responsabilidade do próprio usuário.</p></div>
-        <div class="steps-grid">
-          <article class="step-card reveal"><span class="step-number">01</span><div class="step-icon"><svg><use href="#i-shield"/></svg></div><h3>Obtenha sua própria cópia</h3><p>Use uma cópia do cliente obtida legitimamente por você. O projeto central não fornece nem busca o APK em sites de terceiros.</p><span class="step-tag">origem do usuário</span></article>
-          <article class="step-card reveal"><span class="step-number">02</span><div class="step-icon"><svg><use href="#i-patch"/></svg></div><h3>Execute o patcher local</h3><p>Informe a sua cópia e o servidor escolhido. A versão configurada é produzida no seu próprio computador.</p><span class="step-tag">processamento local</span></article>
-          <article class="step-card reveal"><span class="step-number">03</span><div class="step-icon"><svg><use href="#i-server"/></svg></div><h3>Instale seu servidor</h3><p>Suba o Revival em infraestrutura própria, configure HTTPS, GameData e os recursos da instância que você administra.</p><span class="step-tag">self-hosted</span></article>
-          <article class="step-card reveal"><span class="step-number">04</span><div class="step-icon"><svg><use href="#i-arrow"/></svg></div><h3>Conecte ao servidor escolhido</h3><p>Instale o cliente configurado e conecte-se à instância informada no patcher. Cada administrador controla seu ambiente.</p><span class="step-tag">instância escolhida</span></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section patcher-section" id="patcher">
-      <div class="shell split">
-        <div class="section-copy reveal">
-          <span class="eyebrow">Patcher local</span><h2>O cliente não sai do seu computador.</h2>
-          <p>O patcher é parte essencial do projeto. Ele recebe a cópia local fornecida pelo usuário, configura o endpoint da instância escolhida e gera a saída localmente.</p>
-          <div class="notice strong-notice"><svg><use href="#i-alert"/></svg><div><strong>O projeto central não distribui o APK do jogo.</strong><span>Não existe mecanismo de download automático de APK de terceiros neste site.</span></div></div>
-          <ul class="check-list"><li><svg><use href="#i-check"/></svg> entrada fornecida pelo próprio usuário</li><li><svg><use href="#i-check"/></svg> endereço do servidor informado pelo usuário</li><li><svg><use href="#i-check"/></svg> rebuild, alinhamento e assinatura locais</li><li><svg><use href="#i-check"/></svg> saída não enviada ao projeto central</li></ul>
-          <div class="button-row"><a class="button primary" id="patchDocsBtn" href="#" target="_blank" rel="noopener"><svg><use href="#i-doc"/></svg> Guia do patcher</a><a class="text-link" id="patchSourceBtn" href="#" target="_blank" rel="noopener">Ver scripts <svg><use href="#i-external"/></svg></a></div>
-        </div>
-        <div class="code-window reveal">
-          <div class="code-titlebar"><div><i></i><i></i><i></i></div><span>PATCHER / LOCAL WORKSTATION</span></div>
-          <div class="code-tabs"><button class="active" data-tab="windows">Windows</button><button data-tab="linux">Linux / macOS</button></div>
-          <pre id="patchCode"><code data-code="windows">&gt; scripts\patch-apk.bat
-
-[1] selecione sua cópia local
-[2] informe https://sua-instancia.example
-[3] valide a configuração
-[4] gere a saída assinada localmente
-
-output\
-  cliente-configurado.apk</code><code data-code="linux" hidden>$ ./scripts/patch-apk.sh
-
-[1] selecione sua cópia local
-[2] informe https://sua-instancia.example
-[3] valide a configuração
-[4] gere a saída assinada localmente
-
-output/
-  cliente-configurado.apk</code></pre>
-          <div class="code-footer"><span><i class="pulse"></i> sem upload para terceiros</span><span>processo local</span></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section selfhost" id="self-hosted">
-      <div class="shell">
-        <div class="section-heading reveal"><div><span class="eyebrow">Servidor self-hosted</span><h2>Infraestrutura administrada por você.</h2></div><p>Revival não opera um servidor oficial ou central obrigatório. Cada instalação pode ser executada e administrada de forma independente.</p></div>
-        <div class="selfhost-grid">
-          <div class="server-console reveal"><div class="console-head"><span><svg><use href="#i-terminal"/></svg> deploy</span><small>Ubuntu / Debian</small></div><pre><code>$ git clone https://github.com/testesvibecodeing/mighty-doom-revival.git
-$ cd mighty-doom-revival
-$ sudo ./scripts/install.sh
-
-✓ Node.js / runtime
-✓ serviço systemd
-✓ reverse proxy
-✓ HTTPS
-✓ health check
-✓ site da instância</code></pre></div>
-          <div class="instance-stats reveal">
-            <div class="stat-head"><div><span class="live-dot" id="liveDot"></span><strong>Telemetria desta instância</strong></div><small>GET /revival/health</small></div>
-            <div class="stat-grid"><div class="stat"><span>Estado</span><strong id="tileState">--</strong></div><div class="stat"><span>Latência</span><strong id="tileLatency">--</strong></div><div class="stat"><span>Uptime</span><strong id="tileUptime">--</strong></div><div class="stat"><span>Jogadores</span><strong id="tilePlayers">--</strong></div><div class="stat"><span>GameData</span><strong id="tileGameData">--</strong></div><div class="stat"><span>API / cliente</span><strong id="tileApi">--</strong></div><div class="stat"><span>Pacotes ativos</span><strong id="tilePacks">--</strong></div><div class="stat"><span>Eventos ativos</span><strong id="tileEvents">--</strong></div></div>
-            <div class="health-path"><span id="healthUrlLabel">/revival/health</span><button id="refreshHealth" type="button">Atualizar agora</button></div>
-          </div>
-        </div>
-        <div class="capabilities reveal"><div><svg><use href="#i-server"/></svg><strong>Persistência</strong><span>SQLite e estado da instância</span></div><div><svg><use href="#i-lock"/></svg><strong>Controle local</strong><span>configs, domínio e dados próprios</span></div><div><svg><use href="#i-shield"/></svg><strong>Sem IAP real</strong><span>economia interna configurável</span></div><div><svg><use href="#i-doc"/></svg><strong>Auditável</strong><span>código e documentação no GitHub</span></div></div>
-      </div>
-    </section>
-
-    <section class="section instance-distribution" id="instancia">
-      <div class="shell split reverse">
-        <div class="distribution-card reveal">
-          <div class="distribution-head"><span class="instance-badge">RECURSO OPCIONAL DA INSTÂNCIA</span><span class="availability" id="apkAvailability">verificando</span></div>
-          <h3>Pacote configurado pelo administrador</h3>
-          <p>Uma instância pode, opcionalmente, disponibilizar aos seus próprios usuários um APK já configurado para aquele servidor. Isso é uma decisão do administrador daquela instância — não uma distribuição oficial ou centralizada do projeto Revival.</p>
-          <div class="apk-meta"><div><span>status</span><strong id="apkStatus">--</strong></div><div><span>tamanho</span><strong id="apkSize">--</strong></div><div><span>sha256</span><strong id="apkHash">--</strong></div><div><span>publicado</span><strong id="apkDate">--</strong></div></div>
-          <a class="button instance-download disabled" id="instanceApkBtn" aria-disabled="true"><svg><use href="#i-download"/></svg><span><strong>Nenhum pacote publicado</strong><small>endpoint desta instância: /revival/apk</small></span></a>
-          <div class="legal-mini"><svg><use href="#i-alert"/></svg><p>O administrador que optar por hospedar um pacote configurado é responsável por avaliar permissões, licenças e legislação aplicável à sua jurisdição. O projeto central não busca, importa ou redistribui automaticamente APKs de terceiros.</p></div>
-        </div>
-        <div class="section-copy reveal"><span class="eyebrow">Distribuição da instância</span><h2>Transparente sobre o que cada servidor oferece.</h2><p>O endpoint <code>GET /revival/apk</code> existe para informar se <em>esta instância</em> publicou um pacote configurado, incluindo metadados como tamanho e SHA-256.</p><p>A presença desse arquivo não muda o fluxo principal do projeto: qualquer usuário pode continuar usando sua própria cópia e executar o patcher localmente para o servidor que escolher.</p><div class="principles"><article><span>central</span><strong>servidor + patcher + docs</strong></article><article><span>usuário</span><strong>sua própria cópia + patch local</strong></article><article><span>instância</span><strong>hospedagem opcional sob responsabilidade do admin</strong></article></div></div>
-      </div>
-    </section>
-
-    <section class="section docs-section" id="documentacao">
-      <div class="shell">
-        <div class="section-heading reveal"><div><span class="eyebrow">Documentação</span><h2>Instale, configure, audite.</h2></div><p>Links diretos para a documentação do repositório. Nenhum passo depende de um portal proprietário.</p></div>
-        <div class="docs-grid">
-          <a class="doc-card reveal" id="docServer" href="#" target="_blank" rel="noopener"><span class="doc-icon"><svg><use href="#i-server"/></svg></span><div><small>01</small><h3>Servidor</h3><p>Instalação, configuração e execução.</p></div><svg class="doc-arrow"><use href="#i-arrow"/></svg></a>
-          <a class="doc-card reveal" id="docPatch" href="#" target="_blank" rel="noopener"><span class="doc-icon"><svg><use href="#i-patch"/></svg></span><div><small>02</small><h3>Patcher local</h3><p>Fluxo do cliente configurado localmente.</p></div><svg class="doc-arrow"><use href="#i-arrow"/></svg></a>
-          <a class="doc-card reveal" id="docLegal" href="#" target="_blank" rel="noopener"><span class="doc-icon"><svg><use href="#i-shield"/></svg></span><div><small>03</small><h3>Política legal</h3><p>Preservação, limites e direitos de terceiros.</p></div><svg class="doc-arrow"><use href="#i-arrow"/></svg></a>
-          <a class="doc-card reveal" id="docMatrix" href="#" target="_blank" rel="noopener"><span class="doc-icon"><svg><use href="#i-doc"/></svg></span><div><small>04</small><h3>Compatibilidade</h3><p>Matriz de endpoints e progresso técnico.</p></div><svg class="doc-arrow"><use href="#i-arrow"/></svg></a>
-        </div>
-      </div>
-    </section>
-
-    <section class="section faq-section" id="faq">
-      <div class="shell faq-layout">
-        <div class="faq-intro reveal"><span class="eyebrow">FAQ</span><h2>Perguntas sem linguagem ambígua.</h2><p>O Revival descreve exatamente o que é central, o que é local e o que pertence à instância administrada pelo usuário.</p></div>
-        <div class="faq-list">
-          <details class="reveal"><summary>Revival é oficial ou afiliado aos titulares do jogo?</summary><p>Não. É um projeto comunitário, independente e não oficial. Não é afiliado, patrocinado ou endossado pela Bethesda, ZeniMax, Microsoft, id Software ou Alpha Dog Games.</p></details>
-          <details class="reveal"><summary>O projeto central fornece o APK de Mighty DOOM?</summary><p>Não. O fluxo principal exige que o usuário obtenha legitimamente sua própria cópia e execute o patcher local. O site não possui mecanismo de download automático a partir de repositórios de APK de terceiros.</p></details>
-          <details class="reveal"><summary>Por que existe um botão de pacote/APK nesta página?</summary><p>Porque cada servidor Revival pode ser administrado por uma pessoa diferente. O administrador da instância pode optar por hospedar um pacote já configurado para os usuários daquela própria instância, sob sua responsabilidade e conforme a legislação aplicável. Isso não é uma distribuição central do projeto.</p></details>
-          <details class="reveal"><summary>Posso usar o patcher mesmo se a instância oferecer um pacote?</summary><p>Sim. O patcher local continua sendo um fluxo independente: você fornece sua própria cópia e escolhe o endereço do servidor.</p></details>
-          <details class="reveal"><summary>Onde meu progresso e as configurações ficam armazenados?</summary><p>Na infraestrutura da instância escolhida. O Revival foi projetado para ser self-hosted; o administrador controla banco, configuração, domínio, eventos e demais dados do próprio servidor.</p></details>
-          <details class="reveal"><summary>O nome Mighty DOOM é propriedade do projeto Revival?</summary><p>Não. O nome e demais marcas pertencem aos seus respectivos titulares. O site usa o nome somente quando necessário para identificar, de forma descritiva, o cliente com o qual a infraestrutura busca interoperabilidade.</p></details>
-        </div>
-      </div>
-    </section>
-
-    <section class="section closing"><div class="shell closing-card reveal"><div class="closing-mark" aria-hidden="true"><span></span><span></span><span></span></div><div><span class="eyebrow">Revival</span><h2>Infraestrutura aberta para preservação técnica.</h2><p>Servidor independente, patcher local e documentação para instalações administradas pelos próprios usuários.</p></div><a class="button primary" id="githubClosing" href="#" target="_blank" rel="noopener"><svg><use href="#i-github"/></svg> Abrir repositório</a></div></section>
-  </main>
-
-  <footer>
-    <div class="shell footer-grid">
-      <div class="footer-brand"><span class="brand-mark compact" aria-hidden="true"><span></span><span></span><span></span><span></span></span><div><strong>REVIVAL</strong><small>community infrastructure</small></div></div>
-      <div class="footer-legal"><strong>Aviso de independência e direitos de terceiros</strong><p>Revival é um projeto independente de preservação e interoperabilidade. Não é afiliado, patrocinado ou endossado pela Bethesda, ZeniMax, Microsoft, id Software ou Alpha Dog Games. Mighty DOOM, DOOM e demais marcas, personagens, artes, músicas, logos e conteúdos relacionados pertencem aos seus respectivos titulares.</p><a id="footerLegal" href="#" target="_blank" rel="noopener">Ler política legal completa <svg><use href="#i-external"/></svg></a></div>
-      <div class="footer-nav"><a id="footerGithub" href="#" target="_blank" rel="noopener">GitHub</a><a href="#patcher">Patcher</a><a href="#self-hosted">Servidor</a><a href="#instancia">Instância</a></div>
     </div>
-    <div class="shell footer-bottom"><span>Projeto comunitário · self-hosted · não oficial</span><span>Identidade visual original do Revival — sem logos ou artes oficiais.</span></div>
-  </footer>
+    <div class="hero-fade"></div>
+  </section>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"><span class="toast-dot"></span><span id="toastMsg">Pronto.</span></div>
-  <script src="/assets/js/config.js"></script>
-  <script type="module" src="/assets/js/app.js"></script>
+  <section class="live" id="status">
+    <div class="shell">
+      <div class="section-title reveal"><span class="wing"></span><h2>DADOS REAIS · SERVIDOR AO VIVO</h2><span class="wing"></span></div>
+      <div class="live-grid">
+        <div class="stats-grid reveal">
+          <div class="stat"><small><span class="pulse"></span>Slayers registrados</small><div class="stat-value" id="tilePlayers">--</div></div>
+          <div class="stat"><small>Pacotes da loja ativos</small><div class="stat-value" id="tilePacks">--</div></div>
+          <div class="stat"><small>Eventos ativos</small><div class="stat-value" id="tileEvents">--</div></div>
+          <div class="stat"><small>Latência agora</small><div class="stat-value" id="tileLatency">--</div></div>
+          <div class="stat"><small>Uptime do servidor</small><div class="stat-value" id="tileUptime">--</div></div>
+          <div class="stat"><small>Game data</small><div class="stat-value" id="tileGameData">--</div></div>
+          <div class="stat"><small>APK publicado</small><div class="stat-value" id="tileApk">--</div></div>
+          <div class="stat"><small>API / cliente</small><div class="stat-value" id="tileApi">--</div></div>
+        </div>
+        <div class="terminal reveal">
+          <div class="terminal-top"><span></span><span></span><span></span><b>REVIVAL // LIVE SYSTEM</b></div>
+          <pre id="terminalLog">[BOOT] aguardando resposta do servidor...</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature-strip" id="recursos">
+    <div class="shell">
+      <div class="section-title reveal"><span class="wing"></span><h2>RECURSOS PRINCIPAIS</h2><span class="wing"></span></div>
+      <div class="grid-features">
+        <article class="card reveal"><div class="icon"><i class="fa-solid fa-skull"></i></div><div><h3>Eventos completos</h3><p>Eventos originais, rotações e conteúdo sazonal preservado.</p></div></article>
+        <article class="card reveal"><div class="icon"><i class="fa-solid fa-box-open"></i></div><div><h3>Battle Pass</h3><p>Progressão, tiers e recompensas locais sem pagamento real.</p></div></article>
+        <article class="card reveal"><div class="icon"><i class="fa-solid fa-coins"></i></div><div><h3>Loja in-game</h3><p>Compre pacotes somente com moedas obtidas jogando.</p></div></article>
+        <article class="card reveal"><div class="icon"><i class="fa-solid fa-khanda"></i></div><div><h3>Progressão total</h3><p>Capítulos, missões, armas, Slayer e evolução persistente.</p></div></article>
+        <article class="card reveal"><div class="icon"><i class="fa-solid fa-shirt"></i></div><div><h3>Personalização</h3><p>Armas, skins, equipamentos, launchers e ultimates.</p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="content" id="download">
+    <div class="shell two-col">
+      <div class="reveal">
+        <span class="eyebrow">// CLIENTE</span>
+        <h2>PREPARE SEU APK.<br><span>O INFERNO ESTÁ ESPERANDO.</span></h2>
+        <p>O patcher altera o endpoint do cliente, ajusta rede/TLS, recompila, alinha e assina o APK para conectar ao Revival Server.</p>
+        <div class="steps">
+          <div class="step"><b>01</b><span>Baixe o APK 1.13.1 compatível.</span></div>
+          <div class="step"><b>02</b><span>Execute o patcher e informe seu domínio.</span></div>
+          <div class="step"><b>03</b><span>Instale o APK gerado no Android.</span></div>
+          <div class="step"><b>04</b><span>Abra, conecte e jogue.</span></div>
+        </div>
+        <div class="download-row">
+          <a class="btn btn-primary large disabled" id="downloadBtn" href="#download"><i class="fa-solid fa-download"></i><span><strong>APK ainda não publicado</strong><small id="apkSubLabel">aguardando o upload via link temporário do install.sh</small></span></a>
+          <a class="btn btn-secondary large" id="githubBtn" href="#" target="_blank" rel="noopener"><i class="fa-brands fa-github"></i><span><strong>GitHub</strong><small>Código do servidor e patcher</small></span></a>
+        </div>
+      </div>
+      <div class="upload-card reveal">
+        <h3><i class="fa-solid fa-fire-flame-curved"></i> Publicar seu APK neste site</h3>
+        <ol>
+          <li>Na VPS, rode <code>sudo ./scripts/install.sh</code> — no final ele imprime um <b>link temporário de upload</b>.</li>
+          <li>Abra o link no navegador e arraste o APK já patcheado. O link fica ativo por <b>24 horas</b>.</li>
+          <li>O botão de download do site passa a servir o APK automaticamente (com tamanho e SHA-256 reais).</li>
+          <li>O instalador também imprime, logo abaixo, um <b>link de cancelamento</b>: abra-o para eliminar o upload na hora e ninguém substituir o seu APK.</li>
+        </ol>
+        <p class="note">O upload é opcional: sem APK publicado, o servidor do jogo funciona normalmente — só o download pelo site fica indisponível.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <div class="shell">
+      <div class="faq-head reveal"><span class="eyebrow">// FAQ</span><h2>PERGUNTAS FREQUENTES</h2></div>
+      <details class="reveal">
+        <summary>O status do servidor é real?</summary>
+        <p>Sim. A página consulta <code>/revival/health</code> e <code>/revival/apk</code> no próprio domínio a cada 30 segundos e todos os números exibidos (jogadores, pacotes, eventos, uptime, latência, APK) vêm direto do servidor real.</p>
+      </details>
+      <details class="reveal">
+        <summary>Como o APK aparece para download?</summary>
+        <p>Via link temporário de 24 horas impresso pelo <code>scripts/install.sh</code>. Depois de enviar, o download fica ativo em <code>/download/mighty-doom-revival.apk</code>. Para bloquear novos envios antes das 24h, use o link de cancelamento impresso junto.</p>
+      </details>
+      <details class="reveal">
+        <summary>Posso usar meu próprio domínio?</summary>
+        <p>Sim. Informe o domínio no instalador da VPS e use o mesmo domínio no patcher do APK. O site é servido pelo próprio servidor, então tudo fica no mesmo domínio automaticamente.</p>
+      </details>
+      <details class="reveal">
+        <summary>Existe pagamento real?</summary>
+        <p>Não. A proposta do Revival é usar somente moedas e recursos internos do jogo; IAP e anúncios respondem como desabilitados.</p>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer id="contato">
+  <div class="shell footer-inner">
+    <div><strong>MIGHTY DOOM REVIVAL</strong><p>Projeto independente de preservação e interoperabilidade.</p></div>
+    <div class="footer-links">
+      <a id="footerGithub" href="#" target="_blank" rel="noopener"><i class="fa-brands fa-github"></i> GitHub</a>
+      <a href="#inicio"><i class="fa-solid fa-arrow-up"></i> Voltar ao topo</a>
+    </div>
+  </div>
+  <div class="legal">Não afiliado à Bethesda, ZeniMax, Microsoft, id Software ou Alpha Dog Games. DOOM e marcas relacionadas pertencem aos seus respectivos proprietários.</div>
+</footer>
+
+<div class="toast" id="toast" role="status"><i class="fa-solid fa-circle-check"></i><span id="toastMsg">Pronto.</span></div>
+
+<noscript><div style="position:fixed;inset:auto 0 0;z-index:300;padding:10px;text-align:center;background:#2a0c04;color:#ffd9a8;font-family:sans-serif">Ative o JavaScript para ver o status do servidor ao vivo e o fundo interativo.</div></noscript>
+
+<script src="assets/js/config.js"></script>
+<script type="module" src="assets/js/app.js"></script>
 </body>
 </html>
