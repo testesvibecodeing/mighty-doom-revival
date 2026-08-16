@@ -17,6 +17,7 @@ if (( NODE_MAJOR < 24 )); then
   exit 2
 fi
 
+cp -n "$SERVER_DIR/.env.example" "$SERVER_DIR/.env" || true
 cp -n "$SERVER_DIR/config/revival.example.json" "$SERVER_DIR/config/revival.json" || true
 cp -n "$SERVER_DIR/config/packs.example.json" "$SERVER_DIR/config/packs.json" || true
 cp -n "$SERVER_DIR/config/events.example.json" "$SERVER_DIR/config/events.json" || true
@@ -31,6 +32,8 @@ npm run check
 
 echo '[3/3] Preparação concluída.'
 cat <<'EOF'
+
+IMPORTANTE: edite server/.env e troque REVIVAL_ADMIN_TOKEN=change-me.
 
 Para iniciar:
   cd server
