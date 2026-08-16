@@ -39,12 +39,17 @@ def _host_offsets(data: bytes) -> list[int]:
 
 
 def _candidate_regions(data: bytes, host_offset: int, max_string_bytes: int = 8192) -> list[tuple[int, int, int]]:
-    """Return plausible (prefix, payload_end, aligned_end) Unity string regions."""
+    """Return plausible (prefix, payload_end, aligned_end) Unity string regions.
+
+    Do not require the uint32 length prefix itself to start at a 4-byte offset.
+    Unity strings are padded to a 4-byte boundary after their payload, but the
+    containing field can begin unaligned depending on the preceding serialized
+    fields. Safety comes from requiring a unique length-delimited UTF-8 region,
+    known-host containment and zero alignment padding before any bytes change.
+    """
     candidates: list[tuple[int, int, int]] = []
     lower = max(0, host_offset - max_string_bytes - 4)
-    # Serialized fields are 4-byte aligned relative to the object payload.
-    first = lower + ((4 - (lower % 4)) % 4)
-    for prefix in range(first, host_offset, 4):
+    for prefix in range(lower, host_offset):
         if prefix + 4 > host_offset:
             break
         length = int.from_bytes(data[prefix:prefix + 4], "little", signed=False)
