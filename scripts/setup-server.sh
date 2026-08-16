@@ -2,36 +2,43 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVER_DIR="$ROOT/server/community"
+SERVER_DIR="$ROOT/server"
 
-for cmd in git node npm; do
+for cmd in node npm; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "[ERRO] $cmd não encontrado. O upstream atual requer Node.js 24+ e npm 11+." >&2
+    echo "[ERRO] $cmd não encontrado. Use Node.js 24+." >&2
     exit 2
   fi
 done
 
-mkdir -p "$ROOT/server"
-
-if [[ ! -d "$SERVER_DIR/.git" ]]; then
-  echo "Clonando servidor upstream..."
-  git clone https://gitlab.com/dannyhpy/mightydoom-gameserver.git "$SERVER_DIR"
-else
-  echo "Servidor já existe. Atualizando..."
-  git -C "$SERVER_DIR" pull --ff-only
+NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])')"
+if (( NODE_MAJOR < 24 )); then
+  echo "[ERRO] Node.js 24+ necessário. Encontrado: $(node --version)" >&2
+  exit 2
 fi
 
+cp -n "$SERVER_DIR/config/revival.example.json" "$SERVER_DIR/config/revival.json" || true
+cp -n "$SERVER_DIR/config/packs.example.json" "$SERVER_DIR/config/packs.json" || true
+cp -n "$SERVER_DIR/config/events.example.json" "$SERVER_DIR/config/events.json" || true
+mkdir -p "$SERVER_DIR/runtime" "$SERVER_DIR/data"
+
 cd "$SERVER_DIR"
+echo '[1/3] Instalando dependências...'
+npm install
 
-npm install --omit=dev --omit=optional
-npm install better-sqlite3
-npx knex migrate:latest
+echo '[2/3] Verificando sintaxe...'
+npm run check
 
+echo '[3/3] Preparação concluída.'
 cat <<'EOF'
 
-Servidor preparado.
+Para iniciar:
+  cd server
+  npm start
 
-Para iniciar atrás de Nginx/Caddy:
-  cd server/community
-  npm run start -- --addr 127.0.0.1 --port 8080 --proxy --debug
+Health check:
+  http://127.0.0.1:8080/revival/health
+
+Para compatibilidade completa, coloque o game-data validado em:
+  server/data/game-data.json
 EOF
