@@ -57,6 +57,9 @@ reports/
 .DS_Store
 Thumbs.db
 
+# Claude Code local/personal settings (per-machine, not team-shared)
+.claude/settings.local.json
+
 # Logs / temporary files
 *.log
 *.tmp

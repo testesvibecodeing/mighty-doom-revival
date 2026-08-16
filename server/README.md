@@ -95,3 +95,5 @@ RESEARCH_MODE=false
 ## HTTPS
 
 Em produção/LAN, coloque Nginx ou Caddy na frente da porta 8080. O APK será patchado para apontar para o hostname escolhido pelo usuário. O TLS e a CA do APK serão tratados pelo patcher do repositório.
+
+Em uma VPS Ubuntu, [`scripts/install.sh`](../scripts/install.sh) faz isso automaticamente (Caddy + Let's Encrypt + systemd). Veja a seção "Deploy em produção (VPS Ubuntu)" no [README principal](../README.md).

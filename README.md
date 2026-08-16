@@ -48,7 +48,8 @@ mighty-doom-revival/
 │   ├── analyze_apk.py
 │   ├── analyze-official-apk.bat
 │   ├── patch_apk.py
-│   └── patch-apk.bat
+│   ├── patch-apk.bat
+│   └── install.sh          # instalador completo para VPS Ubuntu/Debian
 └── server/
     ├── src/                # servidor Revival próprio
     ├── config/             # packs, eventos e configuração
@@ -120,6 +121,62 @@ GET http://127.0.0.1:8080/revival/health
 O servidor já tem base para autenticação local, SQLite, categorias de recursos, moedas/energia, inventário/slots, starter bundle, entrega de game data, loja configurável, compras por moeda interna, agenda de eventos e estado persistente. Endpoints ainda desconhecidos podem ser registrados pelo `RESEARCH_MODE` durante a fase de compatibilidade.
 
 Veja [`server/README.md`](server/README.md).
+
+## 3b. Deploy em produção (VPS Ubuntu)
+
+Como este repositório é público, a forma recomendada de colocar o Revival Server no ar é uma VPS Ubuntu com HTTPS de verdade, usando o instalador [`scripts/install.sh`](scripts/install.sh). Ele é idempotente (pode rodar de novo a cada `git pull`) e faz tudo sozinho:
+
+- instala Node.js 24 LTS (precisa de `node:sqlite`) e o Caddy, se ainda não existirem;
+- prepara `server/.env` e os `config/*.json` a partir dos `.example`;
+- roda a suíte de testes do servidor como gate de deploy (aborta se algo quebrar);
+- sobe o servidor como serviço `systemd` (reinício automático);
+- configura o Caddy como reverse proxy com HTTPS automático via Let's Encrypt para o domínio informado;
+- valida `http://127.0.0.1:8080/revival/health` e depois `https://SEU_DOMINIO/revival/health` antes de terminar.
+
+Pré-requisitos:
+
+- VPS Ubuntu 22.04+ (ou Debian) com acesso root/sudo;
+- um domínio/subdomínio com registro DNS `A` apontando para o IP público da VPS;
+- portas `80` e `443` liberadas no firewall do provedor (security group) além do `ufw`.
+
+Instalação (primeira vez):
+
+```bash
+sudo apt-get update && sudo apt-get install -y git
+git clone https://github.com/testesvibecodeing/mighty-doom-revival.git
+cd mighty-doom-revival
+sudo ./scripts/install.sh
+```
+
+O script pergunta o domínio HTTPS (ex: `d.seudominio.com.br`). Para rodar sem prompt interativo, informe-o antes:
+
+```bash
+DOMAIN=d.seudominio.com.br sudo -E ./scripts/install.sh
+```
+
+Ao final ele imprime o `REVIVAL_ADMIN_TOKEN` gerado (guarde-o — autoriza `POST /revival/reload`) e os comandos úteis para inspecionar os serviços:
+
+```bash
+systemctl status mighty-doom-revival
+systemctl status caddy
+journalctl -u mighty-doom-revival -f
+```
+
+Atualizar o servidor em produção depois de mudanças no código:
+
+```bash
+cd mighty-doom-revival
+git pull
+sudo ./scripts/install.sh
+```
+
+Se `server/data/game-data.json` ainda não existir na VPS, o serviço sobe mesmo assim (`game_data_loaded: false`); depois de colocar o arquivo real, reinicie:
+
+```bash
+sudo systemctl restart mighty-doom-revival
+```
+
+Por fim, use o domínio configurado (`https://d.seudominio.com.br`) em `scripts\patch-apk.bat`, no Windows, para gerar o APK apontando para o seu Revival Server.
 
 ## 4. Game data
 
