@@ -39,13 +39,23 @@ echo Verificando dependencias minimas...
 call :require python || (pause & exit /b 3)
 
 echo.
-echo Verificando se "%SERVER_HOST%" cabe no patch direto e seguro (sem apktool)...
+echo Verificando capacidade do patch direto (sem apktool)...
 python scripts\check_patch_length.py "%APK%" "%SERVER_HOST%"
-if errorlevel 1 (
-  echo.
-  echo Ajuste o hostname acima e rode o patcher de novo.
+set "LENGTH_RC=!ERRORLEVEL!"
+if "!LENGTH_RC!"=="2" (
+  echo [ERRO] Hostname/APK invalido para o precheck.
   pause
-  exit /b %ERRORLEVEL%
+  exit /b 2
+)
+if not "!LENGTH_RC!"=="0" if not "!LENGTH_RC!"=="4" (
+  echo [ERRO] Precheck falhou com codigo !LENGTH_RC!.
+  pause
+  exit /b !LENGTH_RC!
+)
+if "!LENGTH_RC!"=="4" (
+  echo.
+  echo [INFO] O hostname nao cabe no fast path. Continuando para o patch bundle-aware.
+  echo [INFO] Se a referencia exigir realocacao de metadata IL2CPP, a etapa posterior bloqueara com seguranca.
 )
 
 call :require java || (pause & exit /b 3)
@@ -133,8 +143,8 @@ set "PATCH_RC=%ERRORLEVEL%"
 
 if "%PATCH_RC%"=="4" (
   echo.
-  echo Hostname com tamanho diferente detectado. Tentando patch bundle-aware...
-  python scripts\patch_bundle_from_report.py --decoded "%DECODED%" --server "%SERVER_HOST%" --report "%REPORT%"
+  echo Patch direto incompleto. Tentando patch bundle-aware em TODOS os bundles Addressables...
+  python scripts\patch_bundle_from_report.py --decoded "%DECODED%" --server "%SERVER_HOST%" --report "%REPORT%" --sweep-all-bundles
   set "PATCH_RC=!ERRORLEVEL!"
 )
 
@@ -182,8 +192,6 @@ if errorlevel 1 (
   exit /b 8
 )
 
-rem A assinatura nao deve alterar os payloads de assets. Verifique novamente o
-rem endpoint depois do signer para impedir entrega de um artefato inesperado.
 python scripts\verify_patched_apk.py --apk "%UNSIGNED%" --server "%SERVER_HOST%" --report "%VERIFY_REPORT%"
 if errorlevel 1 (
   echo [ERRO] APK assinado falhou na verificacao final do endpoint.

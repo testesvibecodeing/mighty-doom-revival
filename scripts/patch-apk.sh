@@ -62,13 +62,27 @@ fi
 echo "[OK] $PYTHON_BIN"
 
 echo
-echo "Verificando se \"$SERVER_HOST\" cabe no patch direto e seguro (sem apktool)..."
+echo "Verificando capacidade do patch direto (sem apktool)..."
 step "verificação de comprimento do hostname"
-if ! "$PYTHON_BIN" scripts/check_patch_length.py "$APK" "$SERVER_HOST"; then
-  echo >&2
-  echo "Ajuste o hostname acima e rode o patcher de novo." >&2
-  exit 4
-fi
+LENGTH_RC=0
+"$PYTHON_BIN" scripts/check_patch_length.py "$APK" "$SERVER_HOST" || LENGTH_RC=$?
+case "$LENGTH_RC" in
+  0)
+    ;;
+  4)
+    echo
+    echo "[INFO] O hostname não cabe no fast path. Continuando para o patch bundle-aware."
+    echo "[INFO] Se a referência exigir realocação de metadata IL2CPP, a etapa posterior bloqueará com segurança."
+    ;;
+  2)
+    echo "[ERRO] Hostname/APK inválido para o precheck." >&2
+    exit 2
+    ;;
+  *)
+    echo "[ERRO] Precheck falhou com código $LENGTH_RC." >&2
+    exit "$LENGTH_RC"
+    ;;
+esac
 
 if ! command -v java >/dev/null 2>&1; then
   echo "[FALTA] java não está no PATH." >&2
@@ -132,9 +146,9 @@ fi
 
 if [[ "$PATCH_RC" == "4" ]]; then
   echo
-  echo "Hostname com tamanho diferente detectado. Tentando patch bundle-aware..."
+  echo "Patch direto incompleto. Tentando patch bundle-aware em TODOS os bundles Addressables..."
   PATCH_RC=0
-  "$PYTHON_BIN" scripts/patch_bundle_from_report.py --decoded "$DECODED" --server "$SERVER_HOST" --report "$REPORT" || PATCH_RC=$?
+  "$PYTHON_BIN" scripts/patch_bundle_from_report.py --decoded "$DECODED" --server "$SERVER_HOST" --report "$REPORT" --sweep-all-bundles || PATCH_RC=$?
 fi
 
 if [[ "$PATCH_RC" != "0" ]]; then
@@ -161,8 +175,6 @@ step "[7/8] assinatura do APK"
 java -jar "$SIGNER" -a "$UNSIGNED" --overwrite --verbose
 java -jar "$SIGNER" -a "$UNSIGNED" --onlyVerify --verbose
 
-# A assinatura não deve alterar os payloads de assets. Verifique novamente o
-# endpoint depois do signer para impedir entrega de um artefato inesperado.
 step "[7/8] verificação final do endpoint pós-assinatura"
 "$PYTHON_BIN" scripts/verify_patched_apk.py --apk "$UNSIGNED" --server "$SERVER_HOST" --report "$VERIFY_REPORT"
 
