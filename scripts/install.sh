@@ -11,7 +11,22 @@
 # gate de deploy, sobe o servidor via systemd e configura HTTPS automático
 # (Let's Encrypt) via Caddy para o domínio informado.
 #
-# Toda a execução é registrada em deploy/logs/install-<timestamp>.log.
+# SEGURO PARA VPS COMPARTILHADA: se Node.js e/ou Caddy já estiverem
+# instalados (por exemplo, por outro projeto na mesma VPS), este instalador
+# NUNCA os reinstala nem os marca como "nossos". Ele também nunca sobrescreve
+# /etc/caddy/Caddyfile - só acrescenta uma linha "import" (se ainda não
+# houver) e escreve o domínio deste projeto em um arquivo próprio dentro de
+# /etc/caddy/conf.d/, sem tocar em blocos de outros domínios/projetos. Cada
+# decisão de posse (o que é "nosso" e pode ser removido depois) é tomada uma
+# única vez, na primeira execução, e fica registrada permanentemente em
+# deploy/.install-state para o par deste script, scripts/uninstall.sh, usar.
+#
+# Para desfazer só o que pertence a este projeto (sem afetar outros projetos
+# na mesma VPS), veja scripts/uninstall.sh.
+#
+# Toda a execução é registrada em deploy/logs/install-<timestamp>.log, com
+# uma seção "OWNERSHIP" para cada decisão sobre o que pertence a este
+# projeto e o que foi preservado por já pertencer a outra coisa.
 
 if [ -z "${BASH_VERSION:-}" ]; then
   echo "[ERRO] Execute este script com bash: sudo bash scripts/install.sh" >&2
@@ -24,6 +39,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_DIR="$ROOT/server"
 DEPLOY_DIR="$ROOT/deploy"
 LOG_DIR="$DEPLOY_DIR/logs"
+STATE_FILE="$DEPLOY_DIR/.install-state"
 mkdir -p "$LOG_DIR"
 
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -37,6 +53,18 @@ exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$LOG_FILE" >&2)
 echo "============================================================"
 echo " Mighty DOOM Revival - instalador VPS"
 echo " Log desta execução: $LOG_FILE"
+echo "============================================================"
+echo ""
+echo "Este instalador é seguro para VPS compartilhada com outros projetos:"
+echo "  - Só assume posse de Node.js/Caddy se ele mesmo instalar porque"
+echo "    estavam ausentes. Se já existiam, ficam marcados como 'não é deste"
+echo "    projeto' e scripts/uninstall.sh nunca vai removê-los."
+echo "  - Nunca sobrescreve /etc/caddy/Caddyfile: só acrescenta a linha"
+echo "    'import' se faltar, e escreve o domínio deste projeto em um arquivo"
+echo "    próprio dentro de /etc/caddy/conf.d/, sem tocar em outros domínios."
+echo "  - Cada decisão de posse é registrada permanentemente em:"
+echo "      $STATE_FILE"
+echo "    e reaproveitada nas próximas execuções (git pull && install.sh)."
 echo "============================================================"
 
 STEP="inicialização"
@@ -64,6 +92,37 @@ fail() {
   echo "[ERRO] $1" >&2
   echo "Log completo desta execução: $LOG_FILE" >&2
   exit "${2:-1}"
+}
+
+# Registro persistente de posse (deploy/.install-state): guarda, para sempre,
+# se cada dependência de sistema (Node.js, pacote Caddy, ...) foi instalada
+# por ESTE instalador ou já existia na VPS antes dele (ex: outro projeto).
+# Uma vez decidido, o valor nunca é reavaliado em execuções futuras - assim
+# scripts/uninstall.sh sabe com segurança o que pode remover.
+[[ -f "$STATE_FILE" ]] || : > "$STATE_FILE"
+# shellcheck disable=SC1090
+source "$STATE_FILE"
+
+set_state() {
+  local key="$1" value="$2"
+  if grep -q "^${key}=" "$STATE_FILE" 2>/dev/null; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$STATE_FILE"
+  else
+    echo "${key}=${value}" >> "$STATE_FILE"
+  fi
+  export "${key}=${value}"
+}
+
+state_decided() {
+  grep -q "^${1}=" "$STATE_FILE" 2>/dev/null
+}
+
+ownership_label() {
+  case "${!1:-}" in
+    1) echo "SIM - pertence a este projeto (uninstall.sh pode remover)" ;;
+    0) echo "NÃO - já existia antes/pertence a outra coisa (uninstall.sh nunca remove)" ;;
+    *) echo "não se aplica" ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -98,6 +157,16 @@ if command -v node >/dev/null 2>&1; then
   fi
 fi
 
+if ! state_decided NODE_INSTALLED_BY_SCRIPT; then
+  if [[ "$NEED_NODE_INSTALL" == "1" ]]; then
+    echo "[OWNERSHIP] Node.js compatível ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
+    set_state NODE_INSTALLED_BY_SCRIPT 1
+  else
+    echo "[OWNERSHIP] Node.js compatível já estava instalado nesta VPS antes deste projeto: NÃO é nosso, uninstall.sh nunca vai removê-lo."
+    set_state NODE_INSTALLED_BY_SCRIPT 0
+  fi
+fi
+
 if [[ "$NEED_NODE_INSTALL" == "1" ]]; then
   echo "Instalando Node.js 24 LTS via NodeSource..."
   curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
@@ -111,7 +180,20 @@ node -e "const s=require('node:sqlite'); const db=new s.DatabaseSync(':memory:')
 # ---------------------------------------------------------------------------
 step "Verificando/instalando Caddy (reverse proxy + HTTPS automático)"
 
-if ! command -v caddy >/dev/null 2>&1; then
+CADDY_ALREADY_PRESENT=1
+command -v caddy >/dev/null 2>&1 || CADDY_ALREADY_PRESENT=0
+
+if ! state_decided CADDY_PACKAGE_INSTALLED_BY_SCRIPT; then
+  if [[ "$CADDY_ALREADY_PRESENT" == "0" ]]; then
+    echo "[OWNERSHIP] Pacote 'caddy' ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
+    set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 1
+  else
+    echo "[OWNERSHIP] Pacote 'caddy' já estava instalado nesta VPS (pode ser de outro projeto): NÃO é nosso, uninstall.sh nunca vai remover o pacote."
+    set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 0
+  fi
+fi
+
+if [[ "$CADDY_ALREADY_PRESENT" == "0" ]]; then
   apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
     | gpg --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -293,21 +375,67 @@ verify_service_active "$SERVICE_NAME" || fail "O serviço $SERVICE_NAME não sub
 # ---------------------------------------------------------------------------
 step "Configurando Caddy (proxy 127.0.0.1:8080 -> HTTPS público em $DOMAIN)"
 
+# IMPORTANTE (VPS compartilhada): este bloco NUNCA sobrescreve o Caddyfile
+# existente. Cada projeto/domínio ganha seu próprio arquivo em
+# /etc/caddy/conf.d/*.caddy, importado uma única vez a partir do Caddyfile
+# principal. Assim vários projetos podem dividir o mesmo Caddy na mesma VPS
+# sem um apagar a configuração do outro.
 CADDYFILE="/etc/caddy/Caddyfile"
-cat > "$CADDYFILE" <<EOF
+CADDY_CONF_DIR="/etc/caddy/conf.d"
+CADDY_SITE_FILE="$CADDY_CONF_DIR/mighty-doom-revival.caddy"
+mkdir -p "$CADDY_CONF_DIR"
+
+if [[ ! -f "$CADDYFILE" ]]; then
+  echo "[OWNERSHIP] /etc/caddy/Caddyfile não existia: criando um Caddyfile global mínimo que só importa $CADDY_CONF_DIR/*.caddy."
+  cat > "$CADDYFILE" <<EOF
+# Caddyfile global desta VPS. Cada site/domínio deve ficar em seu próprio
+# arquivo dentro de $CADDY_CONF_DIR/ (importado abaixo), nunca editado
+# direto aqui, para vários projetos compartilharem o mesmo Caddy sem
+# conflito entre si.
+import $CADDY_CONF_DIR/*.caddy
+EOF
+  if ! state_decided CADDYFILE_CREATED_BY_SCRIPT; then
+    set_state CADDYFILE_CREATED_BY_SCRIPT 1
+  fi
+else
+  if ! state_decided CADDYFILE_CREATED_BY_SCRIPT; then
+    echo "[OWNERSHIP] /etc/caddy/Caddyfile já existia nesta VPS (não foi criado por nós; pode ter blocos de outros projetos). Este instalador NUNCA sobrescreve esse arquivo."
+    set_state CADDYFILE_CREATED_BY_SCRIPT 0
+  fi
+  if grep -qE "^[[:space:]]*import[[:space:]]+${CADDY_CONF_DIR}/\*\.caddy[[:space:]]*\$" "$CADDYFILE"; then
+    echo "[OWNERSHIP] Caddyfile já importa $CADDY_CONF_DIR/*.caddy; nada a alterar nele."
+  else
+    echo "[OWNERSHIP] Acrescentando só a linha 'import $CADDY_CONF_DIR/*.caddy' ao final do Caddyfile existente (100% do conteúdo atual é preservado)."
+    {
+      echo ""
+      echo "# Acrescentado por mighty-doom-revival scripts/install.sh (idempotente):"
+      echo "# permite sites em arquivos separados sem editar este Caddyfile."
+      echo "import $CADDY_CONF_DIR/*.caddy"
+    } >> "$CADDYFILE"
+    if ! state_decided CADDY_IMPORT_LINE_ADDED_BY_SCRIPT; then
+      set_state CADDY_IMPORT_LINE_ADDED_BY_SCRIPT 1
+    fi
+  fi
+fi
+
+echo "[OWNERSHIP] Escrevendo somente o site deste projeto em $CADDY_SITE_FILE - nenhum outro arquivo/domínio é tocado."
+cat > "$CADDY_SITE_FILE" <<EOF
 $DOMAIN {
 	encode gzip
 	reverse_proxy 127.0.0.1:8080
 }
 EOF
+set_state CADDY_SITE_FILE "$CADDY_SITE_FILE"
+set_state DOMAIN "$DOMAIN"
 
 if ! caddy validate --config "$CADDYFILE" >>"$LOG_FILE" 2>&1; then
-  fail "Caddyfile gerado é inválido. Veja $LOG_FILE para o erro completo do 'caddy validate'."
+  fail "Configuração do Caddy ficou inválida depois de escrever $CADDY_SITE_FILE. Veja $LOG_FILE para o erro completo do 'caddy validate'."
 fi
 
 # Libera 80/443 ANTES de reiniciar o Caddy: se o ufw estiver ativo e as portas
 # ainda fechadas nesse momento, o primeiro desafio ACME (HTTP-01) do domínio
-# real falha por conexão recusada.
+# real falha por conexão recusada. Isso é global (não some no uninstall):
+# outros serviços/domínios da VPS também costumam precisar de 80/443.
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
   echo "ufw ativo: liberando portas 80/tcp e 443/tcp..."
   ufw allow 80/tcp >/dev/null || true
@@ -315,7 +443,12 @@ if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
 fi
 
 systemctl enable caddy >/dev/null
-systemctl restart caddy
+if systemctl is-active --quiet caddy; then
+  echo "Caddy já estava ativo (pode estar servindo outros domínios): usando 'reload' em vez de 'restart' para não derrubar as conexões deles."
+  systemctl reload caddy
+else
+  systemctl restart caddy
+fi
 
 verify_service_active "caddy" || fail "O serviço caddy não subiu. Veja o journalctl acima."
 
@@ -412,6 +545,20 @@ echo ""
 echo "Logs:"
 echo "  Instalação:  $LOG_FILE"
 echo "  Servidor:    $SERVER_LOG"
+echo ""
+echo "------------------------------------------------------------"
+echo "Resumo de propriedade (VPS compartilhada com outros projetos):"
+echo "  Node.js instalado por este instalador:        $(ownership_label NODE_INSTALLED_BY_SCRIPT)"
+echo "  Pacote 'caddy' instalado por este instalador:  $(ownership_label CADDY_PACKAGE_INSTALLED_BY_SCRIPT)"
+echo "  /etc/caddy/Caddyfile criado por este instalador: $(ownership_label CADDYFILE_CREATED_BY_SCRIPT)"
+echo "  Linha 'import' acrescentada por este instalador: $(ownership_label CADDY_IMPORT_LINE_ADDED_BY_SCRIPT)"
+echo "  Serviço systemd $SERVICE_NAME:              sempre nosso"
+echo "  Site do Caddy deste projeto ($CADDY_SITE_FILE): sempre nosso"
+echo ""
+echo "  Registro completo salvo em: $STATE_FILE"
+echo "  Para remover só o que é deste projeto (sem afetar outros projetos"
+echo "  na mesma VPS): sudo ./scripts/uninstall.sh"
+echo "------------------------------------------------------------"
 echo ""
 echo "Próximo passo (no Windows): rode scripts\\patch-apk.bat e informe"
 echo "'$DOMAIN' quando ele perguntar o servidor."

@@ -52,7 +52,8 @@ mighty-doom-revival/
 │   ├── setup-patcher-tools.bat / .sh
 │   ├── setup-server.bat / .sh
 │   ├── start-server.bat / .sh
-│   └── install.sh          # instalador completo para VPS Ubuntu/Debian
+│   ├── install.sh          # instalador completo para VPS Ubuntu/Debian
+│   └── uninstall.sh        # desinstalador (remove só o que é deste projeto)
 └── server/
     ├── src/                # servidor Revival próprio
     ├── config/             # packs, eventos e configuração
@@ -149,6 +150,8 @@ Como este repositório é público, a forma recomendada de colocar o Revival Ser
 - configura o Caddy como reverse proxy com HTTPS automático via Let's Encrypt para o domínio informado;
 - valida `http://127.0.0.1:8080/revival/health` e depois `https://SEU_DOMINIO/revival/health` antes de terminar.
 
+**Seguro para VPS compartilhada com outros projetos:** se Node.js e/ou Caddy já estiverem instalados (por exemplo, por outro projeto na mesma VPS), o instalador nunca os reinstala nem passa a "possuí-los". Ele também nunca sobrescreve `/etc/caddy/Caddyfile` — só acrescenta a linha `import` (se ainda não houver) e escreve o domínio deste projeto em um arquivo próprio dentro de `/etc/caddy/conf.d/`, sem tocar em blocos de outros domínios. Cada decisão sobre o que pertence a este projeto é registrada permanentemente em `deploy/.install-state` (local, não versionado) e documentada com o prefixo `[OWNERSHIP]` em `deploy/logs/install-<timestamp>.log`, incluindo um resumo de propriedade ao final da execução.
+
 Pré-requisitos:
 
 - VPS Ubuntu 22.04+ (ou Debian) com acesso root/sudo;
@@ -193,6 +196,30 @@ sudo systemctl restart mighty-doom-revival
 ```
 
 Por fim, use o domínio configurado (`https://d.seudominio.com.br`) em `scripts\patch-apk.bat`, no Windows, para gerar o APK apontando para o seu Revival Server.
+
+### Desinstalar
+
+Para remover o Revival Server desta VPS, use o par do instalador: [`scripts/uninstall.sh`](scripts/uninstall.sh). Ele só remove o que pertence a este projeto (o serviço `systemd` e o site próprio do Caddy em `/etc/caddy/conf.d/mighty-doom-revival.caddy`); nunca apaga `/etc/caddy/Caddyfile` nem blocos de outros domínios/projetos que já estejam nele.
+
+```bash
+sudo ./scripts/uninstall.sh
+```
+
+Ele mostra e pede confirmação antes de remover (use `-y`/`--yes` para pular o prompt em automação). Por padrão **preserva** Node.js, Caddy e os arquivos locais (`server/.env`, `server/config/*.json`, `server/data/`, `server/runtime/`), mesmo que este instalador os tenha criado. Duas flags opcionais liberam uma limpeza mais completa, sempre respeitando o que é (ou não) deste projeto:
+
+```bash
+# Também remove Node.js/Caddy via apt, mas SÓ os que scripts/install.sh
+# registrou como instalados por ele (deploy/.install-state). Se já existiam
+# antes deste projeto, ou se há outros sites em /etc/caddy/conf.d/ além do
+# nosso, ficam preservados mesmo com esta flag.
+sudo ./scripts/uninstall.sh --purge-packages
+
+# Também apaga server/.env, server/config/*.json, server/data/ e
+# server/runtime/ (inclui o banco SQLite com progresso de jogadores).
+sudo ./scripts/uninstall.sh --purge-data
+```
+
+Toda a execução (o que foi removido e o que foi preservado, e por quê) fica registrada em `deploy/logs/uninstall-<timestamp>.log`.
 
 ## 4. Game data
 

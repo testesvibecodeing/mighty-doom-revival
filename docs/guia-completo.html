@@ -1,0 +1,1243 @@
+<title>Mighty DOOM Revival</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  (function () {
+    try {
+      var os = localStorage.getItem('revival-os') || 'win';
+      document.documentElement.setAttribute('data-os', os);
+    } catch (e) {
+      document.documentElement.setAttribute('data-os', 'win');
+    }
+  })();
+</script>
+<style>
+  :root {
+    color-scheme: light dark;
+
+    /* ---- paleta: light (padrão em :root) ---- */
+    --bg: #f6f3ec;
+    --surface: #ffffff;
+    --surface-2: #efebdf;
+    --border: #ded6c2;
+    --text: #211c13;
+    --text-dim: #6b6151;
+    --accent: #c1501e;
+    --accent-strong: #a23f16;
+    --accent-ink: #fff7ee;
+    --ok: #3f7a46;
+    --warn: #9c6c12;
+    --danger: #a23a26;
+    --code-bg: #ede7d8;
+    --code-text: #2a2416;
+    --rail-bg: #fbf8f1;
+    --shadow: rgba(30, 26, 15, 0.10);
+    --focus: #1c6dd0;
+
+    --font-display: "Bahnschrift", "SF Compact Display", "Segoe UI Semibold", system-ui, sans-serif;
+    --font-body: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "Cascadia Code", "Consolas", ui-monospace, SFMono-Regular, Menlo, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14120d;
+      --surface: #1b1811;
+      --surface-2: #221e15;
+      --border: #362f20;
+      --text: #ede6d4;
+      --text-dim: #a89c82;
+      --accent: #e8672c;
+      --accent-strong: #f3844f;
+      --accent-ink: #1a1108;
+      --ok: #7fa06b;
+      --warn: #e0a94a;
+      --danger: #c4573f;
+      --code-bg: #191510;
+      --code-text: #e9e1cc;
+      --rail-bg: #17140e;
+      --shadow: rgba(0, 0, 0, 0.45);
+      --focus: #7fb2ef;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #14120d;
+    --surface: #1b1811;
+    --surface-2: #221e15;
+    --border: #362f20;
+    --text: #ede6d4;
+    --text-dim: #a89c82;
+    --accent: #e8672c;
+    --accent-strong: #f3844f;
+    --accent-ink: #1a1108;
+    --ok: #7fa06b;
+    --warn: #e0a94a;
+    --danger: #c4573f;
+    --code-bg: #191510;
+    --code-text: #e9e1cc;
+    --rail-bg: #17140e;
+    --shadow: rgba(0, 0, 0, 0.45);
+    --focus: #7fb2ef;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  a { color: var(--accent-strong); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { color: var(--accent); }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+    margin: 0;
+    color: var(--text);
+  }
+
+  code, pre, .mono { font-family: var(--font-mono); }
+
+  p { margin: 0 0 1em; max-width: 62ch; }
+  ul, ol { margin: 0 0 1em; padding-left: 1.25em; max-width: 62ch; }
+  li + li { margin-top: 0.35em; }
+
+  img, svg { max-width: 100%; }
+
+  /* ---------------- progress + topbar ---------------- */
+
+  .progressbar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 3px;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+    z-index: 40;
+    transition: width 0.12s linear;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 1.25rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .brand span { color: var(--accent-strong); }
+
+  .os-switch {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-2);
+    padding: 3px;
+    gap: 3px;
+  }
+  .os-switch button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .os-switch button.active {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  /* ---------------- shell / rail ---------------- */
+
+  .shell {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 0;
+    align-items: start;
+  }
+
+  .rail {
+    position: sticky;
+    top: 53px;
+    align-self: start;
+    height: calc(100vh - 53px);
+    overflow-y: auto;
+    background: var(--rail-bg);
+    border-right: 1px solid var(--border);
+    padding: 1.25rem 0.75rem 2rem;
+  }
+
+  .rail ol { list-style: none; margin: 0; padding: 0; max-width: none; }
+  .rail li { margin: 0; }
+  .rail li + li { margin-top: 2px; }
+
+  .rail a {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.86rem;
+    font-weight: 600;
+    border-left: 2px solid transparent;
+  }
+  .rail a .n {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    opacity: 0.7;
+  }
+  .rail a .chk {
+    margin-left: auto;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    flex: none;
+  }
+  .rail a.is-done .chk { background: var(--ok); border-color: var(--ok); }
+  .rail a:hover { background: var(--surface-2); color: var(--text); }
+  .rail a.active {
+    background: var(--surface-2);
+    color: var(--text);
+    border-left-color: var(--accent);
+  }
+  .rail a.active .n { color: var(--accent-strong); opacity: 1; }
+
+  main { min-width: 0; padding: 0 0 4rem; }
+
+  /* ---------------- hero ---------------- */
+
+  .hero {
+    padding: 2.75rem 2.5rem 2.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.1rem; }
+  .badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--surface-2);
+  }
+
+  .hero h1 {
+    font-size: clamp(1.9rem, 3.2vw, 2.6rem);
+    line-height: 1.05;
+    margin-bottom: 0.6rem;
+  }
+  .hero .lede { max-width: 60ch; color: var(--text-dim); font-size: 1.02rem; }
+
+  .target-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--code-bg);
+    color: var(--code-text);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    flex-wrap: wrap;
+  }
+
+  .pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 1.75rem;
+  }
+  .pipeline a {
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    box-shadow: 0 1px 0 var(--shadow);
+  }
+  .pipeline a:hover { border-color: var(--accent); color: var(--accent-strong); }
+  .pipeline .arrow { color: var(--text-dim); font-size: 0.9rem; }
+
+  /* ---------------- steps ---------------- */
+
+  .step {
+    padding: 2.4rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+    scroll-margin-top: 64px;
+  }
+  .step:target { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+
+  .step-head {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.1rem;
+  }
+  .step-num {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.15rem 0.45rem;
+  }
+  .step-head h2 { font-size: 1.4rem; }
+
+  .done-toggle {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .done-toggle input { accent-color: var(--ok); width: 15px; height: 15px; }
+
+  .step-body h3 {
+    font-size: 1rem;
+    margin: 1.6rem 0 0.6rem;
+    color: var(--text);
+  }
+  .step-body h3:first-child { margin-top: 0; }
+
+  .lead { color: var(--text-dim); }
+
+  /* ---------------- callouts ---------------- */
+
+  .callout {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    margin: 1rem 0;
+    max-width: 68ch;
+  }
+  .callout .tag {
+    flex: none;
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.4rem;
+    border-radius: 5px;
+  }
+  .callout p, .callout ul { margin: 0; max-width: none; }
+  .callout ul { padding-left: 1.1em; }
+  .callout.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+  .callout.warn .tag { background: color-mix(in srgb, var(--warn) 25%, transparent); color: var(--warn); }
+  .callout.danger { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+  .callout.danger .tag { background: color-mix(in srgb, var(--danger) 25%, transparent); color: var(--danger); }
+  .callout.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+  .callout.ok .tag { background: color-mix(in srgb, var(--ok) 25%, transparent); color: var(--ok); }
+
+  /* ---------------- command blocks ---------------- */
+
+  .cmd {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 1rem 0 1.3rem;
+    background: var(--code-bg);
+    max-width: 100%;
+  }
+  .cmd-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0.7rem;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .cmd-os {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .copy-btn {
+    appearance: none;
+    flex: none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.28rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--ok); border-color: var(--ok); }
+
+  .cmd pre {
+    margin: 0;
+    padding: 0.8rem 1rem;
+    overflow-x: auto;
+    color: var(--code-text);
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  .cmd pre + pre { border-top: 1px dashed var(--border); }
+
+  [data-os="win"] .unix-only { display: none; }
+  [data-os="unix"] .win-only { display: none; }
+
+  code.inline {
+    font-family: var(--font-mono);
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    font-size: 0.88em;
+    border: 1px solid var(--border);
+  }
+
+  /* ---------------- checklist ---------------- */
+
+  .checklist { list-style: none; padding: 0; margin: 1rem 0; max-width: 62ch; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+  }
+  .checklist input { margin-top: 0.28em; accent-color: var(--ok); width: 15px; height: 15px; flex: none; }
+  .checklist label { cursor: pointer; }
+
+  /* ---------------- prereq / troubleshoot table ---------------- */
+
+  .table-wrap { overflow-x: auto; margin: 1rem 0 1.4rem; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 560px;
+    font-size: 0.9rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    font-weight: 700;
+  }
+  td code.inline { white-space: nowrap; }
+
+  /* ---------------- mini pipeline diagram (step 5) ---------------- */
+
+  .microflow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    margin: 1rem 0 1.4rem;
+  }
+  .microflow span.node {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .microflow span.sep { color: var(--text-dim); opacity: 0.6; font-size: 0.8rem; }
+
+  /* ---------------- cta button ---------------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    font-size: 0.92rem;
+    padding: 0.7rem 1.1rem;
+    border-radius: 9px;
+    text-decoration: none;
+    border: 1px solid color-mix(in srgb, var(--accent) 70%, black 10%);
+  }
+  .btn:hover { background: var(--accent-strong); color: var(--accent-ink); }
+
+  /* ---------------- footer ---------------- */
+
+  footer.page-end {
+    padding: 2.4rem 2.5rem 3rem;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  footer.page-end .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.2rem;
+    margin: 0.8rem 0 1.2rem;
+    padding: 0;
+    list-style: none;
+  }
+  footer.page-end small { display: block; margin-top: 1rem; opacity: 0.8; }
+
+  /* ---------------- responsive ---------------- */
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail {
+      position: sticky;
+      top: 53px;
+      height: auto;
+      max-height: 40vh;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero, .step, footer.page-end { padding-left: 1.25rem; padding-right: 1.25rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+
+<div class="progressbar" id="progress"></div>
+
+<header class="topbar">
+  <div class="brand">MIGHTY DOOM <span>REVIVAL</span></div>
+  <div class="os-switch" role="group" aria-label="Sistema operacional dos comandos">
+    <button type="button" data-os="win">Windows</button>
+    <button type="button" data-os="unix">Linux · Mac</button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" aria-label="Etapas do guia">
+    <ol>
+      <li><a href="#prereqs" data-target="prereqs"><span class="n">00</span>Pré-requisitos<span class="chk"></span></a></li>
+      <li><a href="#download" data-target="download"><span class="n">01</span>Baixar o APK<span class="chk"></span></a></li>
+      <li><a href="#patcher-tools" data-target="patcher-tools"><span class="n">02</span>Ferramentas do patcher<span class="chk"></span></a></li>
+      <li><a href="#server-local" data-target="server-local"><span class="n">03</span>Servidor local<span class="chk"></span></a></li>
+      <li><a href="#deploy-vps" data-target="deploy-vps"><span class="n">04</span>Deploy em produção<span class="chk"></span></a></li>
+      <li><a href="#patch-apk" data-target="patch-apk"><span class="n">05</span>Gerar o APK<span class="chk"></span></a></li>
+      <li><a href="#install-android" data-target="install-android"><span class="n">06</span>Instalar no Android<span class="chk"></span></a></li>
+      <li><a href="#troubleshooting" data-target="troubleshooting"><span class="n">07</span>Checklist &amp; problemas<span class="chk"></span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="badges">
+        <span class="badge">Não afiliado à Bethesda / ZeniMax / id Software</span>
+        <span class="badge">Preservação pessoal</span>
+        <span class="badge">Sem dinheiro real</span>
+      </div>
+      <h1>O caminho completo, do zero até jogar</h1>
+      <p class="lede">
+        Este guia segue exatamente os scripts do repositório, na ordem em que eles devem
+        rodar: baixar e validar o APK, preparar as ferramentas, subir o servidor Revival,
+        colocá-lo em produção com HTTPS, gerar o APK patchado e instalar no celular.
+        Nenhuma etapa aqui distribui o APK oficial — você usa a sua própria cópia.
+      </p>
+      <div class="target-chip">
+        <strong>Alvo:</strong>&nbsp;com.bethsoft.ubu · versão 1.13.1 · build 84862 · Unity 2021.3.25f1 / IL2CPP / ARM64
+      </div>
+
+      <div class="pipeline" aria-label="Visão geral do caminho">
+        <a href="#download">APK</a><span class="arrow">›</span>
+        <a href="#server-local">Servidor</a><span class="arrow">›</span>
+        <a href="#deploy-vps">Deploy HTTPS</a><span class="arrow">›</span>
+        <a href="#patch-apk">Patch</a><span class="arrow">›</span>
+        <a href="#install-android">Instalar</a><span class="arrow">›</span>
+        <a href="#troubleshooting">Jogar</a>
+      </div>
+    </section>
+
+    <!-- ================= 00 PRÉ-REQUISITOS ================= -->
+    <section id="prereqs" class="step">
+      <div class="step-head">
+        <span class="step-num">00</span>
+        <h2>Pré-requisitos</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="prereqs"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <p class="lead">Instale isto antes de começar. O instalador de produção (etapa 04) resolve boa parte
+        sozinho numa VPS Ubuntu/Debian, mas no seu PC Windows/Linux/Mac estes itens precisam existir no PATH.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Ferramenta</th><th>Para quê</th><th>Versão mínima</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Python</td><td>baixar/analisar o APK, scripts auxiliares</td><td><code class="inline">3.11+</code></td></tr>
+              <tr><td>Java (JDK)</td><td>apktool e uber-apk-signer, dentro do patcher</td><td><code class="inline">17+</code></td></tr>
+              <tr><td>Node.js</td><td>servidor Revival (precisa de <code class="inline">node:sqlite</code>)</td><td><code class="inline">22.5+</code> (24 LTS recomendado)</td></tr>
+              <tr><td>Git</td><td>clonar o repositório e atualizar depois</td><td>qualquer recente</td></tr>
+              <tr><td>ADB <span class="lead">(opcional)</span></td><td>instalar o APK final no celular via cabo</td><td>Android Platform Tools</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Confirme no terminal</h3>
+        <div class="cmd">
+          <div class="cmd-head">
+            <span class="cmd-os win-only">C:\&gt;</span>
+            <span class="cmd-os unix-only">~$</span>
+            <button class="copy-btn" type="button">Copiar</button>
+          </div>
+          <pre class="win-only"><code>python --version
+java -version
+node --version
+git --version</code></pre>
+          <pre class="unix-only"><code>python3 --version
+java -version
+node --version
+git --version</code></pre>
+        </div>
+
+        <div class="callout">
+          <span class="tag">Para depois</span>
+          <p>A etapa 04 (deploy em produção) roda numa <strong>VPS separada</strong>, não no seu PC. Para ela você só
+          precisa de acesso root/sudo à VPS e de um domínio com DNS apontando para ela — os pacotes do
+          Ubuntu/Debian são instalados automaticamente pelo instalador.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 01 DOWNLOAD ================= -->
+    <section id="download" class="step">
+      <div class="step-head">
+        <span class="step-num">01</span>
+        <h2>Baixar e validar o APK</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="download"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <p class="lead">Você precisa da sua própria cópia do Mighty DOOM 1.13.1. O repositório não redistribui o
+        APK — o link abaixo abre a página oficial da Uptodown numa aba nova, para você baixar por conta própria.</p>
+
+        <p>
+          <a class="btn" href="https://mighty-doom.en.uptodown.com/android/download" target="_blank" rel="noopener">
+            Abrir página de download da Uptodown ↗
+          </a>
+        </p>
+
+        <h3>Na aba que abriu</h3>
+        <ol>
+          <li>Clique em <strong>Download</strong>.</li>
+          <li>Se aparecer um desafio da Cloudflare (Turnstile), resolva-o normalmente — a Uptodown passou a exigir
+          isso antes de liberar o link direto.</li>
+          <li>Deixe o download terminar no navegador.</li>
+        </ol>
+
+        <h3>Agora coloque o arquivo na pasta <code class="inline">input</code></h3>
+        <p>Pegue o <code class="inline">.apk</code> baixado e coloque (ou mova) dentro da pasta do projeto, exatamente
+        neste caminho:</p>
+        <div class="cmd">
+          <div class="cmd-head"><span class="cmd-os">caminho esperado</span><button class="copy-btn" type="button">Copiar</button></div>
+          <pre><code>input/mighty-doom.apk</code></pre>
+        </div>
+        <p class="lead">Se a pasta <code class="inline">input</code> ainda não existir, crie-a na raiz do projeto.</p>
+
+        <h3>Rode a validação</h3>
+        <p>Este comando confere o SHA-256 do arquivo contra o hash oficial alvo, <strong>recusa o arquivo se não
+        bater</strong>, e gera o relatório de análise. Se o APK já estiver em <code class="inline">input/</code>
+        (como no passo acima), ele valida o que já está lá; se não estiver, ele tenta baixar sozinho.</p>
+        <div class="cmd">
+          <div class="cmd-head">
+            <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+            <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+            <button class="copy-btn" type="button">Copiar</button>
+          </div>
+          <pre class="win-only"><code>scripts\analyze-official-apk.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/analyze-official-apk.sh</code></pre>
+        </div>
+
+        <div class="callout warn">
+          <span class="tag">Se a Uptodown bloquear o download automático</span>
+          <p>O desafio Cloudflare às vezes impede o script de raspar a página sozinho. Solução manual:
+          na aba que você abriu, depois de clicar em Download, copie a URL final que começa com
+          <code class="inline">https://dw.uptodown.com/dwn/...</code> (aba <em>Rede</em> do DevTools do navegador,
+          ou o gerenciador de downloads) e rode de novo passando essa URL:</p>
+          <div class="cmd">
+            <div class="cmd-head">
+              <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+              <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+              <button class="copy-btn" type="button">Copiar</button>
+            </div>
+            <pre class="win-only"><code>scripts\analyze-official-apk.bat "https://dw.uptodown.com/dwn/..."</code></pre>
+            <pre class="unix-only"><code>./scripts/analyze-official-apk.sh "https://dw.uptodown.com/dwn/..."</code></pre>
+          </div>
+        </div>
+
+        <h3>O que fica pronto</h3>
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr><td><code class="inline">input/mighty-doom.apk</code></td><td>cópia local validada, nunca vai para o Git</td></tr>
+              <tr><td><code class="inline">reports/apk-1.13.1.json</code></td><td>relatório sanitizado (hash, estrutura Unity/IL2CPP, endpoints conhecidos)</td></tr>
+              <tr><td><code class="inline">reports/apk-1.13.1.md</code></td><td>mesmo relatório em Markdown</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="lead">SHA-256 esperado da cópia alvo: <code class="inline">519bfbb18c5bbab78f450b549777774e7d0ed78cd8b42cc25c7a2d3167669f35</code></p>
+      </div>
+    </section>
+
+    <!-- ================= 02 PATCHER TOOLS ================= -->
+    <section id="patcher-tools" class="step">
+      <div class="step-head">
+        <span class="step-num">02</span>
+        <h2>Preparar as ferramentas do patcher</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="patcher-tools"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <p class="lead">Baixa o <strong>apktool 3.0.3</strong> e o <strong>uber-apk-signer 1.3.0</strong> para a pasta
+        <code class="inline">.tools/</code> (fora do Git), conferindo o SHA-256 de cada um antes de aceitar o
+        arquivo.</p>
+
+        <div class="cmd">
+          <div class="cmd-head">
+            <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+            <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+            <button class="copy-btn" type="button">Copiar</button>
+          </div>
+          <pre class="win-only"><code>scripts\setup-patcher-tools.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/setup-patcher-tools.sh</code></pre>
+        </div>
+
+        <div class="callout">
+          <span class="tag">Opcional</span>
+          <p>O patcher da etapa 05 chama este script sozinho se as ferramentas ainda não existirem. Rodar aqui
+          antes só adianta o download e confirma que Java está corretamente instalado.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 03 SERVIDOR LOCAL ================= -->
+    <section id="server-local" class="step">
+      <div class="step-head">
+        <span class="step-num">03</span>
+        <h2>Subir o servidor Revival localmente</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="server-local"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <p class="lead">Use isto para testar o backend no seu próprio PC antes de colocar em produção. O celular
+        não vai conseguir falar com <code class="inline">127.0.0.1</code> da sua máquina — para jogar de verdade,
+        siga também a etapa 04.</p>
+
+        <h3>Preparar</h3>
+        <p>Copia <code class="inline">server/.env</code> e os <code class="inline">config/*.json</code> a partir dos
+        <code class="inline">.example</code>, confere se o Node instalado tem <code class="inline">node:sqlite</code>
+        funcional e roda um teste real end-to-end.</p>
+        <div class="cmd">
+          <div class="cmd-head">
+            <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+            <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+            <button class="copy-btn" type="button">Copiar</button>
+          </div>
+          <pre class="win-only"><code>scripts\setup-server.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/setup-server.sh</code></pre>
+        </div>
+
+        <div class="callout warn">
+          <span class="tag">Importante</span>
+          <p>Abra <code class="inline">server/.env</code> e troque <code class="inline">REVIVAL_ADMIN_TOKEN=change-me</code>
+          por um valor seu — esse token autoriza recarregar a configuração do servidor.</p>
+        </div>
+
+        <h3>Iniciar</h3>
+        <div class="cmd">
+          <div class="cmd-head">
+            <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+            <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+            <button class="copy-btn" type="button">Copiar</button>
+          </div>
+          <pre class="win-only"><code>scripts\start-server.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/start-server.sh</code></pre>
+        </div>
+        <p>Health check local: <code class="inline">http://127.0.0.1:8080/revival/health</code></p>
+
+        <div class="callout">
+          <span class="tag">GameData</span>
+          <p>Se <code class="inline">server/data/game-data.json</code> ainda não existir, o servidor tenta importar
+          um snapshot comunitário automaticamente. Para rodar isso manualmente:</p>
+          <div class="cmd">
+            <div class="cmd-head">
+              <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+              <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+              <button class="copy-btn" type="button">Copiar</button>
+            </div>
+            <pre class="win-only"><code>python scripts\fetch-community-gamedata.py</code></pre>
+            <pre class="unix-only"><code>python3 scripts/fetch-community-gamedata.py</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 04 DEPLOY VPS ================= -->
+    <section id="deploy-vps" class="step">
+      <div class="step-head">
+        <span class="step-num">04</span>
+        <h2>Deploy em produção (VPS com HTTPS)</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="deploy-vps"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <p class="lead">O Android só conversa com o Revival Server por <strong>HTTPS público de verdade</strong>.
+        Esta etapa roda inteira dentro de uma VPS Linux, não no seu PC.</p>
+
+        <h3>Antes de começar, tenha em mãos</h3>
+        <ul>
+          <li>uma VPS Ubuntu 22.04+ (ou Debian) com acesso <code class="inline">root</code>/<code class="inline">sudo</code>;</li>
+          <li>um domínio ou subdomínio com registro DNS <code class="inline">A</code> apontando para o IP público da VPS
+          (ex.: <code class="inline">d.seudominio.com.br</code>);</li>
+          <li>as portas <code class="inline">80</code> e <code class="inline">443</code> liberadas no firewall do
+          provedor (security group) além do <code class="inline">ufw</code>.</li>
+        </ul>
+
+        <h3>Instalar (primeira vez, dentro da VPS)</h3>
+        <div class="cmd">
+          <div class="cmd-head"><span class="cmd-os">bash na VPS (sempre Linux)</span><button class="copy-btn" type="button">Copiar</button></div>
+          <pre><code>sudo apt-get update &amp;&amp; sudo apt-get install -y git
+git clone https://github.com/testesvibecodeing/mighty-doom-revival.git
+cd mighty-doom-revival
+sudo ./scripts/install.sh</code></pre>
+        </div>
+        <p class="lead">O script pergunta o domínio HTTPS. Para rodar sem prompt interativo, informe-o antes:</p>
+        <div class="cmd">
+          <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
+          <pre><code>DOMAIN=d.seudominio.com.br sudo -E ./scripts/install.sh</code></pre>
+        </div>
+
+        <h3>O que ele faz sozinho</h3>
+        <ul>
+          <li>instala Node.js 24 LTS e o Caddy, se ainda não existirem;</li>
+          <li>prepara <code class="inline">server/.env</code> e os <code class="inline">config/*.json</code> a partir dos <code class="inline">.example</code>;</li>
+          <li>roda a suíte de testes do servidor como <strong>gate de deploy</strong> — aborta se algo quebrar;</li>
+          <li>sobe o servidor como serviço <code class="inline">systemd</code>, com reinício automático;</li>
+          <li>configura o Caddy como reverse proxy com HTTPS automático (Let's Encrypt) para o domínio informado;</li>
+          <li>valida <code class="inline">http://127.0.0.1:8080/revival/health</code> e depois
+          <code class="inline">https://SEU_DOMINIO/revival/health</code> antes de terminar.</li>
+        </ul>
+
+        <div class="callout">
+          <span class="tag">VPS compartilhada</span>
+          <p>Se Node.js e/ou Caddy já estiverem instalados nesta VPS (por outro projeto, por exemplo), o instalador
+          <strong>nunca os reinstala nem passa a considerá-los deste projeto</strong>. Ele também nunca sobrescreve
+          <code class="inline">/etc/caddy/Caddyfile</code>: só acrescenta a linha <code class="inline">import</code>
+          (se faltar) e escreve o domínio deste projeto em um arquivo próprio dentro de
+          <code class="inline">/etc/caddy/conf.d/</code>, sem tocar em outros domínios já configurados. Cada decisão
+          fica registrada em <code class="inline">deploy/.install-state</code> e explicada com o prefixo
+          <code class="inline">[OWNERSHIP]</code> no log da execução.</p>
+        </div>
+
+        <div class="callout ok">
+          <span class="tag">Ao final</span>
+          <p>Ele imprime o <code class="inline">REVIVAL_ADMIN_TOKEN</code> gerado — <strong>guarde-o</strong>. Também
+          mostra os comandos para inspecionar os serviços:</p>
+          <div class="cmd">
+            <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
+            <pre><code>systemctl status mighty-doom-revival
+systemctl status caddy
+journalctl -u mighty-doom-revival -f</code></pre>
+          </div>
+        </div>
+
+        <h3>Atualizar depois de mudanças no código</h3>
+        <div class="cmd">
+          <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
+          <pre><code>cd mighty-doom-revival
+git pull
+sudo ./scripts/install.sh</code></pre>
+        </div>
+        <p class="lead">É idempotente — pode rodar de novo a cada <code class="inline">git pull</code>.</p>
+
+        <h3>Desinstalar</h3>
+        <p class="lead">O par do instalador, <code class="inline">scripts/uninstall.sh</code>, remove só o que
+        pertence a este projeto (o serviço <code class="inline">systemd</code> e o site próprio do Caddy). Ele
+        nunca apaga <code class="inline">/etc/caddy/Caddyfile</code> nem blocos de outros domínios/projetos que já
+        estejam configurados nele.</p>
+        <div class="cmd">
+          <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
+          <pre><code>sudo ./scripts/uninstall.sh</code></pre>
+        </div>
+        <p class="lead">Ele mostra o que vai (e o que não vai) ser removido e pede confirmação
+        (<code class="inline">-y</code> pula o prompt). Por padrão <strong>preserva</strong> Node.js, Caddy e os
+        arquivos locais (<code class="inline">server/.env</code>, <code class="inline">server/data/</code>,
+        <code class="inline">server/runtime/</code>), mesmo os que o instalador tenha criado. Duas flags liberam uma
+        limpeza mais completa:</p>
+        <div class="cmd">
+          <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
+          <pre><code>sudo ./scripts/uninstall.sh --purge-packages  # remove Node.js/Caddy, só se instalados por este projeto
+sudo ./scripts/uninstall.sh --purge-data      # apaga server/.env, config, data/ e runtime/ (progresso incluso)</code></pre>
+        </div>
+        <div class="callout warn">
+          <span class="tag">Atenção</span>
+          <p><code class="inline">--purge-packages</code> só remove Node.js/Caddy se
+          <code class="inline">deploy/.install-state</code> confirmar que foram instalados por este instalador — se
+          já existiam antes (ou há outros sites em <code class="inline">/etc/caddy/conf.d/</code>), ficam
+          preservados mesmo com a flag. <code class="inline">--purge-data</code> apaga o banco de progresso dos
+          jogadores; use só se quiser mesmo zerar tudo.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 05 PATCH APK ================= -->
+    <section id="patch-apk" class="step">
+      <div class="step-head">
+        <span class="step-num">05</span>
+        <h2>Gerar o APK do Revival</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="patch-apk"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <p class="lead">Agora, de volta ao seu PC: esta etapa injeta o domínio do seu servidor (etapa 04) dentro do
+        APK validado (etapa 01), reconstrói e assina uma cópia local.</p>
+
+        <div class="cmd">
+          <div class="cmd-head">
+            <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+            <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+            <button class="copy-btn" type="button">Copiar</button>
+          </div>
+          <pre class="win-only"><code>scripts\patch-apk.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/patch-apk.sh</code></pre>
+        </div>
+
+        <h3>O assistente pergunta três coisas</h3>
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr><td><strong>Caminho do APK</strong></td><td>Enter aceita o padrão <code class="inline">input/mighty-doom.apk</code></td></tr>
+              <tr><td><strong>Hostname HTTPS do servidor</strong></td><td>o domínio configurado na etapa 04, ex.: <code class="inline">d.seudominio.com.br</code></td></tr>
+              <tr><td><strong>CA PEM/CRT local</strong></td><td>deixe vazio — o caso normal, com certificado público Let's Encrypt do deploy em VPS</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>O que acontece por baixo</h3>
+        <div class="microflow">
+          <span class="node">preflight HTTPS</span><span class="sep">→</span>
+          <span class="node">analisar APK</span><span class="sep">→</span>
+          <span class="node">desmontar</span><span class="sep">→</span>
+          <span class="node">aplicar servidor/TLS</span><span class="sep">→</span>
+          <span class="node">reconstruir</span><span class="sep">→</span>
+          <span class="node">verificar endpoint</span><span class="sep">→</span>
+          <span class="node">assinar</span><span class="sep">→</span>
+          <span class="node">cópia final</span>
+        </div>
+
+        <p>Resultado: <code class="inline">output/mighty-doom-revival.apk</code> (ignorado pelo Git).</p>
+
+        <div class="callout warn">
+          <span class="tag">Se parar em "needs_bundle_aware_patch"</span>
+          <p>Não é um bug: o patcher se recusa a corromper um bundle Unity trocando um hostname por outro de
+          tamanho diferente sem uma reserialização segura. Detalhes em
+          <code class="inline">work/apk-patch/patch-report.json</code>.</p>
+        </div>
+
+        <div class="callout">
+          <span class="tag">Se parar no preflight</span>
+          <p>O patcher exige que <code class="inline">/revival/health</code> já responda com o client 1.13.1, a API
+          24.0.0 e o GameData carregado antes de gerar qualquer APK. Volte à etapa 04 e confirme que o domínio
+          está mesmo no ar em HTTPS.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 06 INSTALL ================= -->
+    <section id="install-android" class="step">
+      <div class="step-head">
+        <span class="step-num">06</span>
+        <h2>Instalar no Android</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="install-android"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <ol>
+          <li>Nas configurações do Android, habilite <strong>Instalar apps desconhecidos</strong> para o app que
+          você vai usar para abrir o APK (gerenciador de arquivos, navegador, etc.).</li>
+          <li>Se o Mighty DOOM <strong>oficial</strong> já estiver instalado, desinstale-o primeiro — a assinatura
+          do APK gerado é diferente (chave de laboratório própria do patcher), então o Android recusa
+          atualizar por cima.</li>
+        </ol>
+
+        <div class="callout danger">
+          <span class="tag">Atenção</span>
+          <p>Desinstalar o app oficial apaga os dados locais dele. Faça backup antes se houver progresso que
+          você queira manter.</p>
+        </div>
+
+        <h3>Com ADB (mais rápido, via cabo)</h3>
+        <div class="cmd">
+          <div class="cmd-head">
+            <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
+            <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
+            <button class="copy-btn" type="button">Copiar</button>
+          </div>
+          <pre class="win-only"><code>adb uninstall com.bethsoft.ubu
+adb install output\mighty-doom-revival.apk</code></pre>
+          <pre class="unix-only"><code>adb uninstall com.bethsoft.ubu
+adb install output/mighty-doom-revival.apk</code></pre>
+        </div>
+
+        <h3>Sem ADB</h3>
+        <p>Copie <code class="inline">output/mighty-doom-revival.apk</code> para o celular (cabo, nuvem, etc.) e
+        toque no arquivo pelo gerenciador de arquivos do Android para instalar.</p>
+
+        <h3>Abra o app</h3>
+        <p>Ele deve se conectar em <code class="inline">https://SEU_DOMINIO</code> — o servidor Revival que você
+        subiu na etapa 04, e não mais os servidores oficiais.</p>
+      </div>
+    </section>
+
+    <!-- ================= 07 CHECKLIST / TROUBLESHOOTING ================= -->
+    <section id="troubleshooting" class="step">
+      <div class="step-head">
+        <span class="step-num">07</span>
+        <h2>Checklist final &amp; problemas comuns</h2>
+        <label class="done-toggle"><input type="checkbox" data-done="troubleshooting"> Concluí esta etapa</label>
+      </div>
+      <div class="step-body">
+        <h3>Antes de considerar pronto</h3>
+        <ul class="checklist" id="dod-checklist">
+          <li><input type="checkbox" id="dod-1"><label for="dod-1">APK validado por SHA-256</label></li>
+          <li><input type="checkbox" id="dod-2"><label for="dod-2">APK patchado com sucesso (etapa 05)</label></li>
+          <li><input type="checkbox" id="dod-3"><label for="dod-3">APK assinado e instalado no celular</label></li>
+          <li><input type="checkbox" id="dod-4"><label for="dod-4">Jogo abre sem crashar</label></li>
+          <li><input type="checkbox" id="dod-5"><label for="dod-5">HTTPS/TLS conecta (sem erro de certificado)</label></li>
+          <li><input type="checkbox" id="dod-6"><label for="dod-6">Login/auth funciona</label></li>
+          <li><input type="checkbox" id="dod-7"><label for="dod-7">Menu e inventário aparecem</label></li>
+          <li><input type="checkbox" id="dod-8"><label for="dod-8">Progresso se mantém ao fechar e reabrir o jogo</label></li>
+        </ul>
+
+        <h3>Problemas comuns</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Sintoma</th><th>Causa provável</th><th>O que fazer</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Download automático falha na etapa 01</td>
+                <td>Cloudflare Turnstile bloqueando a raspagem da página</td>
+                <td>baixe manualmente pelo navegador e passe a URL final <code class="inline">dw.uptodown.com/dwn/...</code> como argumento</td>
+              </tr>
+              <tr>
+                <td><code class="inline">node:sqlite não disponível</code></td>
+                <td>versão do Node abaixo de 22.5</td>
+                <td>instale Node.js 24 LTS</td>
+              </tr>
+              <tr>
+                <td>Patcher para em <code class="inline">needs_bundle_aware_patch</code></td>
+                <td>hostname escolhido tem tamanho diferente do host original dentro do bundle Unity</td>
+                <td>veja <code class="inline">work/apk-patch/patch-report.json</code>; tente um hostname do mesmo comprimento</td>
+              </tr>
+              <tr>
+                <td><code class="inline">install.sh</code> falha ao emitir o certificado HTTPS</td>
+                <td>DNS ainda não propagou, ou portas 80/443 fechadas</td>
+                <td>confirme o registro <code class="inline">A</code> do domínio e libere as portas no firewall do provedor + <code class="inline">ufw</code></td>
+              </tr>
+              <tr>
+                <td>App instala mas não conecta</td>
+                <td>servidor sem HTTPS público válido, ou versão oficial não foi desinstalada antes</td>
+                <td>revalide a etapa 04 (health check público) e repita a etapa 06</td>
+              </tr>
+              <tr>
+                <td><code class="inline">game_data_loaded: false</code> no health check</td>
+                <td><code class="inline">server/data/game-data.json</code> ausente na VPS</td>
+                <td>rode <code class="inline">python3 scripts/fetch-community-gamedata.py</code> na VPS e reinicie: <code class="inline">sudo systemctl restart mighty-doom-revival</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="page-end">
+      <p>Referência rápida — abra a partir da sua cópia local do repositório:</p>
+      <ul class="links">
+        <li><a href="../README.md">README.md</a></li>
+        <li><a href="./APK-PATCH.md">docs/APK-PATCH.md</a></li>
+        <li><a href="./SERVER.md">docs/SERVER.md</a></li>
+        <li><a href="./ENDPOINT-MATRIX.md">docs/ENDPOINT-MATRIX.md</a></li>
+        <li><a href="./ROADMAP-100-PERCENT.md">docs/ROADMAP-100-PERCENT.md</a></li>
+        <li><a href="../server/README.md">server/README.md</a></li>
+      </ul>
+      <small>Mighty DOOM Revival é um projeto pessoal de preservação/interoperabilidade. Não distribui o APK oficial,
+      assets ou código descompilado. Nenhuma compra usa dinheiro real — apenas moedas/recursos internos do jogo.</small>
+    </footer>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+
+    // ---- OS switch ----
+    var osButtons = document.querySelectorAll('.os-switch button');
+    function setOS(os) {
+      root.setAttribute('data-os', os);
+      osButtons.forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-os') === os); });
+      try { localStorage.setItem('revival-os', os); } catch (e) {}
+    }
+    setOS(root.getAttribute('data-os') || 'win');
+    osButtons.forEach(function (b) {
+      b.addEventListener('click', function () { setOS(b.getAttribute('data-os')); });
+    });
+
+    // ---- copy buttons ----
+    document.querySelectorAll('.copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var cmd = btn.closest('.cmd');
+        var pres = cmd.querySelectorAll('pre');
+        var visible = null;
+        pres.forEach(function (p) { if (p.offsetParent !== null) visible = p; });
+        if (!visible && pres.length) visible = pres[0];
+        if (!visible) return;
+        var text = visible.textContent;
+        var done = function () {
+          var original = btn.textContent;
+          btn.textContent = 'Copiado ✓';
+          btn.classList.add('copied');
+          setTimeout(function () { btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+        } else {
+          fallbackCopy(text, done);
+        }
+      });
+    });
+    function fallbackCopy(text, done) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      done();
+    }
+
+    // ---- step-done persistence ----
+    var railLinks = {};
+    document.querySelectorAll('.rail a[data-target]').forEach(function (a) {
+      railLinks[a.getAttribute('data-target')] = a;
+    });
+    document.querySelectorAll('input[data-done]').forEach(function (cb) {
+      var key = 'revival-done-' + cb.getAttribute('data-done');
+      try { cb.checked = localStorage.getItem(key) === '1'; } catch (e) {}
+      if (railLinks[cb.getAttribute('data-done')]) {
+        railLinks[cb.getAttribute('data-done')].classList.toggle('is-done', cb.checked);
+      }
+      cb.addEventListener('change', function () {
+        try { localStorage.setItem(key, cb.checked ? '1' : '0'); } catch (e) {}
+        if (railLinks[cb.getAttribute('data-done')]) {
+          railLinks[cb.getAttribute('data-done')].classList.toggle('is-done', cb.checked);
+        }
+      });
+    });
+
+    // ---- definition-of-done checklist persistence ----
+    document.querySelectorAll('#dod-checklist input[type="checkbox"]').forEach(function (cb) {
+      var key = 'revival-dod-' + cb.id;
+      try { cb.checked = localStorage.getItem(key) === '1'; } catch (e) {}
+      cb.addEventListener('change', function () {
+        try { localStorage.setItem(key, cb.checked ? '1' : '0'); } catch (e) {}
+      });
+    });
+
+    // ---- scroll spy ----
+    var sections = document.querySelectorAll('main section.step[id]');
+    if ('IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          var link = railLinks[entry.target.id];
+          if (!link) return;
+          if (entry.isIntersecting) {
+            document.querySelectorAll('.rail a.active').forEach(function (a) { a.classList.remove('active'); });
+            link.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 });
+      sections.forEach(function (s) { observer.observe(s); });
+    }
+
+    // ---- progress bar ----
+    var bar = document.getElementById('progress');
+    function updateProgress() {
+      var doc = document.documentElement;
+      var scrollTop = window.scrollY || doc.scrollTop;
+      var height = doc.scrollHeight - doc.clientHeight;
+      var pct = height > 0 ? (scrollTop / height) * 100 : 0;
+      bar.style.width = pct + '%';
+    }
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    window.addEventListener('resize', updateProgress);
+    updateProgress();
+  })();
+</script>

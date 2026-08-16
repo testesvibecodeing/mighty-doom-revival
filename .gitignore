@@ -64,3 +64,7 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+
+# Estado de deploy da VPS (gerado por scripts/install.sh e scripts/uninstall.sh)
+deploy/logs/
+deploy/.install-state
