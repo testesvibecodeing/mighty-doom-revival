@@ -11,6 +11,9 @@ jadx-out/
 dump/
 original/
 
+# External upstream checkout
+server/community/
+
 # Unity / reverse engineering generated data
 *.assets.resS
 il2cpp-output/
