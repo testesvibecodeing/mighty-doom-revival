@@ -167,8 +167,23 @@ export class Repository {
     return this.db.prepare('SELECT * FROM items WHERE user_id = ? ORDER BY id').all(userId)
   }
 
+  itemById (userId, itemId) {
+    return this.db.prepare('SELECT * FROM items WHERE user_id = ? AND id = ?').get(userId, itemId) || null
+  }
+
   slots (userId) {
     return this.db.prepare('SELECT slot_id, item_id FROM inventory_slots WHERE user_id = ? ORDER BY slot_id').all(userId)
+  }
+
+  setSlot (userId, slotId, itemId) {
+    const item = this.itemById(userId, itemId)
+    if (!item) return false
+    this.db.prepare(`
+      INSERT INTO inventory_slots (user_id, slot_id, item_id)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id, slot_id) DO UPDATE SET item_id = excluded.item_id
+    `).run(userId, slotId, itemId)
+    return true
   }
 
   settings (userId) {
