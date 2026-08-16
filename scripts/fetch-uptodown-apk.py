@@ -72,11 +72,25 @@ def resolve_download_url(page_url: str) -> tuple[str, str]:
     page_url = page_url.rstrip("/")
     html = read_html(page_url)
 
-    # Current Uptodown flow (also used by Obtainium): the app heading carries
-    # a data-file-id. A second page exposes the final data-url token.
+    # Previous Uptodown flow (also used by Obtainium): the app heading carries
+    # a data-file-id. A second page used to expose the final data-url token
+    # directly in the static HTML.
     file_id = find_attr(html, "detail-app-name", "data-file-id")
     intermediate = f"{page_url}/{urllib.parse.quote(file_id, safe='')}-x"
     intermediate_html = read_html(intermediate)
+
+    if "download-turnstile-widget" in intermediate_html:
+        raise RuntimeError(
+            "Uptodown agora exige um desafio Cloudflare Turnstile antes de "
+            "liberar o link de download; o token não fica mais no HTML "
+            "estático, então este script não consegue resolvê-lo sozinho "
+            "(e não tentamos automatizar/burlar o Turnstile). Abra "
+            f"{intermediate} num navegador normal, clique em Download, "
+            "copie a URL final 'https://dw.uptodown.com/dwn/...' (aba Rede "
+            "do DevTools ou o gerenciador de downloads) e rode de novo com "
+            "--direct-url \"<essa URL>\"."
+        )
+
     token = find_attr(intermediate_html, "detail-download-button", "data-url")
 
     return file_id, f"https://dw.uptodown.com/dwn/{token}"
@@ -117,14 +131,26 @@ def main() -> int:
     ap.add_argument("--url", default=DEFAULT_PAGE, help="Página /android/download da Uptodown")
     ap.add_argument("--output", default="input/mighty-doom.apk", help="Destino local do APK")
     ap.add_argument("--sha256", default=EXPECTED_SHA256, help="SHA-256 esperado; vazio desativa validação")
+    ap.add_argument(
+        "--direct-url",
+        default=None,
+        help=(
+            "URL final 'https://dw.uptodown.com/dwn/...' já resolvida manualmente "
+            "(necessário quando a Uptodown exige o desafio Cloudflare Turnstile "
+            "antes de expor o link). Pula a raspagem da página e baixa direto daqui."
+        ),
+    )
     args = ap.parse_args()
 
     output = Path(args.output).expanduser().resolve()
     expected = args.sha256.strip().lower()
 
     try:
-        file_id, download_url = resolve_download_url(args.url)
-        print(f"Uptodown file id: {file_id}")
+        if args.direct_url:
+            download_url = args.direct_url
+        else:
+            file_id, download_url = resolve_download_url(args.url)
+            print(f"Uptodown file id: {file_id}")
         digest, size = download(download_url, output)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, RuntimeError) as exc:
         print(f"ERRO: não foi possível obter o APK: {exc}", file=sys.stderr)
