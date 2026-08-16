@@ -12,7 +12,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -23,13 +23,14 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install dependencies
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install server dependencies
         working-directory: server
         run: npm install
-
-      - name: Syntax check
-        working-directory: server
-        run: npm run check
 
       - name: Prepare runtime config
         working-directory: server
@@ -38,7 +39,17 @@ jobs:
           cp config/packs.example.json config/packs.json
           cp config/events.example.json config/events.json
 
-      - name: Smoke-test server
+      - name: Full server regression suite
+        working-directory: server
+        run: npm test
+
+      - name: Patcher exact-length regression
+        run: python scripts/test_patch_apk.py
+
+      - name: Patcher bundle-aware logic regression
+        run: python scripts/test_patch_unity_bundle.py
+
+      - name: Standalone health smoke
         working-directory: server
         env:
           HOST: 127.0.0.1
