@@ -1,6 +1,7 @@
 import { handleBattlePassRequest } from './battle-pass.js'
 import { handleProgressionRequest } from './progression.js'
 import { handleQuestRequest } from './quests.js'
+import { handleRewardTrackRequest } from './reward-tracks.js'
 import { claimDailyReward, claimIdleReward } from './rewards.js'
 import { playerUserDataWire } from './user-data.js'
 
@@ -22,6 +23,9 @@ export function handleCompatRequest (path, body, userId, repo, runtime) {
 
   const quests = handleQuestRequest(path, body, userId, repo, runtime)
   if (quests) return quests
+
+  const rewardTracks = handleRewardTrackRequest(path, body, userId, repo, runtime)
+  if (rewardTracks) return rewardTracks
 
   // Intercept the legacy user-data path before index.js reaches its older
   // hardcoded talent_progression response. This keeps purchased talents and
