@@ -1,6 +1,7 @@
 import { handleBattlePassRequest } from './battle-pass.js'
 import { handleProgressionRequest } from './progression.js'
-import { claimDailyReward, claimIdleReward, startOfUtcDayEpoch } from './rewards.js'
+import { handleQuestRequest } from './quests.js'
+import { claimDailyReward, claimIdleReward } from './rewards.js'
 import { playerUserDataWire } from './user-data.js'
 
 function playerLevelWire (user) {
@@ -18,6 +19,9 @@ export function handleCompatRequest (path, body, userId, repo, runtime) {
 
   const progression = handleProgressionRequest(path, body, userId, repo, runtime)
   if (progression) return progression
+
+  const quests = handleQuestRequest(path, body, userId, repo, runtime)
+  if (quests) return quests
 
   // Intercept the legacy user-data path before index.js reaches its older
   // hardcoded talent_progression response. This keeps purchased talents and
@@ -41,18 +45,6 @@ export function handleCompatRequest (path, body, userId, repo, runtime) {
     const result = claimIdleReward(repo, userId, runtime)
     if (!result.ok) return { error: [400, 2000, { reason: result.reason, state: result.state }] }
     return { data: { resources: result.resources, periods: result.periods } }
-  }
-
-  if (path === '/game/quests/get-daily-quests') {
-    const dayStart = startOfUtcDayEpoch()
-    return {
-      data: {
-        day_start_epoch: dayStart,
-        day_end_epoch: dayStart + 86400,
-        milestones: [],
-        quests: []
-      }
-    }
   }
 
   if (path === '/game/player/level-up') {
