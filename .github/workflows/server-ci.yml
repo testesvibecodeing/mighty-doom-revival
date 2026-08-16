@@ -43,6 +43,9 @@ jobs:
         working-directory: server
         run: npm test
 
+      - name: Revival HTTPS preflight regression
+        run: python scripts/test_check_revival_server.py
+
       - name: Patcher exact-length regression
         run: python scripts/test_patch_apk.py
 
