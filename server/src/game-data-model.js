@@ -1,4 +1,12 @@
 import { resolveResource } from './config.js'
+import {
+  findById,
+  findByTag,
+  inventorySlots,
+  resourceId,
+  slayersList,
+  weaponsList
+} from './game-data-schema.js'
 
 const CATEGORY_KIND = new Map([
   [1, 'currency'],
@@ -22,13 +30,6 @@ const COLLECTION_KIND = [
   ['entitlements', 'entitlement'],
   ['cosmetics', 'cosmetic']
 ]
-
-function resourceId (value) {
-  if (!value || typeof value !== 'object') return null
-  if (Number.isInteger(value.rid)) return value.rid
-  if (Number.isInteger(value.id)) return value.id
-  return null
-}
 
 function categoryId (definition) {
   if (!definition || typeof definition !== 'object') return null
@@ -65,8 +66,6 @@ export function classifyResource (rid, runtime, explicitKind = null) {
     if (inCollection(runtime.gameData, collection, rid)) return kind
   }
 
-  // Currency definitions normally live in the generic resources table. Keep
-  // this conservative: unknown resources are not silently treated as items.
   if (inCollection(runtime.gameData, 'resources', rid)) return 'currency'
   return 'unknown'
 }
@@ -168,17 +167,17 @@ export function giveGameResource (repo, userId, entry, runtime) {
   throw new Error(`Categoria de recurso desconhecida para rid=${rid}`)
 }
 
-function findByTag (list, tag) {
-  return Array.isArray(list) ? list.find(x => x?.tag === tag) : null
-}
+function compatibleStarterGrant (grants, kind, definitions, slot) {
+  const candidates = grants.filter(grant => grant.kind === kind && Number.isInteger(grant.uid))
+  if (candidates.length === 0) return null
+  if (!slot || slot.type === undefined || slot.type === null) return candidates[0]
 
-function findSlotId (gameData, tag) {
-  const slot = findByTag(gameData?.inventory?.slots, tag)
-  return resourceId(slot)
-}
+  const compatible = candidates.find(grant => {
+    const definition = findById(definitions, grant.wire?.rid)
+    return definition && definition.slot === slot.type
+  })
 
-function firstGrantedItem (grants, kind) {
-  return grants.find(x => x.kind === kind && Number.isInteger(x.uid)) || null
+  return compatible || null
 }
 
 export function seedStarterBundle (repo, userId, runtime) {
@@ -193,22 +192,33 @@ export function seedStarterBundle (repo, userId, runtime) {
     return { seeded: false, reason: 'starter-bundle-not-found', grants: [] }
   }
 
+  const slots = inventorySlots(gameData)
+  const primarySlot = findByTag(slots, 'slot_primary_weapon')
+  const slayerSlot = findByTag(slots, 'slot_slayer')
+  if (!primarySlot || !slayerSlot) {
+    return { seeded: false, reason: 'required-starter-slot-missing', grants: [] }
+  }
+
   const grants = []
   repo.tx(() => {
     for (const resource of bundle.resources) {
       grants.push(giveGameResource(repo, userId, resource, runtime))
     }
 
-    // The original client bootstrap expects a primary weapon and a Slayer to
-    // be equipped before the first menu/tutorial flow. Resolve slot IDs by tag
-    // so the server follows the user's own game-data instead of hardcoding IDs.
-    const primarySlot = findSlotId(gameData, 'slot_primary_weapon')
-    const slayerSlot = findSlotId(gameData, 'slot_slayer')
-    const weapon = firstGrantedItem(grants, 'weapon')
-    const slayer = firstGrantedItem(grants, 'slayer')
+    const weapon = compatibleStarterGrant(grants, 'weapon', weaponsList(gameData), primarySlot)
+    const slayer = compatibleStarterGrant(grants, 'slayer', slayersList(gameData), slayerSlot)
 
-    if (Number.isInteger(primarySlot) && weapon) repo.setSlot(userId, primarySlot, weapon.uid)
-    if (Number.isInteger(slayerSlot) && slayer) repo.setSlot(userId, slayerSlot, slayer.uid)
+    if (!weapon) throw new Error(`Starter sem arma compatível com slot ${primarySlot.type ?? primarySlot.id}`)
+    if (!slayer) throw new Error(`Starter sem Slayer compatível com slot ${slayerSlot.type ?? slayerSlot.id}`)
+
+    const primarySlotId = resourceId(primarySlot)
+    const slayerSlotId = resourceId(slayerSlot)
+    if (!Number.isInteger(primarySlotId) || !Number.isInteger(slayerSlotId)) {
+      throw new Error('Slots obrigatórios do starter não possuem id/rid válido')
+    }
+
+    if (!repo.setSlot(userId, primarySlotId, weapon.uid)) throw new Error('Falha ao equipar arma starter')
+    if (!repo.setSlot(userId, slayerSlotId, slayer.uid)) throw new Error('Falha ao equipar Slayer starter')
   })
 
   return { seeded: true, grants }
