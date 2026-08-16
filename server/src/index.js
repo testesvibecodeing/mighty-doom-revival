@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { loadEnvFile } from 'node:process'
 import Koa from 'koa'
 import Router from '@koa/router'
 import { bodyParser } from '@koa/bodyparser'
@@ -12,9 +13,13 @@ import { giveGameResource, inventoryWire, seedStarterBundle } from './game-data-
 import { fail, gameGuard, ok, requireUser } from './protocol.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
 
+const serverRoot = resolve(import.meta.dirname, '..')
+const envPath = resolve(serverRoot, '.env')
+if (existsSync(envPath)) loadEnvFile(envPath)
+
 let runtime = loadRuntimeConfig()
-const defaultDbPath = resolve(import.meta.dirname, '..', 'runtime', 'revival.sqlite3')
-const dbPath = process.env.DB_PATH ? resolve(process.cwd(), process.env.DB_PATH) : defaultDbPath
+const defaultDbPath = resolve(serverRoot, 'runtime', 'revival.sqlite3')
+const dbPath = process.env.DB_PATH ? resolve(serverRoot, process.env.DB_PATH) : defaultDbPath
 const repo = new Repository(dbPath)
 const app = new Koa({ proxy: String(process.env.TRUST_PROXY || 'true').toLowerCase() !== 'false' })
 const root = new Router()
