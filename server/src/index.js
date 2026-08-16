@@ -41,7 +41,10 @@ function nowSeconds () {
 }
 
 function wire (data = {}, code = 1000) {
-  return { uts: nowSeconds(), code, ...data }
+  // O cliente 1.13.1 faz DateTime.Parse(uts) em Ubu.GameController.ParseServerTimestamp
+  // (StartSession recebe o timestamp como string). Unix epoch numérico derruba o
+  // register/login com FormatException, então o wire é ISO 8601 UTC.
+  return { uts: new Date().toISOString(), code, ...data }
 }
 
 function json (res, status, payload) {

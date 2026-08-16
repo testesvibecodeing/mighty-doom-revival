@@ -9,6 +9,7 @@ the optional dependency is absent.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import tempfile
@@ -278,6 +279,109 @@ def patch_bundle(path: Path, target_host: str) -> dict[str, Any]:
         "verified": True,
         "verification": verification,
         "inspection": inspection,
+    }
+
+
+def zero_catalog_crc(catalog_path: Path, bundle_path: Path) -> dict[str, Any]:
+    """Zerar o ``m_Crc`` do bundle re-salvo no catalog.json do Addressables.
+
+    O CRC gravado no catálogo se refere ao bundle ORIGINAL do build oficial.
+    Qualquer reserialização muda o CRC e a Unity recusa carregar o bundle em
+    runtime ("CRC Mismatch ... Will not load AssetBundle"), derrubando o load
+    de cena com um ``RemoteProviderException`` enganoso. A Unity só valida o
+    CRC quando o valor passado é não-zero, então zerar o campo no
+    ``AssetBundleRequestOptions`` daquele bundle (identificado pelo hash
+    presente no nome do arquivo) desativa a checagem. Os objetos do catálogo
+    vivem serializados como JSON UTF-16LE dentro de ``m_ExtraDataString``
+    (base64); a substituição preserva o comprimento em bytes para não
+    deslocar os offsets do stream apontados pelas entradas do catálogo.
+    """
+    name = bundle_path.name
+    stem = name[:-len(".bundle")] if name.endswith(".bundle") else name
+    bundle_hash = stem.rsplit("_", 1)[-1].lower()
+    if len(bundle_hash) != 32 or any(c not in "0123456789abcdef" for c in bundle_hash):
+        return {
+            "path": str(catalog_path),
+            "bundle": name,
+            "zeroed": False,
+            "error": f"não foi possível extrair o hash 32-hex do nome do bundle: {name}",
+        }
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    extra_b64 = catalog.get("m_ExtraDataString")
+    if not extra_b64:
+        return {
+            "path": str(catalog_path),
+            "bundle": name,
+            "zeroed": False,
+            "error": "catalog.json sem m_ExtraDataString",
+        }
+    raw = base64.b64decode(extra_b64)
+
+    def u16(text: str) -> bytes:
+        return text.encode("utf-16-le")
+
+    hash_at = raw.find(u16(f'"m_Hash":"{bundle_hash}"'))
+    if hash_at == -1:
+        return {
+            "path": str(catalog_path),
+            "bundle": name,
+            "zeroed": False,
+            "error": f"m_Hash {bundle_hash} não encontrado no catálogo",
+        }
+    field_at = raw.find(u16('"m_Crc":'), hash_at)
+    if field_at == -1:
+        return {
+            "path": str(catalog_path),
+            "bundle": name,
+            "zeroed": False,
+            "error": "m_Crc não encontrado após o m_Hash do bundle",
+        }
+
+    prefix = u16('"m_Crc":')
+    digits_at = field_at + len(prefix)
+    digits_end = digits_at
+    digits: list[str] = []
+    while digits_end + 1 < len(raw):
+        char = raw[digits_end:digits_end + 2].decode("utf-16-le", errors="ignore")
+        if not char.isdigit():
+            break
+        digits.append(char)
+        digits_end += 2
+    old_digits = "".join(digits)
+    if not old_digits:
+        return {
+            "path": str(catalog_path),
+            "bundle": name,
+            "zeroed": False,
+            "error": "valor numérico do m_Crc não encontrado",
+        }
+    if old_digits == "0":
+        return {"path": str(catalog_path), "bundle": name, "zeroed": False, "already_zero": True}
+
+    # '0' + espaços mantém o JSON válido (espaço em branco é permitido entre
+    # tokens) e o comprimento em bytes idêntico aos dígitos originais.
+    replacement = u16("0" + " " * (len(old_digits) - 1))
+    if len(replacement) != digits_end - digits_at:
+        return {
+            "path": str(catalog_path),
+            "bundle": name,
+            "zeroed": False,
+            "error": "substituição de mesmo comprimento impossível",
+        }
+    patched = raw[:digits_at] + replacement + raw[digits_end:]
+    catalog["m_ExtraDataString"] = base64.b64encode(patched).decode("ascii")
+    catalog_path.write_text(
+        json.dumps(catalog, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+        newline="",
+    )
+    return {
+        "path": str(catalog_path),
+        "bundle": name,
+        "hash": bundle_hash,
+        "crc_before": int(old_digits),
+        "zeroed": True,
     }
 
 

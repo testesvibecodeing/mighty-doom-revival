@@ -3,7 +3,9 @@ export function nowSeconds () {
 }
 
 export function wire (data = {}, code = 1000) {
-  return { uts: nowSeconds(), code, ...data }
+  // O cliente 1.13.1 faz DateTime.Parse(uts) em ParseServerTimestamp; o wire
+  // precisa ser string ISO 8601 UTC, não unix epoch numérico.
+  return { uts: new Date().toISOString(), code, ...data }
 }
 
 export function ok (ctx, data = {}) {

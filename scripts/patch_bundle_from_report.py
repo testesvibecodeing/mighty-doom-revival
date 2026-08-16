@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from patch_apk import normalize_host
-from patch_unity_bundle import UnityPyUnavailable, patch_bundle
+from patch_unity_bundle import UnityPyUnavailable, patch_bundle, zero_catalog_crc
 from patch_unity_raw_strings import RawStringPatchError, patch_raw_bundle
 
 
@@ -51,6 +51,16 @@ def main() -> int:
     parser.add_argument("--decoded", required=True)
     parser.add_argument("--server", required=True)
     parser.add_argument("--report", required=True)
+    parser.add_argument(
+        "--sweep-all-bundles",
+        action="store_true",
+        help=(
+            "Varre TODOS os .bundle de assets/aa, não apenas os arquivos com hit "
+            "ASCII cru no relatório. Necessário porque blocos LZ4 fragmentam o "
+            "hostname oficial (ex.: 'game.<hash>.net' dentro do bundle de cenas) "
+            "sem produzir uma ocorrência contígua escaneável em bytes brutos."
+        ),
+    )
     args = parser.parse_args()
 
     decoded = Path(args.decoded).resolve()
@@ -66,7 +76,12 @@ def main() -> int:
         print(f"ERRO ao ler parâmetros do bundle-aware patch: {exc}", file=sys.stderr)
         return 2
 
-    paths = sorted({str(hit.get("path", "")) for hit in report.get("known_host_hits", []) if hit.get("path")})
+    paths = {str(hit.get("path", "")) for hit in report.get("known_host_hits", []) if hit.get("path")}
+    addressables = decoded / "assets" / "aa"
+    if args.sweep_all_bundles and addressables.is_dir():
+        for bundle in sorted(addressables.rglob("*.bundle")):
+            paths.add(str(bundle.relative_to(decoded)))
+    paths = sorted(paths)
     results = []
     try:
         for rel in paths:
@@ -82,6 +97,27 @@ def main() -> int:
             # Stage 1: prefer normal Unity typetree/object patching.
             result = patch_bundle(candidate, host)
             result["path"] = rel
+
+            # A reserialized bundle no longer matches the build-time CRC kept
+            # in the Addressables catalog; Unity refuses to load it at runtime
+            # ("CRC Mismatch"). Zero the catalog's m_Crc for this bundle so
+            # the engine skips validation. A failure here means a patched
+            # bundle that cannot load, so it must block the pipeline.
+            if result.get("changed"):
+                catalog = decoded / "assets" / "aa" / "catalog.json"
+                if not catalog.is_file():
+                    raise RawStringPatchError(
+                        f"{rel}: bundle foi reserializado mas assets/aa/catalog.json não existe "
+                        "para zerar o m_Crc; o APK carregado rejeitaria o bundle por CRC."
+                    )
+                crc_result = zero_catalog_crc(catalog, candidate)
+                result["catalog_crc"] = crc_result
+                if not crc_result.get("zeroed") and not crc_result.get("already_zero"):
+                    raise RawStringPatchError(
+                        f"{rel}: falha ao zerar o m_Crc no catalog.json "
+                        f"({crc_result.get('error', 'erro desconhecido')}); "
+                        "a Unity recusaria carregar o bundle reserializado."
+                    )
 
             # Stage 2: if official host bytes remain, only patch them when they
             # are provably Unity serialized UTF-8 strings with length/alignment.
@@ -122,6 +158,20 @@ def main() -> int:
     report["bundle_candidates"] = candidates
     changed = [x for x in results if x.get("changed")]
     if not changed:
+        # Sweep mode always inspects every bundle. If the stage-1 byte patch
+        # already succeeded and no bundle holds an official host anywhere, the
+        # tree is simply clean: report success instead of a false blocker.
+        if args.sweep_all_bundles and report.get("status") == "ok":
+            report["status"] = "ok_no_bundle_changes"
+            report["bundle_aware"] = results
+            report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(json.dumps({
+                "status": report["status"],
+                "server_host": host,
+                "inspected_bundles": len(results),
+                "replacements": 0,
+            }, indent=2, ensure_ascii=False))
+            return 0
         if candidates["raw_only_references"]:
             report["status"] = "needs_typetree_mapping"
             detail = (
