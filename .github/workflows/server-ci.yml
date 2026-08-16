@@ -52,6 +52,9 @@ jobs:
       - name: Patcher bundle-aware logic regression
         run: python scripts/test_patch_unity_bundle.py
 
+      - name: Raw Unity serialized string regression
+        run: python scripts/test_patch_unity_raw_strings.py
+
       - name: Sanitized APK Unity mapper regression
         run: python scripts/test_inspect_apk_unity_candidates.py
 
