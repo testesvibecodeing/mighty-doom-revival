@@ -21,14 +21,15 @@ Este arquivo é o ponto de retomada técnico do projeto. Atualize-o quando um fl
 | GameData token + `/data` | ✅ | testado com dataset sintético |
 | Tutorial dependencies/rewards | ✅ | SQLite isolado + HTTP integrado |
 | Chapters start/update/revive/end | ✅/🧪 | persistência testada; payload alinhado ao backend preservado; loot/rewards finais ainda incompletos |
+| Player stats | 🧪 | incrementos agora são normalizados, acumulados em SQLite e devolvidos no `user-data`; validar IDs/formato do APK real |
 | Store Revival | ✅ | compra transacional, quotas e moeda interna |
 | IAP dinheiro real | ⛔ | explicitamente bloqueado |
 | Ads externos | ⛔ | desativados |
 | Custom events | ✅ | schedule/progress testados |
-| Battle Pass arquivado | ✅/🧪 | start/mission/tier/premium reward testados; progressão automática por stats ainda pendente |
+| Battle Pass arquivado | ✅/🧪 | start/mission/tier/premium reward testados; missões declarativas por stat agora recebem progresso automático |
 | Daily rewards | ✅/🧪 | estado, claim e persistência cobertos por regressão; validar payload/recompensas no APK real |
 | Idle rewards | ✅/🧪 | geração, claim e persistência cobertos por regressão; boost e validação no APK real pendentes |
-| Daily quests | 🧪 | endpoint explícito; geração/progresso/claim pendentes |
+| Daily quests | 🧪 | endpoint explícito; geração/progresso/claim ainda pendentes |
 | Gear upgrades | 🧪 | upgrade e multi-upgrade transacionais por custos do GameData; validar schema real do dataset/APK |
 | Slayer upgrades | 🧪 | upgrade transacional com moedas/recursos internos e level cap; validar schema real do dataset/APK |
 | Talents | 🧪 | get/buy, pré-requisitos, custos e persistência implementados; validar payload real do cliente |
@@ -66,6 +67,16 @@ O servidor nunca inventa um upgrade gratuito quando o GameData não fornece cust
 
 A regressão sintética em `server/test/progression.mjs` cobre upgrade simples, multi-upgrade, cap, Slayer com dois recursos de custo, pré-requisito de talento, compra e proteção contra compra duplicada. Ainda é obrigatório confirmar os nomes/campos exatos do GameData final e os payloads emitidos pelo APK 1.13.1.
 
+## Player stats e missões
+
+`server/src/stats.js` agora normaliza os formatos conservadores de incremento conhecidos (`stats` em lista, mapa ou `increments`), rejeita zero/negativos e persiste totais acumulados em `user_state`.
+
+O endpoint `/game/player/increment-stats` deixou de ser apenas um ACK: ele grava os incrementos e tenta atualizar missões de Battle Pass quando a definição da missão expõe de forma explícita um `stat_id`/`stat.id` e um alvo (`target`, `amount`, `required` ou `count`). Não há heurística para conceder progresso quando a definição não diz qual stat deve ser usado.
+
+Os totais persistidos também aparecem em `player.stats` dentro de `/game/player/user-data`, permitindo reinício do servidor sem perder contadores.
+
+Regressão: `server/test/stats.mjs` cobre normalização, soma cumulativa, persistência após reabrir SQLite, duas formas de identificador de stat, conclusão automática de missão e claim de pontos de Battle Pass.
+
 ## Battle Pass / modo arquivo
 
 Config padrão:
@@ -95,6 +106,8 @@ Uma temporada histórica sintética com `start_time/end_time` expirados foi exec
 8. claim repetido não duplicou recompensa;
 9. estado apareceu em `events/get-progress`.
 
+A camada nova de stats remove a dependência de `setBattlePassMissionProgress()` para missões que declaram stat + alvo: incrementos reais do jogador podem completar a missão automaticamente.
+
 ## APK / patcher
 
 Cliente alvo:
@@ -111,9 +124,10 @@ O patcher foi testado contra bundle Unity sintético:
 - `d.debruinsistemas.com.br` possui 24 bytes;
 - substituição 24→24 não altera tamanho do bundle;
 - Manifest/TLS são atualizados;
-- hostname incompatível é recusado antes de alterar o bundle.
+- hostname incompatível é recusado antes de alterar o bundle;
+- verificação final rejeita APK que ainda contenha hosts oficiais.
 
-Teste: `scripts/test_patch_apk.py`.
+Testes: `scripts/test_patch_apk.py`, `scripts/test_patch_unity_bundle.py` e `scripts/test_verify_patched_apk.py`.
 
 ### Ainda NÃO validado
 
@@ -127,16 +141,16 @@ Não marcar o projeto como jogável/100% antes desses testes.
 
 ## Infra/CI
 
-O GitHub Actions está configurado, porém os runners da conta não iniciaram por bloqueio de Billing/Spending Limit. Não usar falha de Actions como falha do código enquanto esse bloqueio existir.
+O GitHub Actions está configurado, porém os runners da conta continuam sem iniciar por bloqueio de Billing/Spending Limit. Não usar falha de Actions como falha do código enquanto esse bloqueio existir.
 
 Os testes locais são a fonte atual de validação.
 
 ## Próxima ordem de trabalho
 
-1. validar/importar GameData comunitário completo contra `game-data-schema.js` e os novos leitores de custo de progressão;
-2. implementar Daily Quests completos e Reward Tracks;
+1. validar o formato real de stats/missões no GameData comunitário completo e adaptar os leitores sem hardcode;
+2. implementar Daily Quests completos e Reward Tracks reutilizando a camada persistente de stats;
 3. completar chapter rewards/loot e progressão de jogador;
-4. alimentar progressão de Battle Pass via stats/missões;
+4. ligar todas as missões preservadas ao fluxo de stats observado no cliente;
 5. implementar inbox/grants necessários pelos eventos preservados;
 6. executar `scripts/analyze-official-apk.bat` em ambiente com acesso ao APK;
 7. executar `scripts/patch-apk.bat` no APK real;
