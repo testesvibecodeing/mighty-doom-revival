@@ -4,6 +4,7 @@ import Koa from 'koa'
 import Router from '@koa/router'
 import { bodyParser } from '@koa/bodyparser'
 
+import { installBaselineRoutes } from './baseline.js'
 import { loadRuntimeConfig, researchMode, resolveResource } from './config.js'
 import { Repository } from './db.js'
 import { eventProgress, eventSchedule } from './events.js'
@@ -143,6 +144,8 @@ authed.use(async (ctx, next) => {
   repo.logRequest(ctx.state.user.id, ctx.path, ctx.request.body)
   await next()
 })
+
+installBaselineRoutes(authed, repo, currentRuntime)
 
 authed.post('/player/game-data-token', ctx => {
   const r = currentRuntime()
