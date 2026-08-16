@@ -1,174 +1,200 @@
 # Mighty DOOM Revival
 
-Projeto pessoal de **preservação e interoperabilidade** do cliente Android de Mighty DOOM com um servidor comunitário/self-hosted.
+Projeto pessoal de **preservação e interoperabilidade** do cliente Android de Mighty DOOM com um servidor independente/self-hosted.
 
 > **Não afiliado à Bethesda, ZeniMax, Microsoft, id Software ou Alpha Dog Games.**
 >
-> Este repositório **não distribui o APK oficial, assets, código descompilado ou outros arquivos proprietários do jogo**. O usuário deve fornecer localmente a própria cópia do APK.
+> Este repositório **não distribui o APK oficial, assets, código descompilado ou outros arquivos proprietários do jogo**. O APK e os dados necessários à interoperabilidade permanecem locais/efêmeros.
 
-## Alvo inicial
+## Objetivo
 
-- Jogo: Mighty DOOM
-- Android package: `com.bethsoft.ubu`
-- Última versão oficial conhecida: **1.13.1 (build 84862)**
+Fazer o cliente final do Mighty DOOM voltar a funcionar com uma infraestrutura controlada pelo usuário e, progressivamente, recuperar todos os fluxos ainda presentes no cliente 1.13.1:
+
+- progressão, capítulos, inventário, armas, gear e slayers;
+- quests, recompensas diárias/idle, inbox e reward tracks;
+- eventos e temporadas/battle pass que possam ser reconstruídos a partir dos dados preservados;
+- loja Revival configurável;
+- pacotes personalizados adquiridos **somente com moedas/recursos internos do jogo**;
+- nenhuma compra com cartão, Google Play Billing ou dinheiro real no servidor Revival.
+
+O acompanhamento detalhado está em [`docs/ROADMAP-100-PERCENT.md`](docs/ROADMAP-100-PERCENT.md).
+
+## Cliente alvo
+
+- Package: `com.bethsoft.ubu`
+- Versão: **1.13.1 / build 84862**
 - Engine: Unity 2021.3.25f1 / IL2CPP / ARM64
-- API do jogo: HTTPS + JSON
-- API version observada: `x-ubu-apiversion: 24.0.0`
+- API observada: HTTPS + JSON
+- API version: `x-ubu-apiversion: 24.0.0`
+- SHA-256 da cópia alvo do APK: `519bfbb18c5bbab78f450b549777774e7d0ed78cd8b42cc25c7a2d3167669f35`
 
 ## Estrutura
 
 ```text
 mighty-doom-revival/
-├── README.md
-├── .gitignore
+├── .github/workflows/
+│   ├── analyze-official-apk.yml
+│   └── server-ci.yml
 ├── docs/
 │   ├── APK-PATCH.md
-│   └── SERVER.md
-├── input/                  # coloque seu APK aqui; ignorado pelo Git
-├── output/                 # APKs gerados; ignorado pelo Git
-├── work/                   # arquivos temporários/descompilados; ignorado
-└── scripts/
-    ├── analyze_apk.py
-    ├── patch_apk.py
-    ├── patch-apk.bat
-    ├── setup-server.bat
-    └── setup-server.sh
+│   ├── SERVER.md
+│   └── ROADMAP-100-PERCENT.md
+├── input/                  # APK local; ignorado pelo Git
+├── output/                 # APK patchado; ignorado pelo Git
+├── scripts/
+│   ├── fetch-uptodown-apk.py
+│   ├── analyze_apk.py
+│   ├── patch_apk.py
+│   └── patch-apk.bat
+└── server/
+    ├── src/                # servidor Revival próprio
+    ├── config/             # packs, eventos e configuração
+    ├── data/               # game-data local; ignorado pelo Git
+    └── runtime/            # SQLite; ignorado pelo Git
 ```
 
-## 1. Obter o APK
+## 1. Obter e validar o APK
 
-Use uma cópia que você possua legitimamente. Para esta pesquisa o alvo é a versão `1.13.1` / build `84862`.
-
-Coloque-a localmente como:
+Quem já possui a cópia pode colocá-la em:
 
 ```text
 input/mighty-doom.apk
 ```
 
-O diretório `input/` e todos os `*.apk` ficam no `.gitignore` para impedir upload acidental.
+Para reproduzir a pesquisa a partir da página informada da Uptodown, existe um downloader local que resolve o fluxo atual do site e **recusa o arquivo se o SHA-256 não corresponder ao alvo**:
+
+```bash
+python scripts/fetch-uptodown-apk.py --output input/mighty-doom.apk
+```
+
+O APK nunca é adicionado ao Git. O workflow de análise também apaga o binário antes de publicar qualquer artifact.
 
 ## 2. Analisar o APK
 
+```bash
+python scripts/analyze_apk.py input/mighty-doom.apk \
+  --json-out reports/apk-1.13.1.json \
+  --md-out reports/apk-1.13.1.md
+```
+
+O relatório é sanitizado e contém apenas metadados úteis à interoperabilidade: hash, estrutura Unity/IL2CPP, Addressables e offsets de strings de endpoint conhecidas. Assets e código proprietário não são exportados.
+
+## 3. Servidor Revival próprio
+
+A implementação principal agora está em `server/`. A implementação comunitária `dannyhpy/mightydoom-gameserver` continua sendo uma referência importante de protocolo, mas não é mais necessária como runtime do projeto.
+
+Preparação:
+
+```bash
+cd server
+cp config/revival.example.json config/revival.json
+cp config/packs.example.json config/packs.json
+cp config/events.example.json config/events.json
+npm install
+npm run check
+npm start
+```
+
+Health check:
+
+```text
+GET http://127.0.0.1:8080/revival/health
+```
+
+O servidor já tem a fundação para autenticação local, SQLite, inventário/moedas, entrega de game data, loja configurável, compras por moeda interna, agenda de eventos e estado persistente de eventos. Endpoints ainda desconhecidos podem ser registrados pelo `RESEARCH_MODE` durante a fase de compatibilidade.
+
+Veja [`server/README.md`](server/README.md).
+
+## 4. Game data
+
+A compatibilidade completa depende dos dados que o cliente espera receber de `/game/player/game-data-token` + `/data`.
+
+O arquivo local esperado é:
+
+```text
+server/data/game-data.json
+```
+
+Ele não é commitado. O servidor indexa recursos por `rid/id` e `tag`, permitindo que packs e eventos sejam configurados sem hardcode dos IDs assim que o dataset for validado.
+
+## 5. Loja Revival: sem dinheiro real
+
+Pacotes ficam em `server/config/packs.json`.
+
+Exemplo conceitual:
+
+```json
+{
+  "id": 900100,
+  "tag": "revival_weapon_pack",
+  "active": true,
+  "cost": [
+    { "resource": "TAG_MOEDA_DO_JOGO", "kind": "currency", "amount": 5000 }
+  ],
+  "contents": [
+    { "resource": "TAG_ARMA", "kind": "weapon", "level": 1, "tier": 1 }
+  ]
+}
+```
+
+O backend rejeita configuração de pacote com `price`, `iap` ou `real_money`. As rotas de IAP real ficam deliberadamente desativadas.
+
+## 6. Eventos e battle pass
+
+`server/config/events.json` suporta:
+
+- evento sempre ativo;
+- janela de início/fim;
+- estado independente por jogador;
+- canais de game mode, store offer e battle pass;
+- `args` serializados para o formato esperado pela agenda do cliente.
+
+A estrutura está pronta para receber as definições reais conforme forem identificadas no APK/game data. Isso permitirá reativar eventos antigos e também montar rotações próprias sem depender dos servidores oficiais.
+
+## 7. Patch do APK
+
 No Windows:
-
-```bat
-python scripts\analyze_apk.py input\mighty-doom.apk
-```
-
-O analisador procura, sem extrair conteúdo proprietário para o Git:
-
-- package/version quando disponíveis;
-- arquitetura e bibliotecas Unity/IL2CPP;
-- bundles em `assets/aa/`;
-- referências aos hosts conhecidos;
-- `network_security_config`;
-- SHA-256 do APK.
-
-Depois de recebermos e analisarmos a cópia local do APK, vamos registrar apenas hashes, offsets/nomes técnicos e documentação necessária para interoperabilidade.
-
-## 3. Preparar o servidor comunitário
-
-A implementação comunitária usada como referência é `dannyhpy/mightydoom-gameserver`, no GitLab. Ela usa Node.js/Koa e suporta SQLite. A versão atual requer **Node.js >= 24** e **npm >= 11**.
-
-### Windows
-
-```bat
-scripts\setup-server.bat
-```
-
-### Linux/VPS
-
-```bash
-chmod +x scripts/setup-server.sh
-./scripts/setup-server.sh
-```
-
-Os scripts clonam o upstream em `server/community`, instalam dependências, adicionam `better-sqlite3` e executam as migrations.
-
-Instalação manual equivalente:
-
-```bash
-git clone https://gitlab.com/dannyhpy/mightydoom-gameserver.git server/community
-cd server/community
-npm install --omit=dev --omit=optional
-npm install better-sqlite3
-npx knex migrate:latest
-npm run start -- --addr 0.0.0.0 --port 8080 --debug
-```
-
-Por padrão o servidor escuta em `0.0.0.0:8080`. Para uso real com o cliente Android, coloque um reverse proxy HTTPS (Nginx/Caddy) na frente dele.
-
-Veja [docs/SERVER.md](docs/SERVER.md).
-
-## 4. Patch do APK
-
-Execute:
 
 ```bat
 scripts\patch-apk.bat
 ```
 
-O script foi feito para trabalhar **somente em uma cópia local fornecida pelo usuário**. Ele:
+O patcher atual desmonta, ajusta configuração de rede/TLS, recompila, alinha e assina uma cópia local. A alteração do hostname dentro do Unity Addressables ainda está limitada até identificarmos e reserializarmos corretamente o objeto do bundle no APK alvo.
 
-1. valida dependências;
-2. faz backup/working copy;
-3. desmonta o APK com `apktool`;
-4. configura `network_security_config` para o host informado;
-5. opcionalmente incorpora uma CA local para HTTPS de laboratório;
-6. procura o host hardcoded nos Unity Addressables;
-7. executa uma substituição binária **somente quando ela puder ser feita sem alterar o tamanho da string**;
-8. recompila;
-9. executa `zipalign`;
-10. assina o APK com uma chave pessoal de laboratório;
-11. grava o resultado em `output/`.
+A próxima etapa técnica após a análise real é remover essa limitação e aceitar qualquer hostname HTTPS sem corromper o bundle.
 
-### Limitação atual importante
+Veja [`docs/APK-PATCH.md`](docs/APK-PATCH.md).
 
-O endpoint do jogo aparece dentro de um bundle Unity. Alterar uma string para tamanho diferente pode exigir reserialização/reempacotamento correto do bundle. Por segurança, o patcher atual **não corrompe o bundle tentando fazer isso no escuro**.
+## 8. Docker
 
-Assim que analisarmos o APK 1.13.1 real que será usado no projeto, a próxima etapa é implementar o patch **bundle-aware**, permitindo informar um hostname arbitrário sem a limitação de comprimento.
+A base também inclui `server/Dockerfile` e `docker-compose.yml` para o backend. Os dados SQLite, configs locais e `game-data.json` ficam fora do Git.
 
-Veja [docs/APK-PATCH.md](docs/APK-PATCH.md).
+## Segurança do repositório
 
-## 5. Instalar o APK modificado
-
-O APK recompilado terá assinatura diferente da versão oficial. Em um aparelho de testes, normalmente será necessário remover a instalação oficial antes:
-
-```bat
-adb uninstall com.bethsoft.ubu
-adb install output\mighty-doom-revival.apk
-```
-
-Isso remove os dados locais existentes do app. Faça backup do que for importante antes.
-
-## Objetivo do projeto
-
-O objetivo é tornar um cliente de jogo descontinuado capaz de conversar com uma implementação independente do serviço necessário para funcionar, para **uso pessoal, pesquisa e preservação**.
-
-Não serão adicionados ao repositório:
-
-- APK oficial;
-- assets do jogo;
-- dumps completos do IL2CPP;
-- código descompilado proprietário;
-- chaves privadas;
-- credenciais.
+O `.gitignore` bloqueia APK/XAPK/APKS/AAB, dumps, conteúdo descompilado, game data local, banco SQLite, chaves privadas, certificados pessoais e configs locais.
 
 ## Referências técnicas
 
-- Servidor comunitário: `dannyhpy/mightydoom-gameserver` (GitLab)
-- Pesquisa de preservação: `CTRQuko/mightydoom-preservation` (GitHub)
+- `dannyhpy/mightydoom-gameserver` — implementação comunitária usada como referência de protocolo
+- `CTRQuko/mightydoom-preservation` — pesquisa comunitária de preservação
+- Obtainium — referência para o fluxo atual de download da Uptodown
 
 ## Status
 
-- [x] Repositório inicial
-- [x] Documentação de servidor
-- [x] Setup automático do servidor (Windows/Linux)
-- [x] Analisador local de APK
-- [x] Patcher Windows inicial
-- [ ] Validar contra o APK oficial 1.13.1 build 84862
-- [ ] Identificar exatamente o objeto/string do endpoint no bundle Unity
-- [ ] Implementar patch de hostname de tamanho arbitrário
-- [ ] Validar TLS em Android moderno
-- [ ] Testar login, tutorial e primeiro capítulo
-- [ ] Mapear endpoints faltantes
+- [x] downloader local com validação SHA-256
+- [x] análise estática sanitizada
+- [x] patcher Windows inicial
+- [x] servidor Revival próprio
+- [x] SQLite/persistência
+- [x] base de loja somente com moeda interna
+- [x] base de eventos/battle pass
+- [x] IAP real desativado
+- [x] Docker/base de deploy
+- [ ] executar análise do APK alvo em ambiente com runner disponível
+- [ ] patch bundle-aware de hostname arbitrário
+- [ ] conectar o APK ao servidor Revival
+- [ ] importar/validar game data
+- [ ] mapear schemas reais endpoint por endpoint
+- [ ] restaurar capítulos/progressão completa
+- [ ] restaurar eventos/battle passes disponíveis
+- [ ] validar 100% dos fluxos acessíveis no cliente 1.13.1
