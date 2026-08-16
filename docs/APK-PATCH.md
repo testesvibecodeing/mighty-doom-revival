@@ -87,9 +87,9 @@ Use **hostname**, não IP, nesta primeira versão.
 
 Antes de tocar no apktool, o patcher já roda `scripts/check_patch_length.py`
 (um simples `ZipFile` read, sem decode): ele confere se o hostname digitado
-tem o mesmo número de bytes do(s) host(s) oficial(is) realmente encontrado(s)
-neste APK e **para na hora**, com uma mensagem explicando o comprimento
-exigido, se não bater. Isso evita esperar minutos de `apktool d` só para
+tem **no máximo** o número de bytes do(s) host(s) oficial(is) realmente
+encontrado(s) neste APK e **para na hora**, com uma mensagem explicando o
+limite, se for maior. Isso evita esperar minutos de `apktool d` só para
 descobrir o bloqueio de segurança depois.
 
 ## O que o script modifica
@@ -101,20 +101,36 @@ Depois de `apktool d`, o patcher:
 - opcionalmente incorpora uma CA PEM/CRT fornecida pelo usuário;
 - varre `assets/aa/` (Addressables) **e** `global-metadata.dat` (tabela de
   string literals do IL2CPP) procurando hosts conhecidos;
-- tenta alterar o hostname hardcoded somente quando a troca mantém exatamente o mesmo tamanho binário;
+- troca cada ocorrência do host oficial por outra de **exatamente o mesmo
+  tamanho binário** (detalhes abaixo);
 - recompila, alinha e assina o APK.
 
-## Por que existe a limitação de tamanho?
+## Como o patch lida com o tamanho (e por que hostname maior é bloqueado)
 
-No APK real 1.13.1, o endpoint (`slayersclub.bethesda.net`) não está em um
-Addressable/bundle — está embutido duas vezes no `global-metadata.dat` do
-IL2CPP, em duas seções com codificações diferentes: a tabela de string
-literals (`stringLiteralData`, referenciada por `{length, dataIndex}`) e o
-blob de valores default de campo/parâmetro (`fieldAndParameterDefaultValueData`).
-Strings dentro desse formato não devem ser aumentadas/reduzidas por uma
-simples busca-e-substituição: isso exigiria realocar as duas seções e
-deslocar os offsets de todas as ~20 seções de metadata que vêm depois no
-arquivo, e um erro aí quebra o boot do IL2CPP (o app nem abre).
+No APK real 1.13.1, o endpoint não está em um Addressable/bundle — está
+embutido duas vezes no `global-metadata.dat` do IL2CPP como a URL completa
+`https://slayersclub.bethesda.net/` (33 bytes): uma na tabela de string
+literals (`stringLiteralData`) e outra no blob de valores default de
+campo/parâmetro (`fieldAndParameterDefaultValueData`). Strings dentro desse
+formato não devem ser aumentadas por uma simples busca-e-substituição: isso
+exigiria realocar as duas seções e deslocar os offsets de todas as ~20 seções
+de metadata que vêm depois no arquivo, e um erro aí quebra o boot do IL2CPP
+(o app nem abre).
+
+O patcher aceita qualquer hostname com **até o comprimento do oficial**
+(24 bytes no build atual):
+
+- **mesmo comprimento** (24 bytes): troca direta byte a byte;
+- **mais curto** (ex.: `doom.sualoja.app.br`, 19 bytes): o patcher troca a
+  URL inteira `https://<host>/` por outra **de mesmo comprimento total**,
+  preenchendo a diferença com *userinfo* de URI:
+  `https://u000@doom.sualoja.app.br/`. Userinfo é ignorado por DNS, SNI e
+  pelo header `Host` — o servidor vê o hostname real — e nenhum offset do
+  arquivo é deslocado. Validado contra o `global-metadata.dat` real: as duas
+  ocorrências trocadas, tamanho idêntico, zero bytes do host oficial;
+  faltando 1 byte só, usa o ponto final do FQDN (`<host>.`), também válido;
+- **mais longo** (ex.: `doom.debruinsistemas.com.br`, 27 bytes): **bloqueado
+  de propósito** (exit 4), preservando o APK de trabalho.
 
 Hosts conhecidos atualmente:
 
@@ -123,23 +139,14 @@ slayersclub.bethesda.net                  -> 24 bytes ASCII
 game.9095be396f3547555fe1039cbc894c88.net -> 41 bytes ASCII
 ```
 
-O patcher atual aceita uma troca binária somente se o hostname destino tiver o mesmo comprimento do hostname realmente encontrado no APK. Caso contrário ele **para de propósito**, preservando o APK de trabalho.
-
-Isso é provisório.
-
 ## Próxima etapa: patch bundle-aware / metadata-aware
 
-Para aceitar um hostname de tamanho arbitrário, por exemplo:
-
-```text
-doom.debruinsistemas.com.br
-```
-
-o patcher vai precisar reconstruir corretamente as duas seções do
-`global-metadata.dat` citadas acima (e ainda o caminho bundle-aware para
-Addressables, caso um build futuro mova o endpoint para lá). Até isso
-existir, use um hostname com exatamente 24 bytes — `check_patch_length.py`
-avisa o comprimento exigido antes de você perder tempo com o apktool.
+Para aceitar um hostname maior que o oficial, o patcher vai precisar
+reconstruir corretamente as duas seções do `global-metadata.dat` citadas
+acima (e ainda o caminho bundle-aware para Addressables, caso um build futuro
+mova o endpoint para lá). Até isso existir, use um hostname com no máximo
+24 bytes — `check_patch_length.py` avisa o limite antes de você perder tempo
+com o apktool.
 
 ## Certificado HTTPS
 

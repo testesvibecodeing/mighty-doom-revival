@@ -143,14 +143,36 @@ Veja [`server/README.md`](server/README.md).
 
 Como este repositório é público, a forma recomendada de colocar o Revival Server no ar é uma VPS Ubuntu com HTTPS de verdade, usando o instalador [`scripts/install.sh`](scripts/install.sh). Ele é idempotente (pode rodar de novo a cada `git pull`) e faz tudo sozinho:
 
-- instala Node.js 24 LTS (precisa de `node:sqlite`) e o Caddy, se ainda não existirem;
+- instala Node.js 24 LTS (precisa de `node:sqlite`), se ainda não existir;
+- **detecta o reverse proxy**: se a VPS já tem um `nginx` servindo 80/443 (mesmo que seja de outros projetos), o Revival vira apenas mais um site dele (arquivo próprio em `sites-available` + certbot para o domínio); senão instala/usa o Caddy;
+- escolhe o **perfil de recursos** conforme a RAM da VPS (ver tabela abaixo) e otimiza o serviço `systemd` para ele;
 - prepara `server/.env` e os `config/*.json` a partir dos `.example`;
 - roda a suíte de testes do servidor como gate de deploy (aborta se algo quebrar);
-- sobe o servidor como serviço `systemd` (reinício automático);
-- configura o Caddy como reverse proxy com HTTPS automático via Let's Encrypt para o domínio informado;
+- sobe o servidor como serviço `systemd` (reinício automático, limites de RAM/CPU do perfil);
+- ativa HTTPS automático via Let's Encrypt (nginx+certbot ou Caddy) para o domínio informado;
 - valida `http://127.0.0.1:8080/revival/health` e depois `https://SEU_DOMINIO/revival/health` antes de terminar.
 
-**Seguro para VPS compartilhada com outros projetos:** se Node.js e/ou Caddy já estiverem instalados (por exemplo, por outro projeto na mesma VPS), o instalador nunca os reinstala nem passa a "possuí-los". Ele também nunca sobrescreve `/etc/caddy/Caddyfile` — só acrescenta a linha `import` (se ainda não houver) e escreve o domínio deste projeto em um arquivo próprio dentro de `/etc/caddy/conf.d/`, sem tocar em blocos de outros domínios. Cada decisão sobre o que pertence a este projeto é registrada permanentemente em `deploy/.install-state` (local, não versionado) e documentada com o prefixo `[OWNERSHIP]` em `deploy/logs/install-<timestamp>.log`, incluindo um resumo de propriedade ao final da execução.
+### Perfis de recursos (otimização por RAM da VPS)
+
+O instalador pergunta o perfil (com detecção automática pelo padrão) ou aceita via variável: `RAM_PROFILE=1gb sudo -E ./scripts/install.sh`. A escolha fica salva em `deploy/.install-state` e é reaproveitada nas atualizações.
+
+| Perfil | VPS indicada | Heap do Node (`--max-old-space-size`) | `MemoryHigh` (soft) | `MemoryMax` (limite rígido) | `TasksMax` | `UV_THREADPOOL` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `1gb` | ~1–2 GB RAM (ex.: 2 GB/1 vCPU) | 256 MB | 384 MB | **512 MB** | 256 | 2 |
+| `4gb` | ~4 GB RAM | 768 MB | 1 GB | **1536 MB** | 512 | 4 |
+| `8gb` | 8 GB ou mais | 2048 MB | 2 GB | **3 GB** | 1024 | 4 |
+
+O que cada limite faz:
+
+- **Heap do Node**: teto do coletor de lixo do V8 — acima disso o Node morre com OOM do heap. Calibrado sobrando espaço para o `global-metadata`/GameData em RAM.
+- **`MemoryHigh`**: a partir daí o kernel começa a reclaimar memória do serviço (pressiona o GC) antes de qualquer coisa pior acontecer.
+- **`MemoryMax`**: limite rígido do cgroup — se o serviço estourar (vazamento), o kernel mata **só o jogo**, nunca o nginx nem os outros projetos da VPS.
+- **`TasksMax`**: teto de threads/processos do serviço.
+- **`UV_THREADPOOL`**: threads de I/O (SQLite/arquivos) — 2 já sobra para 1 vCPU.
+
+Todos os perfis também aplicam `LimitNOFILE=16384`. Em VPS do perfil `1gb` sem swap, o instalador imprime o aviso e o comando para criar swap (o que separa um pico de tráfego de um OOM-kill).
+
+**Seguro para VPS compartilhada com outros projetos:** se Node.js, Caddy ou certbot já estiverem instalados (por exemplo, por outro projeto na mesma VPS), o instalador nunca os reinstala nem passa a "possuí-los". Com nginx, ele nunca edita o `nginx.conf` nem sites de outros projetos: escreve **um** arquivo próprio (`/etc/nginx/sites-available/mighty-doom-revival`) e o certbot `--nginx` edita só esse arquivo ao ativar o HTTPS; o reload (não restart) do nginx não derruba conexões dos outros sites. Com Caddy, nunca sobrescreve `/etc/caddy/Caddyfile` — só acrescenta a linha `import` e escreve o domínio em arquivo próprio dentro de `/etc/caddy/conf.d/`. A renovação do certificado fica automática (timer do certbot ou cron próprio em `/etc/cron.d/certbot-renew`, instalado só se a VPS não tiver nenhum). Cada decisão sobre o que pertence a este projeto é registrada permanentemente em `deploy/.install-state` (local, não versionado) e documentada com o prefixo `[OWNERSHIP]` em `deploy/logs/install-<timestamp>.log`, incluindo um resumo de propriedade ao final da execução.
 
 Pré-requisitos:
 
@@ -177,7 +199,7 @@ Ao final ele imprime o `REVIVAL_ADMIN_TOKEN` gerado (guarde-o — autoriza `POST
 
 ```bash
 systemctl status mighty-doom-revival
-systemctl status caddy
+systemctl status nginx   # ou: systemctl status caddy, dependendo do proxy detectado
 journalctl -u mighty-doom-revival -f
 ```
 
@@ -199,7 +221,7 @@ Por fim, use o domínio configurado (`https://d.seudominio.com.br`) em `scripts\
 
 ### Desinstalar
 
-Para remover o Revival Server desta VPS, use o par do instalador: [`scripts/uninstall.sh`](scripts/uninstall.sh). Ele só remove o que pertence a este projeto (o serviço `systemd` e o site próprio do Caddy em `/etc/caddy/conf.d/mighty-doom-revival.caddy`); nunca apaga `/etc/caddy/Caddyfile` nem blocos de outros domínios/projetos que já estejam nele.
+Para remover o Revival Server desta VPS, use o par do instalador: [`scripts/uninstall.sh`](scripts/uninstall.sh). Ele só remove o que pertence a este projeto: o serviço `systemd`, o site próprio no proxy (o arquivo do Caddy em `/etc/caddy/conf.d/` **ou** o site do nginx em `sites-available` + symlink + o certificado Let's Encrypt do domínio) e, se fomos nós que criamos, o cron de renovação do certbot. Ele **nunca** remove/para o nginx, nunca apaga `/etc/caddy/Caddyfile`, nunca mexe em sites de outros domínios/projetos e nunca remove um cron de renovação que possa estar servindo certificados de outros projetos.
 
 ```bash
 sudo ./scripts/uninstall.sh
@@ -208,10 +230,10 @@ sudo ./scripts/uninstall.sh
 Ele mostra e pede confirmação antes de remover (use `-y`/`--yes` para pular o prompt em automação). Por padrão **preserva** Node.js, Caddy e os arquivos locais (`server/.env`, `server/config/*.json`, `server/data/`, `server/runtime/`), mesmo que este instalador os tenha criado. Duas flags opcionais liberam uma limpeza mais completa, sempre respeitando o que é (ou não) deste projeto:
 
 ```bash
-# Também remove Node.js/Caddy via apt, mas SÓ os que scripts/install.sh
+# Também remove Node.js/Caddy/certbot via apt, mas SÓ os que scripts/install.sh
 # registrou como instalados por ele (deploy/.install-state). Se já existiam
-# antes deste projeto, ou se há outros sites em /etc/caddy/conf.d/ além do
-# nosso, ficam preservados mesmo com esta flag.
+# antes deste projeto, ou se há outros sites/certificados dependendo deles,
+# ficam preservados mesmo com esta flag.
 sudo ./scripts/uninstall.sh --purge-packages
 
 # Também apaga server/.env, server/config/*.json, server/data/ e

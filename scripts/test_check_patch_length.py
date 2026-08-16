@@ -27,6 +27,11 @@ def main() -> int:
         assert code == 0, lines
         assert any("[OK]" in line for line in lines), lines
 
+        code, lines = check(apk, "doom.sualoja.app.br")  # 19 bytes: menor, cabe com padding
+        assert code == 0, lines
+        assert any("[OK]" in line for line in lines), lines
+        assert any("userinfo" in line for line in lines), lines
+
         code, lines = check(apk, "doom.debruinsistemas.com.br")  # 27 bytes, mismatched
         assert code == 4, lines
         assert any("[BLOQUEADO]" in line for line in lines), lines

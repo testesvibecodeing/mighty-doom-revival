@@ -120,10 +120,11 @@ Cliente alvo:
 
 O APK real 1.13.1 (`input/mighty-doom.apk`, SHA-256 alvo confirmado) foi baixado e analisado neste ambiente:
 
-- `slayersclub.bethesda.net` (24 bytes) aparece **duas vezes** dentro de `assets/bin/Data/Managed/Metadata/global-metadata.dat`, **não** em `assets/aa/` — a suposição anterior (bundle Addressable) estava errada para este build. `scripts/analyze_apk.py` e `scripts/patch_apk.py` agora escaneiam `global-metadata.dat` também.
+- `slayersclub.bethesda.net` (24 bytes) aparece **duas vezes** dentro de `assets/bin/Data/Managed/Metadata/global-metadata.dat`, **não** em `assets/aa/` — a suposição anterior (bundle Addressable) estava errada para este build. As duas ocorrências são a URL completa `https://slayersclub.bethesda.net/` (33 bytes). `scripts/analyze_apk.py` e `scripts/patch_apk.py` agora escaneiam `global-metadata.dat` também.
 - Localizados por análise binária do header IL2CPP (`Il2CppGlobalMetadataHeader`, sanity check `0xFAB11BAF`, versão `29`): uma ocorrência na tabela `stringLiteralData` (offset 538684), outra no blob `fieldAndParameterDefaultValueData` (offset 6380401) — duas codificações diferentes dentro do mesmo arquivo.
-- `d.debruinsistemas.com.br` (24 bytes) foi testado de ponta a ponta contra o `global-metadata.dat` real: `find_host_occurrences` + `exact_length_patch` trocam as duas ocorrências, tamanho do arquivo idêntico ao original, zero bytes do host oficial restantes.
-- `doom.debruinsistemas.com.br` (27 bytes, domínio real de deploy) foi testado contra o mesmo arquivo e **bloqueado corretamente** pela trava de tamanho (`BLOQUEADO COM SEGURANÇA`, exit 4) — variável-comprimento para `global-metadata.dat` ainda não existe.
+- `d.debruinsistemas.com.br` (24 bytes) foi testado de ponta a ponta contra o `global-metadata.dat` real: as duas ocorrências são trocadas, tamanho do arquivo idêntico ao original, zero bytes do host oficial restantes.
+- Hostnames **menores** que 24 bytes agora também são aceitos: `same_length_patch` troca a URL inteira `https://<host>/` por outra de mesmo comprimento com padding de userinfo (`https://u000@doom.sualoja.app.br/`). Validado contra o `global-metadata.dat` real com `doom.sualoja.app.br` (19 bytes): 2 ocorrências trocadas, tamanho idêntico (11.889.520 bytes), zero bytes oficiais. Userinfo é ignorado por DNS/SNI/Host.
+- `doom.debruinsistemas.com.br` (27 bytes) foi testado contra o mesmo arquivo e **bloqueado corretamente** (`BLOQUEADO COM SEGURANÇA`, exit 4) — hostname maior que o oficial exige o rebuild variável-comprimento do metadata, que ainda não existe.
 - Novo gate `scripts/check_patch_length.py` roda antes do apktool (só lê o ZIP) e avisa incompatibilidade de comprimento antes do usuário esperar o decode; já plugado em `patch-apk.bat`/`.sh`.
 - Manifest/TLS são atualizados; hostname incompatível é recusado antes de alterar o bundle/metadata; verificação final rejeita APK que ainda contenha hosts oficiais.
 - Login local (`/game/auth/register` + `/game/auth/login-device`) testado via smoke test real; login social (`/game/auth/login-google-play-games`, `/game/auth/login-game-center`, `/game/identity/link-*`) já é rejeitado pelo servidor (400/2000) — decisão do projeto: bloqueio no servidor é suficiente, sem remover o botão da UI do cliente por ora.
@@ -133,7 +134,7 @@ Testes: `scripts/test_patch_apk.py`, `scripts/test_patch_unity_bundle.py`, `scri
 ### Ainda NÃO validado
 
 - reconstrução completa (`apktool d`/`b`) do APK real ainda não foi executada neste ambiente (exige Java + `.tools/apktool.jar`, não presentes aqui);
-- reserialização de tamanho variável do `global-metadata.dat` ainda não existe — bloqueia hostnames com comprimento diferente de 24 bytes (inclui o domínio real de deploy, `doom.debruinsistemas.com.br`, 27 bytes);
+- reserialização de tamanho variável do `global-metadata.dat` ainda não existe — bloqueia hostnames **maiores** que 24 bytes (inclui `doom.debruinsistemas.com.br`, 27 bytes); hostnames de até 24 bytes já são suportados via padding de userinfo na URL;
 - reconstrução/assinatura do APK real ainda não foi instalada em Android;
 - handshake HTTPS do APK real contra Revival ainda não foi confirmado;
 - gameplay real no cliente ainda não foi confirmado.

@@ -15,11 +15,14 @@
 #
 # SEGURO PARA VPS COMPARTILHADA: este é o par de scripts/install.sh e só
 # remove o que aquele script registrou como pertencente a este projeto em
-# deploy/.install-state. Pacotes de sistema (Node.js, Caddy) e o
-# /etc/caddy/Caddyfile compartilhado só são tocados se esse registro
-# confirmar que foram criados/instalados por nós; caso contrário ficam
-# marcados como "preservados" e o motivo é explicado no log. Blocos de
-# outros domínios/projetos no Caddy nunca são removidos ou editados.
+# deploy/.install-state. Pacotes de sistema (Node.js, Caddy, certbot), o
+# /etc/caddy/Caddyfile compartilhado, o nginx e os sites de outros projetos
+# só são tocados se esse registro confirmar que foram criados/instalados por
+# nós; caso contrário ficam marcados como "preservados" e o motivo é
+# explicado no log. Blocos de outros domínios/projetos no Caddy ou no nginx
+# nunca são removidos ou editados. O cron de renovação do certbot só é
+# removido se fomos nós que o criamos (ele pode renovar certificados de
+# outros projetos desta VPS).
 #
 # Toda a execução é registrada em deploy/logs/uninstall-<timestamp>.log.
 
@@ -129,12 +132,22 @@ fi
 
 SERVICE_NAME="mighty-doom-revival"
 CADDY_SITE_FILE="/etc/caddy/conf.d/mighty-doom-revival.caddy"
+NGINX_SITE_FILE="${NGINX_SITE_FILE:-}"
 
 if [[ -f "$STATE_FILE" ]]; then
   echo "Carregando registro de propriedade desta instalação: $STATE_FILE"
   # shellcheck disable=SC1090
   source "$STATE_FILE"
   [[ -n "${CADDY_SITE_FILE:-}" ]] || CADDY_SITE_FILE="/etc/caddy/conf.d/mighty-doom-revival.caddy"
+  # Fallback quando o install rodou antes do suporte a nginx: descobrir o
+  # arquivo de site deste projeto pelos caminhos padrão.
+  if [[ -z "${NGINX_SITE_FILE:-}" ]]; then
+    if [[ -f /etc/nginx/sites-available/mighty-doom-revival || -L /etc/nginx/sites-enabled/mighty-doom-revival ]]; then
+      NGINX_SITE_FILE="/etc/nginx/sites-available/mighty-doom-revival"
+    elif [[ -f /etc/nginx/conf.d/mighty-doom-revival.conf ]]; then
+      NGINX_SITE_FILE="/etc/nginx/conf.d/mighty-doom-revival.conf"
+    fi
+  fi
 else
   echo "[AVISO] $STATE_FILE não encontrado (instalação feita antes desta versão do"
   echo "[AVISO] install.sh, ou em outra máquina). Prosseguindo no modo mais seguro"
@@ -152,7 +165,12 @@ echo ""
 echo "------------------------------------------------------------"
 echo "O que este desinstalador VAI remover (pertence a este projeto):"
 echo "  - Serviço systemd: $SERVICE_NAME (/etc/systemd/system/${SERVICE_NAME}.service)"
-echo "  - Site do Caddy deste projeto: $CADDY_SITE_FILE"
+if [[ -n "${NGINX_SITE_FILE:-}" && ( -f "$NGINX_SITE_FILE" || -L /etc/nginx/sites-enabled/mighty-doom-revival ) ]]; then
+  echo "  - Site nginx deste projeto: $NGINX_SITE_FILE"
+  echo "    (+ symlink em sites-enabled e o certificado Let's Encrypt de ${DOMAIN:-<domínio>})"
+else
+  echo "  - Site do Caddy deste projeto: $CADDY_SITE_FILE"
+fi
 if [[ -n "$DOMAIN" ]]; then
   echo "    (domínio https://$DOMAIN vai parar de responder depois de remover)"
 fi
@@ -160,11 +178,18 @@ echo ""
 echo "O que este desinstalador NÃO vai tocar, a menos que você use as flags:"
 echo "  - Pacote Node.js (apt):        $(ownership_note NODE_INSTALLED_BY_SCRIPT) [--purge-packages]"
 echo "  - Pacote 'caddy' (apt):        $(ownership_note CADDY_PACKAGE_INSTALLED_BY_SCRIPT) [--purge-packages]"
+echo "  - Pacote 'certbot' (apt):      $(ownership_note CERTBOT_INSTALLED_BY_SCRIPT) [--purge-packages]"
+echo "  - Pacote/serviço nginx: NUNCA é removido nem parado (é compartilhado"
+echo "    com outros projetos da VPS; removemos apenas o NOSSO arquivo de site)."
 echo "  - /etc/caddy/Caddyfile: nunca é apagado nem sobrescrito. Se a linha"
 echo "    'import .../conf.d/*.caddy' foi acrescentada por nós, ela permanece"
 echo "    (é genérica e inofensiva; outros projetos também podem usá-la)."
-echo "  - Qualquer outro bloco/domínio já configurado em /etc/caddy/Caddyfile ou"
-echo "    em /etc/caddy/conf.d/*.caddy de outros projetos: sempre intocado."
+echo "  - Cron de renovação do certbot (/etc/cron.d/certbot-renew): só sai se"
+echo "    fomos nós que o criamos ($(ownership_note CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT));"
+echo "    caso contrário permanece (pode renovar certificados de outros projetos)."
+echo "  - Qualquer outro bloco/domínio já configurado no nginx, no"
+echo "    /etc/caddy/Caddyfile ou em /etc/caddy/conf.d/*.caddy de outros"
+echo "    projetos: sempre intocado."
 echo "  - Regras de firewall (portas 80/443): outros serviços podem precisar delas."
 echo "  - server/.env, server/config/*.json, server/data/, server/runtime/ e os"
 echo "    logs em $LOG_DIR: preservados [--purge-data remove os 4 primeiros]"
@@ -220,7 +245,64 @@ fi
 echo "[OWNERSHIP] /etc/caddy/Caddyfile e qualquer outro arquivo em /etc/caddy/conf.d/ NÃO foram tocados."
 
 # ---------------------------------------------------------------------------
-step "Pacotes de sistema (Node.js / Caddy)"
+step "Removendo o site deste projeto do nginx (se usado)"
+
+if [[ -n "${NGINX_SITE_FILE:-}" ]]; then
+  NGINX_RELOAD_NEEDED=0
+  if [[ -f "$NGINX_SITE_FILE" || -L "$NGINX_SITE_FILE" ]]; then
+    rm -f "$NGINX_SITE_FILE"
+    echo "[OK] Removido $NGINX_SITE_FILE."
+    NGINX_RELOAD_NEEDED=1
+  fi
+  if [[ -L /etc/nginx/sites-enabled/mighty-doom-revival || -e /etc/nginx/sites-enabled/mighty-doom-revival ]]; then
+    rm -f /etc/nginx/sites-enabled/mighty-doom-revival
+    echo "[OK] Removido symlink /etc/nginx/sites-enabled/mighty-doom-revival."
+    NGINX_RELOAD_NEEDED=1
+  fi
+
+  if [[ "$NGINX_RELOAD_NEEDED" == "1" ]] && command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+    if nginx -t >>"$LOG_FILE" 2>&1; then
+      systemctl reload nginx
+      echo "[OK] nginx recarregado (reload; outros sites da VPS continuam no ar)."
+    else
+      echo "[AVISO] Configuração do nginx ficou inválida após remover nosso site;"
+      echo "[AVISO] o reload NÃO foi feito. Confira manualmente: nginx -t"
+    fi
+  fi
+
+  # O certificado é do domínio DESTE projeto: pode sair sem afetar outros.
+  if [[ -n "$DOMAIN" && -f "/etc/letsencrypt/renewal/$DOMAIN.conf" ]] && command -v certbot >/dev/null 2>&1; then
+    if certbot delete --cert-name "$DOMAIN" --non-interactive >>"$LOG_FILE" 2>&1; then
+      echo "[OK] Certificado Let's Encrypt de $DOMAIN removido (era só deste domínio)."
+    else
+      echo "[AVISO] Não consegui remover o certificado de $DOMAIN via certbot delete."
+      echo "[AVISO] Remova manualmente se quiser: certbot delete --cert-name $DOMAIN"
+    fi
+  fi
+else
+  echo "Nenhum site nginx deste projeto encontrado; nada a fazer."
+fi
+
+echo "[OWNERSHIP] O serviço/pacote nginx, o nginx.conf e os sites de outros projetos NÃO foram tocados."
+
+# ---------------------------------------------------------------------------
+step "Cron de renovação do certbot (só se fomos nós que criamos)"
+
+if [[ -f /etc/cron.d/certbot-renew ]]; then
+  if [[ "${CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT:-}" == "1" ]]; then
+    rm -f /etc/cron.d/certbot-renew
+    echo "[OK] Removido /etc/cron.d/certbot-renew (criado por este instalador)."
+  else
+    echo "[OWNERSHIP] /etc/cron.d/certbot-renew permanece: não há registro de que"
+    echo "[OWNERSHIP] foi criado por este instalador (pode renovar certificados de"
+    echo "[OWNERSHIP] outros projetos desta VPS)."
+  fi
+else
+  echo "/etc/cron.d/certbot-renew não existe; nada a fazer."
+fi
+
+# ---------------------------------------------------------------------------
+step "Pacotes de sistema (Node.js / Caddy / certbot)"
 
 if [[ "$PURGE_PACKAGES" == "1" ]]; then
   if [[ "${NODE_INSTALLED_BY_SCRIPT:-}" == "1" ]]; then
@@ -243,8 +325,22 @@ if [[ "$PURGE_PACKAGES" == "1" ]]; then
   else
     echo "Caddy preservado: não há registro de que foi instalado por este instalador."
   fi
+
+  if [[ "${CERTBOT_INSTALLED_BY_SCRIPT:-}" == "1" ]]; then
+    OTHER_RENEWALS="$(find /etc/letsencrypt/renewal -maxdepth 1 -name '*.conf' 2>/dev/null || true)"
+    if [[ -n "$OTHER_RENEWALS" ]]; then
+      echo "[AVISO] Ainda existem certificados de outros domínios em /etc/letsencrypt/renewal:"
+      echo "$OTHER_RENEWALS" | sed 's/^/[AVISO]   /'
+      echo "[AVISO] Preservando o pacote 'certbot' mesmo com --purge-packages (outros projetos podem depender dele)."
+    else
+      echo "Removendo pacote 'certbot' (registro confirma que foi instalado por este instalador; nenhum outro certificado na VPS)..."
+      apt-get remove -y certbot python3-certbot-nginx || echo "[AVISO] Falha ao remover certbot; remova manualmente se quiser."
+    fi
+  else
+    echo "certbot preservado: não há registro de que foi instalado por este instalador."
+  fi
 else
-  echo "Flag --purge-packages não usada: Node.js e Caddy preservados (mesmo os que este instalador possa ter instalado)."
+  echo "Flag --purge-packages não usada: Node.js, Caddy e certbot preservados (mesmo os que este instalador possa ter instalado)."
 fi
 
 # ---------------------------------------------------------------------------
@@ -284,7 +380,11 @@ echo " Desinstalação concluída"
 echo "============================================================"
 echo "Removido (sempre deste projeto):"
 echo "  - Serviço systemd $SERVICE_NAME"
-echo "  - Site do Caddy: $CADDY_SITE_FILE"
+if [[ -n "${NGINX_SITE_FILE:-}" && -f "$NGINX_SITE_FILE" ]]; then
+  echo "  - Site nginx: $NGINX_SITE_FILE (+ certificado de ${DOMAIN:-<domínio>})"
+else
+  echo "  - Site do Caddy: $CADDY_SITE_FILE"
+fi
 if [[ "$PURGE_PACKAGES" == "1" ]]; then
   echo "  - Pacotes de sistema: ver detalhes acima (só os que eram nossos)"
 fi
@@ -293,9 +393,10 @@ if [[ "$PURGE_DATA" == "1" ]]; then
 fi
 echo ""
 echo "Preservado:"
+echo "  - Pacote/serviço nginx e TODOS os outros sites dele (seja qual for a flag)."
 echo "  - /etc/caddy/Caddyfile e qualquer outro domínio/projeto configurado nele."
 if [[ "$PURGE_PACKAGES" != "1" ]]; then
-  echo "  - Node.js e o pacote 'caddy' (use --purge-packages para remover os que são nossos)."
+  echo "  - Node.js, o pacote 'caddy' e o 'certbot' (use --purge-packages para remover os que são nossos)."
 fi
 if [[ "$PURGE_DATA" != "1" ]]; then
   echo "  - server/.env, server/config/*.json, server/data/, server/runtime/ (use --purge-data)."

@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Patch a decoded Mighty DOOM APK tree for a self-hosted endpoint.
 
-The fast path changes a hardcoded Unity hostname only when the replacement has
-the exact same byte length. Variable-length replacement is delegated to the
-bundle-aware reserializer by the Windows orchestration script.
+The fast path replaces the official https://<host>/ URL with another URL of
+the exact same byte length:
+
+* same-length hostname: direct byte swap;
+* shorter hostname: the URL is padded back to the original length with a URI
+  userinfo segment (``https://u0..@<host>/``). Userinfo is ignored by DNS,
+  SNI and the HTTP Host header, so the server sees the real hostname while
+  every byte offset in global-metadata.dat stays untouched;
+* longer hostname: blocked (would require rebuilding the IL2CPP metadata
+  tables). Variable-length replacement is delegated to the bundle-aware
+  reserializer by the Windows orchestration script.
 """
 
 from __future__ import annotations
@@ -139,24 +147,91 @@ def find_host_occurrences(root: Path) -> list[dict[str, object]]:
     return hits
 
 
-def exact_length_patch(root: Path, target_host: str, hits: list[dict[str, object]]) -> list[str]:
+def build_url_replacement(old_url: bytes, new_host: str) -> bytes | None:
+    """Build an https URL of the exact same length for ``new_host``.
+
+    ``old_url`` is the full ``https://<official-host>/`` prefix found in the
+    APK. When ``new_host`` is shorter, the difference is padded as URI
+    userinfo (``https://u00...@<host>/``), which is syntactically valid and
+    invisible to DNS/SNI/Host. A 1-byte deficit uses the FQDN trailing dot
+    instead (``<host>.``), also valid DNS. Longer hosts cannot be padded.
+    """
+    deficit = len(old_url) - (len("https://") + len(new_host.encode("ascii")) + 1)
+    if deficit < 0:
+        return None
+
+    host = new_host
+    pad = ""
+    if deficit == 1:
+        host = new_host + "."
+    elif deficit >= 2:
+        pad = "u" + "0" * (deficit - 2) + "@"
+
+    new_url = f"https://{pad}{host}/".encode("ascii")
+    if len(new_url) != len(old_url):
+        return None
+    return new_url
+
+
+def same_length_patch(
+    root: Path, target_host: str, hits: list[dict[str, object]]
+) -> tuple[list[str], list[dict[str, object]]]:
+    """Swap every official host occurrence for ``target_host`` without ever
+    changing any byte offsets.
+
+    Returns ``(patched_files, unsupported_occurrences)``. An occurrence is
+    unsupported when it is neither an ``https://<host>/`` URL (which can be
+    padded) nor a same-length bare hostname; those keep the patcher blocked.
+    """
     patched: list[str] = []
+    unsupported: list[dict[str, object]] = []
     target = target_host.encode("ascii")
 
-    compatible = [h for h in hits if int(h["length"]) == len(target)]
-    if not compatible:
-        return patched
-
-    for hit in compatible:
+    for hit in hits:
         rel = str(hit["path"])
         path = root / Path(rel)
         source = str(hit["host"]).encode("ascii")
         data = path.read_bytes()
-        changed = data.replace(source, target)
-        if changed != data:
-            path.write_bytes(changed)
+        out = bytearray(data)
+        changed = False
+
+        pos = data.find(source)
+        while pos != -1:
+            end = pos + len(source)
+            if data[pos - 8 : pos] == b"https://" and data[end : end + 1] == b"/":
+                old_url = bytes(data[pos - 8 : end + 1])
+                new_url = build_url_replacement(old_url, target_host)
+                if new_url is not None:
+                    out[pos - 8 : end + 1] = new_url
+                    changed = True
+                else:
+                    unsupported.append(
+                        {
+                            "path": rel,
+                            "host": hit["host"],
+                            "offset": pos,
+                            "reason": "hostname maior que a URL oficial encontrada",
+                        }
+                    )
+            elif len(target) == len(source):
+                out[pos:end] = target
+                changed = True
+            else:
+                unsupported.append(
+                    {
+                        "path": rel,
+                        "host": hit["host"],
+                        "offset": pos,
+                        "reason": "ocorrência fora de contexto https://<host>/ com comprimento diferente",
+                    }
+                )
+            pos = data.find(source, end)
+
+        if changed and bytes(out) != data:
+            path.write_bytes(bytes(out))
             patched.append(rel)
-    return sorted(set(patched))
+
+    return sorted(set(patched)), unsupported
 
 
 def main() -> int:
@@ -194,18 +269,21 @@ def main() -> int:
 
     hits = find_host_occurrences(decoded)
     patched_files: list[str] = []
+    unsupported: list[dict[str, object]] = []
 
     already_present = any(str(h["host"]) == host for h in hits)
     if not already_present:
-        patched_files = exact_length_patch(decoded, host, hits)
+        patched_files, unsupported = same_length_patch(decoded, host, hits)
 
+    fully_patched = (already_present or patched_files) and not unsupported
     report = {
         "server_host": host,
         "ca_embedded": bool(ca),
         "known_host_hits": hits,
         "host_already_present": already_present,
         "binary_patched_files": patched_files,
-        "status": "ok" if already_present or patched_files else "needs_bundle_aware_patch",
+        "unsupported_occurrences": unsupported,
+        "status": "ok" if fully_patched else "needs_bundle_aware_patch",
     }
 
     payload = json.dumps(report, indent=2, ensure_ascii=False)
@@ -221,14 +299,26 @@ def main() -> int:
         )
         return 3
 
-    if not already_present and not patched_files:
+    if not already_present and not fully_patched:
         lengths = sorted({int(h["length"]) for h in hits})
-        print(
-            "\nBLOQUEADO COM SEGURANÇA: o hostname solicitado possui "
-            f"{len(host.encode('ascii'))} bytes, mas os hosts encontrados possuem "
-            f"comprimento(s) {lengths}. O fluxo deve continuar pelo patch bundle-aware.",
-            file=sys.stderr,
-        )
+        host_len = len(host.encode("ascii"))
+        if any(host_len > length for length in lengths):
+            print(
+                "\nBLOQUEADO COM SEGURANÇA: o hostname solicitado possui "
+                f"{host_len} bytes, mas os hosts encontrados possuem "
+                f"comprimento(s) {lengths}. Hostname MAIOR que o oficial exigiria "
+                "reconstruir as tabelas de metadata do IL2CPP (realocar seções "
+                "inteiras do arquivo), o que não é suportado com segurança.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "\nBLOQUEADO COM SEGURANÇA: este APK tem ocorrência(ões) do host "
+                "fora de contexto https://<host>/ (ver "
+                '"unsupported_occurrences" no relatório), e o patch direto só '
+                "substitui URLs completas de mesmo comprimento.",
+                file=sys.stderr,
+            )
         return 4
 
     print("\nPatch lógico concluído. O APK decoded pode ser recompilado e assinado.")

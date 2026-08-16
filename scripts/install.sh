@@ -6,10 +6,13 @@
 #   sudo ./scripts/install.sh
 #
 # O script é idempotente: pode ser executado de novo a cada "git pull" para
-# atualizar o servidor em produção. Ele instala Node.js e Caddy se faltarem,
-# prepara a configuração do servidor, roda os testes automatizados como
-# gate de deploy, sobe o servidor via systemd e configura HTTPS automático
-# (Let's Encrypt) via Caddy para o domínio informado.
+# atualizar o servidor em produção. Ele instala o Node.js se faltar, escolhe
+# um perfil de recursos conforme a RAM da VPS (1 GB / 4 GB / 8 GB ou mais),
+# roda os testes automatizados como gate de deploy, sobe o servidor via
+# systemd já otimizado para o perfil escolhido e ativa HTTPS automático
+# (Let's Encrypt) para o domínio informado. O proxy é escolhido sozinho:
+# reaproveita um nginx que já exista na VPS (seguro para VPS compartilhada)
+# ou instala/usa o Caddy quando não há nginx.
 #
 # SEGURO PARA VPS COMPARTILHADA: se Node.js e/ou Caddy já estiverem
 # instalados (por exemplo, por outro projeto na mesma VPS), este instalador
@@ -56,12 +59,15 @@ echo " Log desta execução: $LOG_FILE"
 echo "============================================================"
 echo ""
 echo "Este instalador é seguro para VPS compartilhada com outros projetos:"
-echo "  - Só assume posse de Node.js/Caddy se ele mesmo instalar porque"
-echo "    estavam ausentes. Se já existiam, ficam marcados como 'não é deste"
-echo "    projeto' e scripts/uninstall.sh nunca vai removê-los."
-echo "  - Nunca sobrescreve /etc/caddy/Caddyfile: só acrescenta a linha"
-echo "    'import' se faltar, e escreve o domínio deste projeto em um arquivo"
-echo "    próprio dentro de /etc/caddy/conf.d/, sem tocar em outros domínios."
+echo "  - Detecta o reverse proxy: se já existe um nginx servindo 80/443"
+echo "    (de outros projetos), o Revival vira apenas MAIS UM site dele em"
+echo "    arquivo próprio + certbot; senão instala/usa o Caddy. Nunca briga"
+echo "    pelas portas nem edita sites de outros projetos."
+echo "  - Pergunta (ou detecta sozinho) o perfil de recursos da VPS:"
+echo "    1gb / 4gb / 8gb+ - o serviço systemd nasce otimizado para ele."
+echo "  - Só assume posse de pacotes (Node.js/Caddy/certbot) se ele mesmo"
+echo "    instalar porque estavam ausentes. Se já existiam, ficam marcados"
+echo "    como 'não é deste projeto' e scripts/uninstall.sh nunca os remove."
 echo "  - Cada decisão de posse é registrada permanentemente em:"
 echo "      $STATE_FILE"
 echo "    e reaproveitada nas próximas execuções (git pull && install.sh)."
@@ -178,32 +184,68 @@ node -e "const s=require('node:sqlite'); const db=new s.DatabaseSync(':memory:')
   || fail "Node instalado não possui node:sqlite funcional."
 
 # ---------------------------------------------------------------------------
-step "Verificando/instalando Caddy (reverse proxy + HTTPS automático)"
+step "Detectando o reverse proxy desta VPS (nginx compartilhado ou Caddy)"
 
-CADDY_ALREADY_PRESENT=1
-command -v caddy >/dev/null 2>&1 || CADDY_ALREADY_PRESENT=0
-
-if ! state_decided CADDY_PACKAGE_INSTALLED_BY_SCRIPT; then
-  if [[ "$CADDY_ALREADY_PRESENT" == "0" ]]; then
-    echo "[OWNERSHIP] Pacote 'caddy' ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
-    set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 1
-  else
-    echo "[OWNERSHIP] Pacote 'caddy' já estava instalado nesta VPS (pode ser de outro projeto): NÃO é nosso, uninstall.sh nunca vai remover o pacote."
-    set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 0
+# VPS compartilhada: se um nginx já está servindo 80/443 para outros projetos,
+# o Revival vira apenas MAIS UM site dele (arquivo próprio + certbot), em vez
+# de brigar pelas portas. O Caddy só é usado quando não há nginx na VPS.
+PROXY_KIND=""
+if systemctl is-active --quiet nginx 2>/dev/null; then
+  PROXY_KIND="nginx"
+  echo "nginx ativo nesta VPS (possivelmente servindo outros projetos):"
+  echo "  o Revival será apenas mais um site dele, em arquivo próprio."
+elif systemctl is-active --quiet caddy 2>/dev/null; then
+  PROXY_KIND="caddy"
+  echo "Caddy ativo nesta VPS: o Revival será mais um domínio dele (arquivo próprio)."
+elif command -v nginx >/dev/null 2>&1; then
+  PROXY_KIND="nginx"
+  echo "nginx instalado (inativo): será habilitado para servir o Revival."
+elif command -v caddy >/dev/null 2>&1; then
+  PROXY_KIND="caddy"
+  echo "Caddy instalado (inativo): será habilitado para servir o Revival."
+else
+  # Nenhum dos dois instalado: antes de instalar, garantir que 80/443 não
+  # pertencem a outro serviço desconhecido desta VPS.
+  PORT80_LISTENER="$(ss -ltnp 2>/dev/null | awk '$4 ~ /:80$/  {print; exit}')"
+  PORT443_LISTENER="$(ss -ltnp 2>/dev/null | awk '$4 ~ /:443$/ {print; exit}')"
+  if [[ -n "$PORT80_LISTENER$PORT443_LISTENER" ]]; then
+    echo "----- quem escuta em 80/443 nesta VPS -----"
+    [[ -n "$PORT80_LISTENER" ]] && echo "$PORT80_LISTENER"
+    [[ -n "$PORT443_LISTENER" ]] && echo "$PORT443_LISTENER"
+    fail "As portas 80/443 já estão ocupadas por um serviço que não é nginx nem Caddy. Decida qual proxy esta VPS usa (ou desative o serviço acima) antes de rodar o instalador de novo."
   fi
+  PROXY_KIND="caddy"
+  echo "Nenhum proxy instalado: o Caddy será instalado (leve, HTTPS automático)."
 fi
+echo "Reverse proxy escolhido: $PROXY_KIND"
+set_state PROXY_KIND "$PROXY_KIND"
 
-if [[ "$CADDY_ALREADY_PRESENT" == "0" ]]; then
-  apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-    | gpg --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-    | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-  apt-get update -y
-  apt-get install -y caddy
+if [[ "$PROXY_KIND" == "caddy" ]]; then
+  CADDY_ALREADY_PRESENT=1
+  command -v caddy >/dev/null 2>&1 || CADDY_ALREADY_PRESENT=0
+
+  if ! state_decided CADDY_PACKAGE_INSTALLED_BY_SCRIPT; then
+    if [[ "$CADDY_ALREADY_PRESENT" == "0" ]]; then
+      echo "[OWNERSHIP] Pacote 'caddy' ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
+      set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 1
+    else
+      echo "[OWNERSHIP] Pacote 'caddy' já estava instalado nesta VPS (pode ser de outro projeto): NÃO é nosso, uninstall.sh nunca vai remover o pacote."
+      set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 0
+    fi
+  fi
+
+  if [[ "$CADDY_ALREADY_PRESENT" == "0" ]]; then
+    apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+      | gpg --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+      | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+    apt-get update -y
+    apt-get install -y caddy
+  fi
+
+  caddy version
 fi
-
-caddy version
 
 # ---------------------------------------------------------------------------
 step "Preparando configuração do servidor"
@@ -278,7 +320,7 @@ except Exception:
 fi
 
 # ---------------------------------------------------------------------------
-step "Ajustando server/.env para produção atrás do Caddy"
+step "Ajustando server/.env para produção atrás do reverse proxy"
 
 set_env_var HOST 127.0.0.1
 set_env_var PORT 8080
@@ -289,6 +331,84 @@ if [[ -z "$CURRENT_TOKEN" || "$CURRENT_TOKEN" == "change-me" ]]; then
   NEW_TOKEN="$(openssl rand -hex 32)"
   set_env_var REVIVAL_ADMIN_TOKEN "$NEW_TOKEN"
   echo "REVIVAL_ADMIN_TOKEN gerado automaticamente (veja o resumo final)."
+fi
+
+# ---------------------------------------------------------------------------
+step "Perfil de recursos da VPS (otimização para a RAM disponível)"
+
+# Três perfis: 1gb (VPS pequena, até ~3 GB de RAM total), 4gb (média) e
+# 8gb+ (grande). O perfil define o heap do Node e os limites do systemd, de
+# modo que o Revival dê o melhor desempenho possível SEM estrangular o resto
+# da VPS (nginx, outros projetos, cache do sistema).
+TOTAL_MEM_MB="$(( $(awk '/^MemTotal/ {print $2}' /proc/meminfo) / 1024 ))"
+CPU_COUNT="$(nproc 2>/dev/null || echo 1)"
+
+if (( TOTAL_MEM_MB < 3000 )); then
+  DETECTED_PROFILE="1gb"
+elif (( TOTAL_MEM_MB < 7000 )); then
+  DETECTED_PROFILE="4gb"
+else
+  DETECTED_PROFILE="8gb"
+fi
+
+echo "Detectado: ${TOTAL_MEM_MB} MB de RAM, ${CPU_COUNT} CPU(s) -> perfil '${DETECTED_PROFILE}'"
+
+# Prioridade: variável de ambiente RAM_PROFILE > perfil salvo no .install-state
+# > menu interativo (com o detectado como padrão) > detectado.
+if [[ -z "${RAM_PROFILE:-}" ]]; then
+  RAM_PROFILE="${RAM_PROFILE_STATE:-}"
+fi
+
+if [[ -z "$RAM_PROFILE" && -t 0 ]]; then
+  echo ""
+  echo "Perfis disponíveis:"
+  echo "  [1] 1gb  - VPS pequena (~1-2 GB RAM): heap 256MB, limites rígidos de RAM"
+  echo "  [2] 4gb  - VPS média   (~4 GB RAM):    heap 768MB, limites folgados"
+  echo "  [3] 8gb+ - VPS grande  (8 GB+ RAM):    heap 2GB, limites amplos"
+  read -rp "Escolha o perfil para esta VPS [${DETECTED_PROFILE}]: " PROFILE_INPUT
+  RAM_PROFILE="${PROFILE_INPUT:-$DETECTED_PROFILE}"
+fi
+
+if [[ -z "$RAM_PROFILE" ]]; then
+  RAM_PROFILE="$DETECTED_PROFILE"
+fi
+
+case "$RAM_PROFILE" in
+  1|1gb|low)  RAM_PROFILE="1gb" ;;
+  2|4gb|mid)  RAM_PROFILE="4gb" ;;
+  3|8gb|8gb+|high) RAM_PROFILE="8gb" ;;
+  *) fail "Perfil inválido: '$RAM_PROFILE'. Use 1gb, 4gb ou 8gb." ;;
+esac
+
+case "$RAM_PROFILE" in
+  1gb)
+    HEAP_MB=256;  MEM_HIGH="384M";  MEM_MAX="512M";  TASKS_MAX=256;  UV_TP=2
+    ;;
+  4gb)
+    HEAP_MB=768;  MEM_HIGH="1G";    MEM_MAX="1536M"; TASKS_MAX=512;  UV_TP=4
+    ;;
+  8gb)
+    HEAP_MB=2048; MEM_HIGH="2G";    MEM_MAX="3G";    TASKS_MAX=1024; UV_TP=4
+    ;;
+esac
+
+echo "Perfil escolhido: $RAM_PROFILE"
+echo "  Node --max-old-space-size=${HEAP_MB}MB (heap do V8)"
+echo "  systemd MemoryHigh=$MEM_HIGH / MemoryMax=$MEM_MAX / TasksMax=$TASKS_MAX"
+echo "  UV_THREADPOOL=$UV_TP (pools de I/O concorrentes com ${CPU_COUNT} CPU(s))"
+set_state RAM_PROFILE_STATE "$RAM_PROFILE"
+
+# Em VPS pequena, swap é o que separa um pico de memória de um OOM-kill.
+if [[ "$RAM_PROFILE" == "1gb" ]]; then
+  SWAP_MB="$(( $(awk '/^SwapTotal/ {print $2}' /proc/meminfo) / 1024 ))"
+  if (( SWAP_MB == 0 )); then
+    echo "[AVISO] Esta VPS NÃO tem swap. Em uma VPS de ~1 GB isso costuma causar"
+    echo "[AVISO] OOM-kill sob pico. Considere criar 1-2 GB de swap, ex.:"
+    echo "[AVISO]   fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
+    echo "[AVISO]   (echo '/swapfile none swap sw 0 0' >> /etc/fstab)"
+  else
+    echo "Swap presente: ${SWAP_MB} MB (bom para picos de memória)."
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -335,7 +455,15 @@ Wants=network-online.target
 Type=simple
 User=$RUN_USER
 WorkingDirectory=$SERVER_DIR
-ExecStart=$NODE_BIN $SERVER_DIR/src/index.js
+# Otimização por perfil de recursos (RAM_PROFILE=$RAM_PROFILE, ver install.sh):
+# heap do Node calibrado para a RAM da VPS e limites do cgroup que protegem o
+# resto da máquina sem estrangular o servidor do jogo.
+Environment=UV_THREADPOOL=$UV_TP
+ExecStart=$NODE_BIN --max-old-space-size=$HEAP_MB $SERVER_DIR/src/index.js
+MemoryHigh=$MEM_HIGH
+MemoryMax=$MEM_MAX
+TasksMax=$TASKS_MAX
+LimitNOFILE=16384
 Restart=always
 RestartSec=3
 StandardOutput=append:$SERVER_LOG
@@ -372,6 +500,133 @@ verify_service_active() {
 
 verify_service_active "$SERVICE_NAME" || fail "O serviço $SERVICE_NAME não subiu. Veja o journalctl acima e $SERVER_LOG."
 
+# ---------------------------------------------------------------------------
+# Libera 80/443 ANTES de (re)configurar o proxy: se o ufw estiver ativo e as
+# portas ainda fechadas nesse momento, o primeiro desafio ACME (HTTP-01) do
+# domínio real falha por conexão recusada. Isso é global (não some no
+# uninstall): outros serviços/domínios da VPS também costumam precisar de
+# 80/443.
+if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
+  echo "ufw ativo: liberando portas 80/tcp e 443/tcp..."
+  ufw allow 80/tcp >/dev/null || true
+  ufw allow 443/tcp >/dev/null || true
+fi
+
+if [[ "$PROXY_KIND" == "nginx" ]]; then
+# ---------------------------------------------------------------------------
+step "Configurando nginx (proxy 127.0.0.1:8080 -> HTTPS público em $DOMAIN)"
+
+# IMPORTANTE (VPS compartilhada): este bloco NUNCA edita o nginx.conf global
+# nem sites de outros projetos. O Revival ganha UM arquivo próprio, e o
+# certbot --nginx edita SOMENTE esse arquivo ao ativar o HTTPS.
+if [[ -f /etc/nginx/sites-available/mighty-doom-revival ]]; then
+  NGINX_SITE_FILE="/etc/nginx/sites-available/mighty-doom-revival"
+  NGINX_ENABLED_LINK="/etc/nginx/sites-enabled/mighty-doom-revival"
+elif [[ -d /etc/nginx/sites-enabled ]]; then
+  NGINX_SITE_FILE="/etc/nginx/sites-available/mighty-doom-revival"
+  NGINX_ENABLED_LINK="/etc/nginx/sites-enabled/mighty-doom-revival"
+else
+  NGINX_SITE_FILE="/etc/nginx/conf.d/mighty-doom-revival.conf"
+  NGINX_ENABLED_LINK=""
+fi
+
+CERT_RENEWAL_CONF="/etc/letsencrypt/renewal/$DOMAIN.conf"
+
+if [[ -f "$NGINX_SITE_FILE" ]] && grep -q "ssl_certificate" "$NGINX_SITE_FILE" && [[ -f "$CERT_RENEWAL_CONF" ]]; then
+  echo "Site nginx do Revival já existe com HTTPS ativo (gerenciado pelo certbot): mantendo $NGINX_SITE_FILE intacto."
+else
+  echo "[OWNERSHIP] Escrevendo somente o site deste projeto em $NGINX_SITE_FILE - nenhum outro site/domínio do nginx é tocado."
+  cat > "$NGINX_SITE_FILE" <<EOF
+# Site do Mighty DOOM Revival (criado por scripts/install.sh).
+# O HTTPS é ativado abaixo pelo certbot --nginx, que edita APENAS este arquivo.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+fi
+
+if [[ -n "$NGINX_ENABLED_LINK" && ! -e "$NGINX_ENABLED_LINK" ]]; then
+  ln -s "$NGINX_SITE_FILE" "$NGINX_ENABLED_LINK"
+fi
+set_state NGINX_SITE_FILE "$NGINX_SITE_FILE"
+set_state DOMAIN "$DOMAIN"
+
+if ! nginx -t >>"$LOG_FILE" 2>&1; then
+  fail "Configuração do nginx ficou inválida depois de escrever $NGINX_SITE_FILE. Veja $LOG_FILE para o erro completo do 'nginx -t'."
+fi
+
+if systemctl is-active --quiet nginx; then
+  systemctl reload nginx
+  echo "[OK] nginx recarregado (reload; conexões de outros sites não caem)."
+else
+  systemctl enable nginx >/dev/null
+  systemctl restart nginx
+fi
+
+verify_service_active "nginx" || fail "O serviço nginx não subiu. Veja o journalctl acima."
+
+# --- certbot: emissor/renovador do certificado Let's Encrypt ---
+if ! command -v certbot >/dev/null 2>&1; then
+  if ! state_decided CERTBOT_INSTALLED_BY_SCRIPT; then
+    echo "[OWNERSHIP] certbot ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
+    set_state CERTBOT_INSTALLED_BY_SCRIPT 1
+  fi
+  apt-get install -y --no-install-recommends certbot python3-certbot-nginx
+else
+  if ! state_decided CERTBOT_INSTALLED_BY_SCRIPT; then
+    echo "[OWNERSHIP] certbot já existia nesta VPS (pode ser de outro projeto): NÃO é nosso, uninstall.sh nunca vai removê-lo."
+    set_state CERTBOT_INSTALLED_BY_SCRIPT 0
+  fi
+fi
+certbot --version
+
+if [[ -f "$CERT_RENEWAL_CONF" ]]; then
+  echo "Certificado Let's Encrypt de $DOMAIN já existe; pulando emissão (a renovação é automática; ver etapa abaixo)."
+else
+  echo "Emitindo certificado Let's Encrypt para $DOMAIN (certbot --nginx --redirect)..."
+  if ! certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect --register-unsafely-without-email >>"$LOG_FILE" 2>&1; then
+    tail -n 30 "$LOG_FILE" >&2 || true
+    fail "O certbot não conseguiu emitir o certificado de $DOMAIN. Confira se o DNS do domínio aponta para o IP público desta VPS e se as portas 80/443 estão liberadas no firewall da VPS/provedor."
+  fi
+  nginx -t >>"$LOG_FILE" 2>&1 && systemctl reload nginx
+fi
+
+# --- renovação automática ---
+# O certificado só se renova sozinho quando existe um timer/cron dele na VPS.
+# Se não houver NENHUM, instalamos um cron dedicado (nosso; o uninstall.sh
+# pode remover). Se já houver qualquer mecanismo (nosso ou de outro projeto),
+# não tocamos nele.
+if systemctl list-timers --all --no-legend 2>/dev/null | grep -q 'certbot'; then
+  echo "Timer do certbot já existe nesta VPS: renovação já é automática, nada a instalar."
+elif [[ -f /etc/cron.d/certbot-renew ]] || crontab -l 2>/dev/null | grep -q 'certbot renew'; then
+  echo "Já existe automação de renovação do certbot nesta VPS (cron): nada a instalar."
+  if ! state_decided CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT; then
+    echo "[OWNERSHIP] Essa automação não foi criada por nós (ou é compartilhada com outros certificados da VPS): fica marcada como NÃO nossa e o uninstall.sh não vai removê-la."
+    set_state CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT 0
+  fi
+else
+  CERTBOT_BIN="$(command -v certbot)"
+  cat > /etc/cron.d/certbot-renew <<EOF
+# Renovação Let's Encrypt (criado por mighty-doom-revival scripts/install.sh).
+# Roda 2x ao dia; o certbot só troca o certificado quando perto de expirar.
+0 3,15 * * * root $CERTBOT_BIN renew --quiet --deploy-hook "systemctl reload nginx"
+EOF
+  chmod 644 /etc/cron.d/certbot-renew
+  echo "[OK] Cron de renovação instalado: /etc/cron.d/certbot-renew (2x ao dia)."
+  set_state CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT 1
+fi
+
+else
 # ---------------------------------------------------------------------------
 step "Configurando Caddy (proxy 127.0.0.1:8080 -> HTTPS público em $DOMAIN)"
 
@@ -432,16 +687,6 @@ if ! caddy validate --config "$CADDYFILE" >>"$LOG_FILE" 2>&1; then
   fail "Configuração do Caddy ficou inválida depois de escrever $CADDY_SITE_FILE. Veja $LOG_FILE para o erro completo do 'caddy validate'."
 fi
 
-# Libera 80/443 ANTES de reiniciar o Caddy: se o ufw estiver ativo e as portas
-# ainda fechadas nesse momento, o primeiro desafio ACME (HTTP-01) do domínio
-# real falha por conexão recusada. Isso é global (não some no uninstall):
-# outros serviços/domínios da VPS também costumam precisar de 80/443.
-if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
-  echo "ufw ativo: liberando portas 80/tcp e 443/tcp..."
-  ufw allow 80/tcp >/dev/null || true
-  ufw allow 443/tcp >/dev/null || true
-fi
-
 systemctl enable caddy >/dev/null
 if systemctl is-active --quiet caddy; then
   echo "Caddy já estava ativo (pode estar servindo outros domínios): usando 'reload' em vez de 'restart' para não derrubar as conexões deles."
@@ -451,6 +696,8 @@ else
 fi
 
 verify_service_active "caddy" || fail "O serviço caddy não subiu. Veja o journalctl acima."
+
+fi  # fim do branch do proxy (nginx | caddy)
 
 # ---------------------------------------------------------------------------
 step "Validando saúde do servidor localmente (http://127.0.0.1:8080/revival/health)"
@@ -487,8 +734,8 @@ for _ in $(seq 1 60); do
 done
 
 if [[ "$PUBLIC_OK" != "1" ]]; then
-  echo "----- journalctl -u caddy (últimas 80 linhas) -----" >&2
-  journalctl -u caddy -n 80 --no-pager >&2 || true
+  echo "----- journalctl -u $PROXY_KIND (últimas 80 linhas) -----" >&2
+  journalctl -u "$PROXY_KIND" -n 80 --no-pager >&2 || true
   fail "Não foi possível validar https://$DOMAIN/revival/health. Confira se o DNS de $DOMAIN aponta para o IP público deste servidor e se as portas 80/443 estão liberadas no firewall da VPS/provedor de nuvem (ex: AWS Security Group, painel da hospedagem)."
 fi
 cat "$PUBLIC_HEALTH"
@@ -533,13 +780,15 @@ echo "============================================================"
 echo "Domínio:                 https://$DOMAIN"
 echo "Health check:             https://$DOMAIN/revival/health"
 echo "Health local:              http://127.0.0.1:8080/revival/health"
+echo "Perfil de recursos:       $RAM_PROFILE (heap ${HEAP_MB}MB, MemoryMax $MEM_MAX, TasksMax $TASKS_MAX)"
+echo "Reverse proxy:            $PROXY_KIND"
 echo ""
 echo "REVIVAL_ADMIN_TOKEN atual: $(get_env_var REVIVAL_ADMIN_TOKEN)"
 echo "(guarde este token; ele autoriza POST /revival/reload)"
 echo ""
 echo "Serviços systemd:"
 echo "  systemctl status $SERVICE_NAME"
-echo "  systemctl status caddy"
+echo "  systemctl status $PROXY_KIND"
 echo "  journalctl -u $SERVICE_NAME -f"
 echo ""
 echo "Logs:"
@@ -549,11 +798,18 @@ echo ""
 echo "------------------------------------------------------------"
 echo "Resumo de propriedade (VPS compartilhada com outros projetos):"
 echo "  Node.js instalado por este instalador:        $(ownership_label NODE_INSTALLED_BY_SCRIPT)"
+if [[ "$PROXY_KIND" == "nginx" ]]; then
+echo "  Site nginx deste projeto ($NGINX_SITE_FILE): sempre nosso"
+echo "  Certificado Let's Encrypt de $DOMAIN:         sempre nosso (domínio do projeto)"
+echo "  Pacote 'certbot' instalado por este instalador: $(ownership_label CERTBOT_INSTALLED_BY_SCRIPT)"
+echo "  Cron de renovação /etc/cron.d/certbot-renew:  $(ownership_label CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT)"
+else
 echo "  Pacote 'caddy' instalado por este instalador:  $(ownership_label CADDY_PACKAGE_INSTALLED_BY_SCRIPT)"
 echo "  /etc/caddy/Caddyfile criado por este instalador: $(ownership_label CADDYFILE_CREATED_BY_SCRIPT)"
 echo "  Linha 'import' acrescentada por este instalador: $(ownership_label CADDY_IMPORT_LINE_ADDED_BY_SCRIPT)"
-echo "  Serviço systemd $SERVICE_NAME:              sempre nosso"
 echo "  Site do Caddy deste projeto ($CADDY_SITE_FILE): sempre nosso"
+fi
+echo "  Serviço systemd $SERVICE_NAME:              sempre nosso"
 echo ""
 echo "  Registro completo salvo em: $STATE_FILE"
 echo "  Para remover só o que é deste projeto (sem afetar outros projetos"

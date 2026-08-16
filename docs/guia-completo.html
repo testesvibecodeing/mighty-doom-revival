@@ -877,23 +877,58 @@ sudo ./scripts/install.sh</code></pre>
 
         <h3>O que ele faz sozinho</h3>
         <ul>
-          <li>instala Node.js 24 LTS e o Caddy, se ainda não existirem;</li>
+          <li>instala Node.js 24 LTS, se ainda não existir;</li>
+          <li><strong>detecta o reverse proxy</strong>: se a VPS já tem um <code class="inline">nginx</code> servindo
+          80/443 (mesmo que de outros projetos), o Revival vira apenas mais um site dele (arquivo próprio +
+          certbot); senão instala/usa o Caddy;</li>
+          <li>escolhe o <strong>perfil de recursos</strong> conforme a RAM da VPS (tabela abaixo) e otimiza o
+          serviço <code class="inline">systemd</code> para ele;</li>
           <li>prepara <code class="inline">server/.env</code> e os <code class="inline">config/*.json</code> a partir dos <code class="inline">.example</code>;</li>
           <li>roda a suíte de testes do servidor como <strong>gate de deploy</strong> — aborta se algo quebrar;</li>
-          <li>sobe o servidor como serviço <code class="inline">systemd</code>, com reinício automático;</li>
-          <li>configura o Caddy como reverse proxy com HTTPS automático (Let's Encrypt) para o domínio informado;</li>
+          <li>sobe o servidor como serviço <code class="inline">systemd</code>, com reinício automático e limites de
+          RAM do perfil;</li>
+          <li>ativa HTTPS automático (Let's Encrypt) para o domínio informado — nginx+certbot ou Caddy — com
+          renovação automática;</li>
           <li>valida <code class="inline">http://127.0.0.1:8080/revival/health</code> e depois
           <code class="inline">https://SEU_DOMINIO/revival/health</code> antes de terminar.</li>
         </ul>
 
+        <h3>Perfis de recursos (otimização pela RAM da VPS)</h3>
+        <p class="lead">O instalador pergunta o perfil (a detecção automática é o padrão da resposta) ou aceita via
+        variável: <code class="inline">RAM_PROFILE=1gb sudo -E ./scripts/install.sh</code>. A escolha fica salva em
+        <code class="inline">deploy/.install-state</code> e é reaproveitada nas atualizações.</p>
+        <div class="cmd">
+          <div class="cmd-head"><span class="cmd-os">limites por perfil</span></div>
+          <pre><code>Perfil   VPS indicada      Heap Node   MemoryHigh   MemoryMax (rígido)   TasksMax   UV_THREADPOOL
+1gb      ~1-2 GB RAM       256 MB      384 MB       512 MB              256        2
+4gb      ~4 GB RAM         768 MB      1 GB         1536 MB             512        4
+8gb      8 GB+ RAM         2048 MB     2 GB         3 GB                1024       4</code></pre>
+        </div>
+        <ul>
+          <li><strong>Heap do Node</strong> (<code class="inline">--max-old-space-size</code>): teto do coletor de
+          lixo do V8, calibrado com folga para o GameData em RAM;</li>
+          <li><strong>MemoryHigh</strong>: a partir daí o kernel começa a reclaimar memória do serviço (pressiona o
+          GC) antes de qualquer coisa pior acontecer;</li>
+          <li><strong>MemoryMax</strong>: limite rígido do cgroup — se o serviço estourar (vazamento), o kernel mata
+          <strong>só o jogo</strong>, nunca o nginx nem os outros projetos da VPS;</li>
+          <li><strong>TasksMax</strong>: teto de threads/processos do serviço;</li>
+          <li><strong>UV_THREADPOOL</strong>: threads de I/O (SQLite/arquivos) — 2 já sobra para 1 vCPU.</li>
+        </ul>
+        <p class="lead">Todos os perfis também aplicam <code class="inline">LimitNOFILE=16384</code>. Em VPS do perfil
+        <code class="inline">1gb</code> sem swap, o instalador imprime o aviso e o comando para criar swap.</p>
+
         <div class="callout">
           <span class="tag">VPS compartilhada</span>
-          <p>Se Node.js e/ou Caddy já estiverem instalados nesta VPS (por outro projeto, por exemplo), o instalador
-          <strong>nunca os reinstala nem passa a considerá-los deste projeto</strong>. Ele também nunca sobrescreve
+          <p>Se Node.js, Caddy ou certbot já estiverem instalados nesta VPS (por outro projeto, por exemplo), o
+          instalador <strong>nunca os reinstala nem passa a considerá-los deste projeto</strong>. Com nginx, ele
+          nunca edita o <code class="inline">nginx.conf</code> nem sites de outros projetos: escreve
+          <strong>um</strong> arquivo próprio e o certbot edita só esse arquivo; o <em>reload</em> (não restart) do
+          nginx não derruba as conexões dos outros sites. Com Caddy, ele nunca sobrescreve
           <code class="inline">/etc/caddy/Caddyfile</code>: só acrescenta a linha <code class="inline">import</code>
           (se faltar) e escreve o domínio deste projeto em um arquivo próprio dentro de
-          <code class="inline">/etc/caddy/conf.d/</code>, sem tocar em outros domínios já configurados. Cada decisão
-          fica registrada em <code class="inline">deploy/.install-state</code> e explicada com o prefixo
+          <code class="inline">/etc/caddy/conf.d/</code>. A renovação do certificado fica automática (timer do
+          certbot ou cron próprio, instalado só se a VPS não tiver nenhum). Cada decisão fica registrada em
+          <code class="inline">deploy/.install-state</code> e explicada com o prefixo
           <code class="inline">[OWNERSHIP]</code> no log da execução.</p>
         </div>
 
@@ -904,7 +939,7 @@ sudo ./scripts/install.sh</code></pre>
           <div class="cmd">
             <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
             <pre><code>systemctl status mighty-doom-revival
-systemctl status caddy
+systemctl status nginx   # ou: caddy, dependendo do proxy detectado
 journalctl -u mighty-doom-revival -f</code></pre>
           </div>
         </div>
@@ -920,9 +955,10 @@ sudo ./scripts/install.sh</code></pre>
 
         <h3>Desinstalar</h3>
         <p class="lead">O par do instalador, <code class="inline">scripts/uninstall.sh</code>, remove só o que
-        pertence a este projeto (o serviço <code class="inline">systemd</code> e o site próprio do Caddy). Ele
-        nunca apaga <code class="inline">/etc/caddy/Caddyfile</code> nem blocos de outros domínios/projetos que já
-        estejam configurados nele.</p>
+        pertence a este projeto: o serviço <code class="inline">systemd</code>, o site próprio no proxy (Caddy
+        <strong>ou</strong> nginx + symlink + certificado Let's Encrypt do domínio) e, se fomos nós que criamos, o
+        cron de renovação do certbot. Ele <strong>nunca</strong> remove/para o nginx, nunca apaga
+        <code class="inline">/etc/caddy/Caddyfile</code> e nunca mexe em blocos de outros domínios/projetos.</p>
         <div class="cmd">
           <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
           <pre><code>sudo ./scripts/uninstall.sh</code></pre>
@@ -934,14 +970,14 @@ sudo ./scripts/install.sh</code></pre>
         limpeza mais completa:</p>
         <div class="cmd">
           <div class="cmd-head"><span class="cmd-os">bash na VPS</span><button class="copy-btn" type="button">Copiar</button></div>
-          <pre><code>sudo ./scripts/uninstall.sh --purge-packages  # remove Node.js/Caddy, só se instalados por este projeto
+          <pre><code>sudo ./scripts/uninstall.sh --purge-packages  # remove Node.js/Caddy/certbot, só se instalados por este projeto
 sudo ./scripts/uninstall.sh --purge-data      # apaga server/.env, config, data/ e runtime/ (progresso incluso)</code></pre>
         </div>
         <div class="callout warn">
           <span class="tag">Atenção</span>
-          <p><code class="inline">--purge-packages</code> só remove Node.js/Caddy se
+          <p><code class="inline">--purge-packages</code> só remove Node.js/Caddy/certbot se
           <code class="inline">deploy/.install-state</code> confirmar que foram instalados por este instalador — se
-          já existiam antes (ou há outros sites em <code class="inline">/etc/caddy/conf.d/</code>), ficam
+          já existiam antes (ou há outros sites/certificados dependendo deles), ficam
           preservados mesmo com a flag. <code class="inline">--purge-data</code> apaga o banco de progresso dos
           jogadores; use só se quiser mesmo zerar tudo.</p>
         </div>
@@ -1093,7 +1129,7 @@ adb install output/mighty-doom-revival.apk</code></pre>
               <tr>
                 <td>Patcher para em <code class="inline">needs_bundle_aware_patch</code></td>
                 <td>hostname escolhido tem tamanho diferente do host original dentro do bundle Unity</td>
-                <td>veja <code class="inline">work/apk-patch/patch-report.json</code>; tente um hostname do mesmo comprimento</td>
+                <td>veja <code class="inline">work/apk-patch/patch-report.json</code>; use um hostname com no máximo 24 bytes (menor funciona: o patcher preenche a URL com padding)</td>
               </tr>
               <tr>
                 <td><code class="inline">install.sh</code> falha ao emitir o certificado HTTPS</td>

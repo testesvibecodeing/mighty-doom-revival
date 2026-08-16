@@ -36,18 +36,27 @@ def check(apk: Path, host: str) -> tuple[int, list[str]]:
 
     found_lengths = sorted({len(h.encode("ascii")) for h in found_hosts})
     target_len = len(host.encode("ascii"))
+    max_len = max(found_lengths)
 
-    if target_len in found_lengths:
+    if target_len <= max_len:
+        if target_len < max_len:
+            return 0, [
+                f"[OK] '{host}' tem {target_len} bytes (o host oficial tem {max_len}).",
+                f"O patcher troca a URL inteira 'https://<host>/' por outra de MESMO comprimento,",
+                f"preenchendo a diferença com userinfo: https://u...@{host}/",
+                "Userinfo é ignorado por DNS/SNI/Host — o servidor continua vendo o hostname real,",
+                "e nenhum offset do global-metadata.dat é deslocado.",
+            ]
         return 0, [f"[OK] '{host}' tem {target_len} bytes; compatível com o patch direto e seguro."]
 
     return 4, [
         f"[BLOQUEADO] '{host}' tem {target_len} bytes.",
         f"O(s) host(s) oficial(is) encontrado(s) neste APK tem/têm {found_lengths} bytes de comprimento.",
-        "Hoje o patcher só troca hostnames com exatamente o mesmo número de bytes do host oficial.",
-        "Trocar por um comprimento diferente exigiria reconstruir a tabela de metadata do IL2CPP",
+        "Hostname MENOR ou IGUAL cabe no patch direto (o patcher preenche a diferença com padding",
+        "de userinfo na URL). Hostname MAIOR exigiria reconstruir a tabela de metadata do IL2CPP",
         "(realocar seções inteiras do arquivo), o que ainda não é suportado com segurança.",
         "",
-        f"Escolha um hostname com exatamente {found_lengths} bytes e rode de novo.",
+        f"Escolha um hostname com no máximo {max_len} bytes e rode de novo.",
     ]
 
 
