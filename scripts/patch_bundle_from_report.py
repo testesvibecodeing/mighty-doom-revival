@@ -11,6 +11,24 @@ from patch_apk import normalize_host
 from patch_unity_bundle import UnityPyUnavailable, patch_bundle
 
 
+def _candidate_summary(results: list[dict]) -> dict:
+    serializable = []
+    raw_only = []
+    for result in results:
+        inspection = result.get("inspection") or {}
+        rel = result.get("path")
+        for candidate in inspection.get("serializable", []):
+            serializable.append({"bundle": rel, **candidate})
+        for candidate in inspection.get("raw_only", []):
+            raw_only.append({"bundle": rel, **candidate})
+    return {
+        "serializable": serializable,
+        "raw_only": raw_only,
+        "serializable_references": sum(int(x.get("serialized_references", 0)) for x in serializable),
+        "raw_only_references": sum(int(x.get("raw_references", 0)) for x in raw_only),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--decoded", required=True)
@@ -53,19 +71,29 @@ def main() -> int:
         print(f"ERRO no patch bundle-aware: {exc}", file=sys.stderr)
         return 4
 
+    candidates = _candidate_summary(results)
+    report["bundle_aware"] = results
+    report["bundle_candidates"] = candidates
     changed = [x for x in results if x.get("changed")]
     if not changed:
-        print(
-            "BLOQUEADO COM SEGURANÇA: o hostname foi localizado no bundle bruto, "
-            "mas não apareceu em TextAsset/MonoBehaviour serializável. Nenhum byte foi alterado.",
-            file=sys.stderr,
-        )
-        report["bundle_aware"] = results
-        report["status"] = "needs_object_mapping"
+        if candidates["raw_only_references"]:
+            report["status"] = "needs_typetree_mapping"
+            detail = (
+                f"{candidates['raw_only_references']} referência(s) localizada(s) em payload bruto de "
+                f"{len(candidates['raw_only'])} objeto(s), mas sem typetree serializável. "
+                "O relatório contém type/path_id para mapear o objeto sem alterar bytes no escuro."
+            )
+        else:
+            report["status"] = "needs_object_mapping"
+            detail = (
+                "o hostname foi localizado no bundle bruto do APK, mas o parser Unity não o associou "
+                "a um objeto serializável nem a um payload de objeto individual."
+            )
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"BLOQUEADO COM SEGURANÇA: {detail}", file=sys.stderr)
+        print(f"Mapa salvo em: {report_path}", file=sys.stderr)
         return 4
 
-    report["bundle_aware"] = results
     report["status"] = "ok_bundle_aware"
     report["bundle_aware_patched_files"] = [x["path"] for x in changed]
     report["bundle_aware_replacements"] = sum(int(x.get("replacements", 0)) for x in changed)
@@ -76,6 +104,8 @@ def main() -> int:
         "server_host": host,
         "patched_files": report["bundle_aware_patched_files"],
         "replacements": report["bundle_aware_replacements"],
+        "serializable_candidates": len(candidates["serializable"]),
+        "raw_only_candidates": len(candidates["raw_only"]),
     }, indent=2, ensure_ascii=False))
     return 0
 
