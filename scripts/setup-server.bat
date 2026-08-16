@@ -10,6 +10,7 @@ echo.
 where node >nul 2>nul || (
   echo [ERRO] Node.js nao encontrado no PATH.
   echo Instale Node.js 22.5+ ou 24 LTS e tente novamente.
+  pause
   exit /b 2
 )
 
@@ -20,6 +21,7 @@ if errorlevel 1 (
   echo Encontrado:
   node --version
   echo Use Node.js 22.5+; Node 24 LTS e o recomendado.
+  pause
   exit /b 2
 )
 node --version
@@ -43,13 +45,17 @@ for %%F in (
   "server\test\smoke.mjs"
 ) do (
   node --check %%F
-  if errorlevel 1 exit /b 3
+  if errorlevel 1 (
+    pause
+    exit /b 3
+  )
 )
 
 echo [3/4] Executando teste real end-to-end local...
 node "server\test\smoke.mjs"
 if errorlevel 1 (
   echo [ERRO] O smoke test do servidor falhou.
+  pause
   exit /b 4
 )
 
@@ -71,4 +77,5 @@ echo.
 echo Health check:
 echo   http://127.0.0.1:8080/revival/health
 echo.
+pause
 exit /b 0

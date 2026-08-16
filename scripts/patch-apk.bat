@@ -17,6 +17,7 @@ if not exist "%APK%" (
   echo [ERRO] APK nao encontrado: %APK%
   echo Para baixar/validar a copia alvo execute antes:
   echo   scripts\analyze-official-apk.bat
+  pause
   exit /b 2
 )
 
@@ -29,18 +30,25 @@ set "CA_FILE="
 set /p "CA_FILE=CA PEM/CRT local para HTTPS [ENTER = certificado publico]: "
 if not "%CA_FILE%"=="" if not exist "%CA_FILE%" (
   echo [ERRO] CA nao encontrada: %CA_FILE%
+  pause
   exit /b 2
 )
 
 echo.
 echo Verificando dependencias minimas...
-call :require python || exit /b 3
-call :require java || exit /b 3
+call :require python || (pause & exit /b 3)
+call :require java || (pause & exit /b 3)
 
 if not exist ".tools\apktool.jar" call "scripts\setup-patcher-tools.bat"
-if errorlevel 1 exit /b %ERRORLEVEL%
+if errorlevel 1 (
+  pause
+  exit /b %ERRORLEVEL%
+)
 if not exist ".tools\uber-apk-signer.jar" call "scripts\setup-patcher-tools.bat"
-if errorlevel 1 exit /b %ERRORLEVEL%
+if errorlevel 1 (
+  pause
+  exit /b %ERRORLEVEL%
+)
 
 echo Verificando suporte bundle-aware...
 python -c "import UnityPy,sys; sys.exit(0 if getattr(UnityPy,'__version__','') == '1.25.3' else 1)" >nul 2>nul
@@ -50,6 +58,7 @@ if errorlevel 1 (
   if errorlevel 1 (
     echo [ERRO] Nao foi possivel instalar UnityPy 1.25.3.
     echo Execute manualmente: python -m pip install UnityPy==1.25.3
+    pause
     exit /b 3
   )
 )
@@ -80,6 +89,7 @@ if errorlevel 1 (
   echo [PARADO] O servidor HTTPS ainda nao esta pronto para receber o cliente.
   echo O patcher exige /revival/health com client 1.13.1, API 24.0.0 e GameData carregado.
   echo Corrija DNS/TLS/servidor antes de gerar um APK apontando para um destino quebrado.
+  pause
   exit /b 11
 )
 
@@ -88,6 +98,7 @@ echo [2/8] Analisando APK...
 python scripts\analyze_apk.py "%APK%"
 if errorlevel 1 (
   echo [ERRO] O APK nao passou pela analise inicial.
+  pause
   exit /b %ERRORLEVEL%
 )
 
@@ -96,6 +107,7 @@ echo [3/8] Desmontando APK...
 java -jar "%APKTOOL%" d -f "%APK%" -o "%DECODED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao desmontar o APK.
+  pause
   exit /b 4
 )
 
@@ -120,6 +132,7 @@ if not "%PATCH_RC%"=="0" (
   echo [PARADO] O patcher nao conseguiu provar uma alteracao segura do bundle Unity.
   echo Nenhum patch binario de tamanho variavel foi feito no escuro.
   echo Relatorio: %REPORT%
+  pause
   exit /b %PATCH_RC%
 )
 
@@ -128,6 +141,7 @@ echo [5/8] Reconstruindo APK...
 java -jar "%APKTOOL%" b "%DECODED%" -o "%UNSIGNED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao reconstruir o APK.
+  pause
   exit /b 5
 )
 
@@ -137,6 +151,7 @@ python scripts\verify_patched_apk.py --apk "%UNSIGNED%" --server "%SERVER_HOST%"
 if errorlevel 1 (
   echo [ERRO] APK reconstruido nao passou pelo gate do endpoint Revival.
   echo Relatorio: %VERIFY_REPORT%
+  pause
   exit /b 6
 )
 
@@ -145,12 +160,14 @@ echo [7/8] Alinhando, assinando e verificando assinatura...
 java -jar "%SIGNER%" -a "%UNSIGNED%" --overwrite --verbose
 if errorlevel 1 (
   echo [ERRO] Falha ao alinhar/assinar o APK.
+  pause
   exit /b 7
 )
 
 java -jar "%SIGNER%" -a "%UNSIGNED%" --onlyVerify --verbose
 if errorlevel 1 (
   echo [ERRO] A verificacao da assinatura falhou.
+  pause
   exit /b 8
 )
 
@@ -159,6 +176,7 @@ rem endpoint depois do signer para impedir entrega de um artefato inesperado.
 python scripts\verify_patched_apk.py --apk "%UNSIGNED%" --server "%SERVER_HOST%" --report "%VERIFY_REPORT%"
 if errorlevel 1 (
   echo [ERRO] APK assinado falhou na verificacao final do endpoint.
+  pause
   exit /b 9
 )
 
@@ -166,6 +184,7 @@ if exist "%OUT%" del /q "%OUT%"
 copy /Y "%UNSIGNED%" "%OUT%" >nul
 if errorlevel 1 (
   echo [ERRO] Nao foi possivel criar %OUT%.
+  pause
   exit /b 10
 )
 
@@ -184,6 +203,7 @@ echo Com ADB instalado, opcionalmente use:
 echo   adb uninstall com.bethsoft.ubu
 echo   adb install "%OUT%"
 echo.
+pause
 exit /b 0
 
 :require

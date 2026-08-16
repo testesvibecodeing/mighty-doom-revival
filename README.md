@@ -46,9 +46,12 @@ mighty-doom-revival/
 │   ├── fetch-uptodown-apk.py
 │   ├── fetch-community-gamedata.py
 │   ├── analyze_apk.py
-│   ├── analyze-official-apk.bat
+│   ├── analyze-official-apk.bat / .sh
 │   ├── patch_apk.py
-│   ├── patch-apk.bat
+│   ├── patch-apk.bat / .sh
+│   ├── setup-patcher-tools.bat / .sh
+│   ├── setup-server.bat / .sh
+│   ├── start-server.bat / .sh
 │   └── install.sh          # instalador completo para VPS Ubuntu/Debian
 └── server/
     ├── src/                # servidor Revival próprio
@@ -77,6 +80,12 @@ No Windows também existe o fluxo em um clique:
 scripts\analyze-official-apk.bat
 ```
 
+No Linux/Mac, o equivalente é:
+
+```bash
+./scripts/analyze-official-apk.sh
+```
+
 O APK nunca é adicionado ao Git. O workflow de análise também apaga o binário antes de publicar qualquer artifact.
 
 ## 2. Analisar o APK
@@ -97,6 +106,13 @@ No Windows:
 
 ```bat
 scripts\setup-server.bat
+```
+
+No Linux/Mac:
+
+```bash
+./scripts/setup-server.sh
+./scripts/start-server.sh
 ```
 
 Ou manualmente:
@@ -242,6 +258,12 @@ No Windows:
 
 ```bat
 scripts\patch-apk.bat
+```
+
+No Linux/Mac:
+
+```bash
+./scripts/patch-apk.sh
 ```
 
 O patcher atual desmonta, ajusta configuração de rede/TLS, recompila, alinha e assina uma cópia local. A alteração do hostname dentro do Unity Addressables ainda está limitada até identificarmos e reserializarmos corretamente o objeto do bundle no APK alvo.

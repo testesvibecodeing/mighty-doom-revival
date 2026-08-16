@@ -1,6 +1,8 @@
-# Patch do APK — Windows
+# Patch do APK — Windows / Linux / Mac
 
 O objetivo do patcher é receber **uma cópia local do APK do próprio usuário** e gerar uma cópia assinada para laboratório apontando para um backend self-hosted.
+
+Os scripts existem em duas versões equivalentes: `.bat` para Windows e `.sh` para Linux/Mac. Os exemplos abaixo mostram a versão Windows; basta trocar `scripts\nome.bat` por `./scripts/nome.sh` no Linux/Mac.
 
 O APK oficial e seus assets não fazem parte deste repositório.
 
@@ -61,6 +63,12 @@ Não publique o APK ou dumps completos no GitHub. Para documentação, registre 
 
 ```bat
 scripts\patch-apk.bat
+```
+
+No Linux/Mac:
+
+```bash
+./scripts/patch-apk.sh
 ```
 
 O assistente pede:

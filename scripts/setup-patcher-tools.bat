@@ -10,10 +10,12 @@ echo.
 where java >nul 2>nul || (
   echo [ERRO] Java nao encontrado no PATH.
   echo Instale um JDK/JRE moderno ^(Java 17+ recomendado^) e tente novamente.
+  pause
   exit /b 2
 )
 where powershell >nul 2>nul || (
   echo [ERRO] PowerShell nao encontrado.
+  pause
   exit /b 2
 )
 
@@ -29,27 +31,36 @@ set "SIGNER_SHA=e1299fd6fcf4da527dd53735b56127e8ea922a321128123b9c32d619bba1d835
 if not exist "%TOOL_DIR%" mkdir "%TOOL_DIR%"
 
 call :download_and_verify "%APKTOOL_URL%" "%APKTOOL%" "%APKTOOL_SHA%" "Apktool 3.0.3"
-if errorlevel 1 exit /b %ERRORLEVEL%
+if errorlevel 1 (
+  pause
+  exit /b %ERRORLEVEL%
+)
 
 call :download_and_verify "%SIGNER_URL%" "%SIGNER%" "%SIGNER_SHA%" "Uber APK Signer 1.3.0"
-if errorlevel 1 exit /b %ERRORLEVEL%
+if errorlevel 1 (
+  pause
+  exit /b %ERRORLEVEL%
+)
 
 echo.
 echo Validando executaveis Java...
 java -jar "%APKTOOL%" --version
 if errorlevel 1 (
   echo [ERRO] Apktool baixado nao executou corretamente.
+  pause
   exit /b 5
 )
 java -jar "%SIGNER%" --version
 if errorlevel 1 (
   echo [ERRO] Uber APK Signer baixado nao executou corretamente.
+  pause
   exit /b 5
 )
 
 echo.
 echo [OK] Ferramentas do patcher preparadas em %TOOL_DIR%.
 echo      Essa pasta e ignorada pelo Git.
+pause
 exit /b 0
 
 :download_and_verify
