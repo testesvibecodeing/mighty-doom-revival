@@ -17,7 +17,7 @@ Fazer o cliente final do Mighty DOOM voltar a funcionar com uma infraestrutura c
 - pacotes personalizados adquiridos **somente com moedas/recursos internos do jogo**;
 - nenhuma compra com cartão, Google Play Billing ou dinheiro real no servidor Revival.
 
-O acompanhamento detalhado está em [`docs/ROADMAP-100-PERCENT.md`](docs/ROADMAP-100-PERCENT.md).
+Acompanhe o trabalho em [`docs/ROADMAP-100-PERCENT.md`](docs/ROADMAP-100-PERCENT.md) e [`docs/ENDPOINT-MATRIX.md`](docs/ENDPOINT-MATRIX.md).
 
 ## Cliente alvo
 
@@ -38,12 +38,15 @@ mighty-doom-revival/
 ├── docs/
 │   ├── APK-PATCH.md
 │   ├── SERVER.md
+│   ├── ENDPOINT-MATRIX.md
 │   └── ROADMAP-100-PERCENT.md
 ├── input/                  # APK local; ignorado pelo Git
 ├── output/                 # APK patchado; ignorado pelo Git
 ├── scripts/
 │   ├── fetch-uptodown-apk.py
+│   ├── fetch-community-gamedata.py
 │   ├── analyze_apk.py
+│   ├── analyze-official-apk.bat
 │   ├── patch_apk.py
 │   └── patch-apk.bat
 └── server/
@@ -67,6 +70,12 @@ Para reproduzir a pesquisa a partir da página informada da Uptodown, existe um 
 python scripts/fetch-uptodown-apk.py --output input/mighty-doom.apk
 ```
 
+No Windows também existe o fluxo em um clique:
+
+```bat
+scripts\analyze-official-apk.bat
+```
+
 O APK nunca é adicionado ao Git. O workflow de análise também apaga o binário antes de publicar qualquer artifact.
 
 ## 2. Analisar o APK
@@ -81,12 +90,19 @@ O relatório é sanitizado e contém apenas metadados úteis à interoperabilida
 
 ## 3. Servidor Revival próprio
 
-A implementação principal agora está em `server/`. A implementação comunitária `dannyhpy/mightydoom-gameserver` continua sendo uma referência importante de protocolo, mas não é mais necessária como runtime do projeto.
+A implementação principal está em `server/`. A implementação comunitária `dannyhpy/mightydoom-gameserver` continua sendo referência importante de protocolo, mas não é necessária como runtime do projeto.
 
-Preparação:
+No Windows:
+
+```bat
+scripts\setup-server.bat
+```
+
+Ou manualmente:
 
 ```bash
 cd server
+cp .env.example .env
 cp config/revival.example.json config/revival.json
 cp config/packs.example.json config/packs.json
 cp config/events.example.json config/events.json
@@ -101,7 +117,7 @@ Health check:
 GET http://127.0.0.1:8080/revival/health
 ```
 
-O servidor já tem a fundação para autenticação local, SQLite, inventário/moedas, entrega de game data, loja configurável, compras por moeda interna, agenda de eventos e estado persistente de eventos. Endpoints ainda desconhecidos podem ser registrados pelo `RESEARCH_MODE` durante a fase de compatibilidade.
+O servidor já tem base para autenticação local, SQLite, categorias de recursos, moedas/energia, inventário/slots, starter bundle, entrega de game data, loja configurável, compras por moeda interna, agenda de eventos e estado persistente. Endpoints ainda desconhecidos podem ser registrados pelo `RESEARCH_MODE` durante a fase de compatibilidade.
 
 Veja [`server/README.md`](server/README.md).
 
@@ -115,7 +131,17 @@ O arquivo local esperado é:
 server/data/game-data.json
 ```
 
-Ele não é commitado. O servidor indexa recursos por `rid/id` e `tag`, permitindo que packs e eventos sejam configurados sem hardcode dos IDs assim que o dataset for validado.
+Ele não é commitado. O servidor indexa recursos por `rid/id` e `tag` e reconhece moedas, armas, equipamentos, launchers, energia, ultimates, slayers, entitlements e cosméticos.
+
+Existe um **snapshot comunitário público** de GameData que pode ser usado apenas como bootstrap/comparação enquanto validamos a cópia final contra o cliente 1.13.1. Para importá-lo localmente:
+
+```bash
+python scripts/fetch-community-gamedata.py
+```
+
+O script valida a estrutura JSON, mostra o SHA-256 e contagens das coleções, mas mantém o arquivo em `server/data/`, fora do Git. A fonte comunitária não é tratada como oficial: qualquer divergência será resolvida a favor do comportamento observado no APK alvo.
+
+Quando o game data possui o bundle `starter`, o registro do Revival pode conceder os recursos dele e equipar automaticamente os slots `slot_primary_weapon` e `slot_slayer`, sem hardcode de IDs.
 
 ## 5. Loja Revival: sem dinheiro real
 
@@ -129,15 +155,15 @@ Exemplo conceitual:
   "tag": "revival_weapon_pack",
   "active": true,
   "cost": [
-    { "resource": "TAG_MOEDA_DO_JOGO", "kind": "currency", "amount": 5000 }
+    { "resource": "coins", "kind": "currency", "amount": 5000 }
   ],
   "contents": [
-    { "resource": "TAG_ARMA", "kind": "weapon", "level": 1, "tier": 1 }
+    { "resource": "heavy_cannon", "kind": "weapon", "level": 1, "tier": 1 }
   ]
 }
 ```
 
-O backend rejeita configuração de pacote com `price`, `iap` ou `real_money`. As rotas de IAP real ficam deliberadamente desativadas.
+O backend rejeita configuração de pacote com `price`, `iap` ou `real_money`. A compra debita moedas internas de forma transacional e pode conceder moedas, energia, armas, gear, launchers, ultimates, slayers, entitlements ou cosméticos. As rotas de IAP real ficam deliberadamente desativadas.
 
 ## 6. Eventos e battle pass
 
@@ -149,7 +175,9 @@ O backend rejeita configuração de pacote com `price`, `iap` ou `real_money`. A
 - canais de game mode, store offer e battle pass;
 - `args` serializados para o formato esperado pela agenda do cliente.
 
-A estrutura está pronta para receber as definições reais conforme forem identificadas no APK/game data. Isso permitirá reativar eventos antigos e também montar rotações próprias sem depender dos servidores oficiais.
+A estrutura está pronta para receber as definições reais conforme forem identificadas no APK/game data. Isso permitirá reativar eventos preservados e também montar rotações próprias sem depender dos servidores oficiais.
+
+A parte de **claim de missões, tiers, temporadas e progressão completa de battle pass ainda precisa ser validada e implementada** antes de considerarmos esse módulo compatível.
 
 ## 7. Patch do APK
 
@@ -177,6 +205,7 @@ O `.gitignore` bloqueia APK/XAPK/APKS/AAB, dumps, conteúdo descompilado, game d
 
 - `dannyhpy/mightydoom-gameserver` — implementação comunitária usada como referência de protocolo
 - `CTRQuko/mightydoom-preservation` — pesquisa comunitária de preservação
+- `OyunErbabi/GameData.json` — snapshot comunitário opcional para comparação/bootstrapping
 - Obtainium — referência para o fluxo atual de download da Uptodown
 
 ## Status
@@ -186,14 +215,16 @@ O `.gitignore` bloqueia APK/XAPK/APKS/AAB, dumps, conteúdo descompilado, game d
 - [x] patcher Windows inicial
 - [x] servidor Revival próprio
 - [x] SQLite/persistência
+- [x] categorias de recursos + starter bundle
 - [x] base de loja somente com moeda interna
 - [x] base de eventos/battle pass
+- [x] importador opcional de GameData comunitário
 - [x] IAP real desativado
 - [x] Docker/base de deploy
 - [ ] executar análise do APK alvo em ambiente com runner disponível
 - [ ] patch bundle-aware de hostname arbitrário
 - [ ] conectar o APK ao servidor Revival
-- [ ] importar/validar game data
+- [ ] validar GameData contra o cliente 1.13.1
 - [ ] mapear schemas reais endpoint por endpoint
 - [ ] restaurar capítulos/progressão completa
 - [ ] restaurar eventos/battle passes disponíveis
