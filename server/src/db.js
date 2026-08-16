@@ -38,6 +38,15 @@ export class Repository {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS energies (
+        user_id INTEGER NOT NULL,
+        rid INTEGER NOT NULL,
+        amount INTEGER NOT NULL DEFAULT 0,
+        regen_epoch INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, rid),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
       CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -47,6 +56,20 @@ export class Repository {
         tier INTEGER,
         amount INTEGER NOT NULL DEFAULT 1,
         metadata_json TEXT NOT NULL DEFAULT '{}',
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS cosmetics (
+        user_id INTEGER NOT NULL,
+        rid INTEGER NOT NULL,
+        PRIMARY KEY (user_id, rid),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS entitlements (
+        user_id INTEGER NOT NULL,
+        rid INTEGER NOT NULL,
+        PRIMARY KEY (user_id, rid),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
@@ -147,6 +170,24 @@ export class Repository {
     return next
   }
 
+  energies (userId) {
+    return this.db.prepare('SELECT rid, amount, regen_epoch FROM energies WHERE user_id = ? ORDER BY rid').all(userId)
+  }
+
+  energy (userId, rid) {
+    return this.db.prepare('SELECT rid, amount, regen_epoch FROM energies WHERE user_id = ? AND rid = ?').get(userId, rid) || null
+  }
+
+  setEnergy (userId, rid, amount, regenEpoch = 0) {
+    if (!Number.isFinite(amount) || amount < 0) throw new Error(`Energia inválida rid=${rid}`)
+    this.db.prepare(`
+      INSERT INTO energies (user_id, rid, amount, regen_epoch) VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, rid) DO UPDATE SET
+        amount = excluded.amount,
+        regen_epoch = excluded.regen_epoch
+    `).run(userId, rid, Math.floor(amount), Math.max(0, Math.floor(regenEpoch || 0)))
+  }
+
   addItem (userId, resource) {
     const info = this.db.prepare(`
       INSERT INTO items (user_id, rid, kind, level, tier, amount, metadata_json)
@@ -169,6 +210,22 @@ export class Repository {
 
   itemById (userId, itemId) {
     return this.db.prepare('SELECT * FROM items WHERE user_id = ? AND id = ?').get(userId, itemId) || null
+  }
+
+  cosmetics (userId) {
+    return this.db.prepare('SELECT rid FROM cosmetics WHERE user_id = ? ORDER BY rid').all(userId)
+  }
+
+  addCosmetic (userId, rid) {
+    this.db.prepare('INSERT OR IGNORE INTO cosmetics (user_id, rid) VALUES (?, ?)').run(userId, rid)
+  }
+
+  entitlements (userId) {
+    return this.db.prepare('SELECT rid FROM entitlements WHERE user_id = ? ORDER BY rid').all(userId)
+  }
+
+  addEntitlement (userId, rid) {
+    this.db.prepare('INSERT OR IGNORE INTO entitlements (user_id, rid) VALUES (?, ?)').run(userId, rid)
   }
 
   slots (userId) {
