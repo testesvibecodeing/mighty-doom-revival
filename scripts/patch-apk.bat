@@ -60,6 +60,7 @@ set "WORK=work\apk-patch"
 set "DECODED=%WORK%\decoded"
 set "UNSIGNED=%WORK%\revival-unsigned.apk"
 set "REPORT=%WORK%\patch-report.json"
+set "VERIFY_REPORT=%WORK%\final-apk-verification.json"
 set "OUT=output\mighty-doom-revival.apk"
 
 if exist "%WORK%" rmdir /s /q "%WORK%"
@@ -67,7 +68,7 @@ mkdir "%WORK%" >nul 2>nul
 if not exist "output" mkdir "output" >nul 2>nul
 
 echo.
-echo [1/6] Analisando APK...
+echo [1/7] Analisando APK...
 python scripts\analyze_apk.py "%APK%"
 if errorlevel 1 (
   echo [ERRO] O APK nao passou pela analise inicial.
@@ -75,7 +76,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/6] Desmontando APK...
+echo [2/7] Desmontando APK...
 java -jar "%APKTOOL%" d -f "%APK%" -o "%DECODED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao desmontar o APK.
@@ -83,7 +84,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/6] Aplicando servidor e configuracao TLS...
+echo [3/7] Aplicando servidor e configuracao TLS...
 if "%CA_FILE%"=="" (
   python scripts\patch_apk.py --decoded "%DECODED%" --server "%SERVER_HOST%" --report "%REPORT%"
 ) else (
@@ -107,7 +108,7 @@ if not "%PATCH_RC%"=="0" (
 )
 
 echo.
-echo [4/6] Reconstruindo APK...
+echo [4/7] Reconstruindo APK...
 java -jar "%APKTOOL%" b "%DECODED%" -o "%UNSIGNED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao reconstruir o APK.
@@ -115,31 +116,49 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/6] Alinhando, assinando e verificando...
+echo [5/7] Validando endpoint dentro do APK reconstruido...
+python scripts\verify_patched_apk.py --apk "%UNSIGNED%" --server "%SERVER_HOST%" --report "%VERIFY_REPORT%"
+if errorlevel 1 (
+  echo [ERRO] APK reconstruido nao passou pelo gate do endpoint Revival.
+  echo Relatorio: %VERIFY_REPORT%
+  exit /b 6
+)
+
+echo.
+echo [6/7] Alinhando, assinando e verificando assinatura...
 java -jar "%SIGNER%" -a "%UNSIGNED%" --overwrite --verbose
 if errorlevel 1 (
   echo [ERRO] Falha ao alinhar/assinar o APK.
-  exit /b 6
+  exit /b 7
 )
 
 java -jar "%SIGNER%" -a "%UNSIGNED%" --onlyVerify --verbose
 if errorlevel 1 (
   echo [ERRO] A verificacao da assinatura falhou.
-  exit /b 7
+  exit /b 8
+)
+
+rem A assinatura nao deve alterar os payloads de assets. Verifique novamente o
+rem endpoint depois do signer para impedir entrega de um artefato inesperado.
+python scripts\verify_patched_apk.py --apk "%UNSIGNED%" --server "%SERVER_HOST%" --report "%VERIFY_REPORT%"
+if errorlevel 1 (
+  echo [ERRO] APK assinado falhou na verificacao final do endpoint.
+  exit /b 9
 )
 
 if exist "%OUT%" del /q "%OUT%"
 copy /Y "%UNSIGNED%" "%OUT%" >nul
 if errorlevel 1 (
   echo [ERRO] Nao foi possivel criar %OUT%.
-  exit /b 8
+  exit /b 10
 )
 
 echo.
-echo [6/6] CONCLUIDO
-echo APK gerado: %OUT%
+echo [7/7] CONCLUIDO
+echo APK gerado e verificado: %OUT%
 echo Servidor: https://%SERVER_HOST%
-echo Relatorio: %REPORT%
+echo Relatorio do patch: %REPORT%
+echo Relatorio final: %VERIFY_REPORT%
 echo.
 echo A assinatura e diferente da oficial. Se a versao oficial estiver instalada,
 echo desinstale-a antes de instalar este APK de preservacao.
