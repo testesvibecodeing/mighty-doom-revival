@@ -118,21 +118,22 @@ Cliente alvo:
 
 ### Validado
 
-O patcher foi testado contra bundle Unity sintético:
+O APK real 1.13.1 (`input/mighty-doom.apk`, SHA-256 alvo confirmado) foi baixado e analisado neste ambiente:
 
-- `slayersclub.bethesda.net` possui 24 bytes;
-- `d.debruinsistemas.com.br` possui 24 bytes;
-- substituição 24→24 não altera tamanho do bundle;
-- Manifest/TLS são atualizados;
-- hostname incompatível é recusado antes de alterar o bundle;
-- verificação final rejeita APK que ainda contenha hosts oficiais.
+- `slayersclub.bethesda.net` (24 bytes) aparece **duas vezes** dentro de `assets/bin/Data/Managed/Metadata/global-metadata.dat`, **não** em `assets/aa/` — a suposição anterior (bundle Addressable) estava errada para este build. `scripts/analyze_apk.py` e `scripts/patch_apk.py` agora escaneiam `global-metadata.dat` também.
+- Localizados por análise binária do header IL2CPP (`Il2CppGlobalMetadataHeader`, sanity check `0xFAB11BAF`, versão `29`): uma ocorrência na tabela `stringLiteralData` (offset 538684), outra no blob `fieldAndParameterDefaultValueData` (offset 6380401) — duas codificações diferentes dentro do mesmo arquivo.
+- `d.debruinsistemas.com.br` (24 bytes) foi testado de ponta a ponta contra o `global-metadata.dat` real: `find_host_occurrences` + `exact_length_patch` trocam as duas ocorrências, tamanho do arquivo idêntico ao original, zero bytes do host oficial restantes.
+- `doom.debruinsistemas.com.br` (27 bytes, domínio real de deploy) foi testado contra o mesmo arquivo e **bloqueado corretamente** pela trava de tamanho (`BLOQUEADO COM SEGURANÇA`, exit 4) — variável-comprimento para `global-metadata.dat` ainda não existe.
+- Novo gate `scripts/check_patch_length.py` roda antes do apktool (só lê o ZIP) e avisa incompatibilidade de comprimento antes do usuário esperar o decode; já plugado em `patch-apk.bat`/`.sh`.
+- Manifest/TLS são atualizados; hostname incompatível é recusado antes de alterar o bundle/metadata; verificação final rejeita APK que ainda contenha hosts oficiais.
+- Login local (`/game/auth/register` + `/game/auth/login-device`) testado via smoke test real; login social (`/game/auth/login-google-play-games`, `/game/auth/login-game-center`, `/game/identity/link-*`) já é rejeitado pelo servidor (400/2000) — decisão do projeto: bloqueio no servidor é suficiente, sem remover o botão da UI do cliente por ora.
 
-Testes: `scripts/test_patch_apk.py`, `scripts/test_patch_unity_bundle.py` e `scripts/test_verify_patched_apk.py`.
+Testes: `scripts/test_patch_apk.py`, `scripts/test_patch_unity_bundle.py`, `scripts/test_check_patch_length.py` e `scripts/test_verify_patched_apk.py`.
 
 ### Ainda NÃO validado
 
-- o APK real 1.13.1 não foi executado neste ambiente;
-- ainda não foi confirmado no binário real que o host oficial aparece exatamente no bundle esperado;
+- reconstrução completa (`apktool d`/`b`) do APK real ainda não foi executada neste ambiente (exige Java + `.tools/apktool.jar`, não presentes aqui);
+- reserialização de tamanho variável do `global-metadata.dat` ainda não existe — bloqueia hostnames com comprimento diferente de 24 bytes (inclui o domínio real de deploy, `doom.debruinsistemas.com.br`, 27 bytes);
 - reconstrução/assinatura do APK real ainda não foi instalada em Android;
 - handshake HTTPS do APK real contra Revival ainda não foi confirmado;
 - gameplay real no cliente ainda não foi confirmado.

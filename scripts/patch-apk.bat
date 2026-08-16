@@ -37,6 +37,17 @@ if not "%CA_FILE%"=="" if not exist "%CA_FILE%" (
 echo.
 echo Verificando dependencias minimas...
 call :require python || (pause & exit /b 3)
+
+echo.
+echo Verificando se "%SERVER_HOST%" cabe no patch direto e seguro (sem apktool)...
+python scripts\check_patch_length.py "%APK%" "%SERVER_HOST%"
+if errorlevel 1 (
+  echo.
+  echo Ajuste o hostname acima e rode o patcher de novo.
+  pause
+  exit /b %ERRORLEVEL%
+)
+
 call :require java || (pause & exit /b 3)
 
 if not exist ".tools\apktool.jar" call "scripts\setup-patcher-tools.bat"

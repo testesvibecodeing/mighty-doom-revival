@@ -85,6 +85,13 @@ doom.seudominio.com
 
 Use **hostname**, não IP, nesta primeira versão.
 
+Antes de tocar no apktool, o patcher já roda `scripts/check_patch_length.py`
+(um simples `ZipFile` read, sem decode): ele confere se o hostname digitado
+tem o mesmo número de bytes do(s) host(s) oficial(is) realmente encontrado(s)
+neste APK e **para na hora**, com uma mensagem explicando o comprimento
+exigido, se não bater. Isso evita esperar minutos de `apktool d` só para
+descobrir o bloqueio de segurança depois.
+
 ## O que o script modifica
 
 Depois de `apktool d`, o patcher:
@@ -92,13 +99,22 @@ Depois de `apktool d`, o patcher:
 - aponta o `AndroidManifest.xml` para `@xml/network_security_config`;
 - gera uma política TLS com o hostname informado;
 - opcionalmente incorpora uma CA PEM/CRT fornecida pelo usuário;
-- varre `assets/aa/` procurando hosts conhecidos;
+- varre `assets/aa/` (Addressables) **e** `global-metadata.dat` (tabela de
+  string literals do IL2CPP) procurando hosts conhecidos;
 - tenta alterar o hostname hardcoded somente quando a troca mantém exatamente o mesmo tamanho binário;
 - recompila, alinha e assina o APK.
 
 ## Por que existe a limitação de tamanho?
 
-A pesquisa comunitária encontrou o endpoint dentro de um Unity Addressable/bundle. Strings dentro de bundles serializados não devem ser aumentadas/reduzidas por uma simples busca-e-substituição: isso pode invalidar offsets, tamanhos de blocos, compressão ou metadados.
+No APK real 1.13.1, o endpoint (`slayersclub.bethesda.net`) não está em um
+Addressable/bundle — está embutido duas vezes no `global-metadata.dat` do
+IL2CPP, em duas seções com codificações diferentes: a tabela de string
+literals (`stringLiteralData`, referenciada por `{length, dataIndex}`) e o
+blob de valores default de campo/parâmetro (`fieldAndParameterDefaultValueData`).
+Strings dentro desse formato não devem ser aumentadas/reduzidas por uma
+simples busca-e-substituição: isso exigiria realocar as duas seções e
+deslocar os offsets de todas as ~20 seções de metadata que vêm depois no
+arquivo, e um erro aí quebra o boot do IL2CPP (o app nem abre).
 
 Hosts conhecidos atualmente:
 
@@ -111,22 +127,19 @@ O patcher atual aceita uma troca binária somente se o hostname destino tiver o 
 
 Isso é provisório.
 
-## Próxima etapa: patch bundle-aware
+## Próxima etapa: patch bundle-aware / metadata-aware
 
-Depois que o APK oficial 1.13.1 usado no projeto for analisado, devemos identificar:
-
-- o bundle exato;
-- o objeto Unity que contém a configuração;
-- o tipo do objeto (TextAsset/MonoBehaviour/etc.);
-- a forma correta de reserializar/reempacotar o bundle.
-
-Então o patcher poderá aceitar um hostname de tamanho arbitrário, por exemplo:
+Para aceitar um hostname de tamanho arbitrário, por exemplo:
 
 ```text
 doom.debruinsistemas.com.br
 ```
 
-sem corromper o Unity bundle.
+o patcher vai precisar reconstruir corretamente as duas seções do
+`global-metadata.dat` citadas acima (e ainda o caminho bundle-aware para
+Addressables, caso um build futuro mova o endpoint para lá). Até isso
+existir, use um hostname com exatamente 24 bytes — `check_patch_length.py`
+avisa o comprimento exigido antes de você perder tempo com o apktool.
 
 ## Certificado HTTPS
 

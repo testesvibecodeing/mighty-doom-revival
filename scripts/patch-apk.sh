@@ -61,6 +61,15 @@ else
 fi
 echo "[OK] $PYTHON_BIN"
 
+echo
+echo "Verificando se \"$SERVER_HOST\" cabe no patch direto e seguro (sem apktool)..."
+step "verificação de comprimento do hostname"
+if ! "$PYTHON_BIN" scripts/check_patch_length.py "$APK" "$SERVER_HOST"; then
+  echo >&2
+  echo "Ajuste o hostname acima e rode o patcher de novo." >&2
+  exit 4
+fi
+
 if ! command -v java >/dev/null 2>&1; then
   echo "[FALTA] java não está no PATH." >&2
   exit 3
