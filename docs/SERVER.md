@@ -1,77 +1,114 @@
-# Servidor self-hosted
+# Servidor self-hosted Revival
 
-Este projeto não reimplementa o backend do zero na primeira etapa. Vamos partir do servidor comunitário existente e completar/corrigir o que o cliente 1.13.1 exigir.
+O runtime principal está em `server/` e é uma implementação própria de compatibilidade, construída para evoluir endpoint por endpoint conforme o cliente 1.13.1 for analisado.
 
-## Implementação de referência
+O projeto comunitário `dannyhpy/mightydoom-gameserver` continua sendo uma referência técnica útil para comparar nomes de endpoints e comportamento observado, mas o Revival não precisa cloná-lo para iniciar.
 
-Projeto upstream:
+## Stack
+
+- Node.js 24+
+- Koa 3
+- SQLite via `better-sqlite3`
+- JSON para configuração de packs/eventos
+- Nginx/Caddy recomendado para HTTPS
+
+## Instalação
+
+```bash
+cd server
+cp config/revival.example.json config/revival.json
+cp config/packs.example.json config/packs.json
+cp config/events.example.json config/events.json
+npm install
+npm run check
+npm start
+```
+
+Por padrão:
 
 ```text
-https://gitlab.com/dannyhpy/mightydoom-gameserver
+http://0.0.0.0:8080
 ```
 
-O upstream atual usa Node.js/Koa, banco via Knex e pode rodar com SQLite (`better-sqlite3`). O `package.json` atual exige Node.js `>=24.0.0` e npm `>=11.0.0`.
-
-## Instalação rápida
-
-### 1. Instale Node.js 24+
-
-Confirme:
+Health check:
 
 ```bash
-node --version
-npm --version
+curl http://127.0.0.1:8080/revival/health
 ```
 
-### 2. Clone o servidor
+## Persistência
 
-A partir da raiz deste repositório:
-
-```bash
-git clone https://gitlab.com/dannyhpy/mightydoom-gameserver.git server/community
-cd server/community
-```
-
-O servidor upstream fica separado para que possamos acompanhar atualizações sem misturar APK/assets proprietários neste repositório.
-
-### 3. Dependências
-
-Comandos documentados pelo upstream:
-
-```bash
-npm install --omit=dev --omit=optional
-npm install better-sqlite3
-```
-
-### 4. Banco SQLite
-
-```bash
-npx knex migrate:latest
-```
-
-Por padrão a configuração usa:
+O SQLite fica por padrão em:
 
 ```text
-db/local.sqlite3
+server/runtime/revival.sqlite3
 ```
 
-### 5. Inicie o servidor
+O banco guarda usuários locais, moedas, itens, slots, configurações, quotas de packs, estado de eventos e um log de chamadas ainda não implementadas.
+
+## Dados do jogo
+
+O cliente solicita um token em `/game/player/game-data-token` e depois busca `/data`.
+
+O arquivo esperado localmente é:
+
+```text
+server/data/game-data.json
+```
+
+Ele fica fora do Git. Até a importação/validação desse dataset, o health check informa `game_data_loaded: false`.
+
+## Loja Revival
+
+A loja própria foi desenhada com uma regra rígida: **nenhum pacote usa dinheiro real**.
+
+`server/config/packs.json` define custo e conteúdo usando `rid` ou `tag` de recursos existentes no game data. O backend rejeita packs que tentem declarar `price`, `iap` ou `real_money`.
+
+A compra acontece por `/game/store/purchase`, debita recursos internos do jogador de forma transacional e concede os recursos configurados.
+
+Rotas de IAP real permanecem desativadas.
+
+## Eventos
+
+`server/config/events.json` aceita eventos sempre ativos ou com janela de início/fim.
+
+Cada jogador pode ter estado persistente separado para:
+
+- game mode events;
+- store offer events;
+- battle pass events.
+
+O servidor gera a agenda em `/game/events/get-schedule` e o progresso em `/game/events/get-progress`. As definições específicas das temporadas serão preenchidas conforme forem recuperadas/validadas.
+
+## Research Mode
+
+Enquanto a compatibilidade não estiver completa, use:
+
+```env
+RESEARCH_MODE=true
+```
+
+Uma chamada POST autenticada ainda desconhecida é registrada no SQLite. Isso permite descobrir a sequência real que o APK exige e substituir respostas genéricas por implementações fiéis.
+
+Quando a matriz de endpoints estiver fechada:
+
+```env
+RESEARCH_MODE=false
+```
+
+## Docker
+
+Na raiz:
 
 ```bash
-npm run start -- --addr 0.0.0.0 --port 8080 --debug
+docker compose up --build -d
 ```
 
-Sem argumentos, o upstream escuta em `0.0.0.0:8080`.
-
-Para uso atrás de Nginx/Caddy, acrescente `--proxy`:
-
-```bash
-npm run start -- --addr 127.0.0.1 --port 8080 --proxy --debug
-```
+Os volumes locais preservam banco/config/dados sem colocar esses arquivos no Git.
 
 ## Reverse proxy HTTPS com Nginx
 
-O cliente do jogo espera HTTPS. Em uma VPS, um exemplo mínimo é:
+Exemplo:
 
 ```nginx
 server {
@@ -92,50 +129,20 @@ server {
 }
 ```
 
-Se o hostname for seu e possuir certificado público válido (ex.: Let's Encrypt), não é necessário incorporar uma CA privada no APK.
+Se o hostname possuir certificado público válido, a solução tende a ser mais simples do que depender de CA privada instalada no Android.
 
-## Teste básico
+## Ordem de validação
 
-Primeiro confirme que o processo responde localmente:
-
-```bash
-curl -v http://127.0.0.1:8080/
-```
-
-Um `404` em `/` não significa necessariamente que o servidor esteja quebrado; o importante nesta fase é confirmar que o processo Koa está atendendo e então testar endpoints reais do jogo.
-
-Quando o reverse proxy estiver pronto:
-
-```bash
-curl -vk https://doom.seudominio.com/
-```
-
-## Próximos testes do cliente
-
-A ordem sugerida é:
-
-1. conexão TLS;
-2. registro/login por device;
-3. bootstrap/player data;
-4. inventário;
+1. patch do hostname/TLS no APK;
+2. `/game/auth/register` e login local;
+3. game data;
+4. user data/inventário;
 5. tutorial;
-6. entrada no primeiro capítulo;
-7. conclusão do capítulo;
-8. quests/eventos/recompensas;
-9. funcionalidades baseadas em relógio/tempo;
-10. loja/IAP substituída por comportamento local seguro.
+6. capítulos e recompensas;
+7. slayers/gear/talentos;
+8. quests/daily/idle/inbox;
+9. loja e packs por moeda interna;
+10. eventos/store-offer/battle pass;
+11. regressão completa antes de desativar Research Mode.
 
-## Segurança
-
-Para uma instalação pessoal:
-
-- mantenha a porta `8080` inacessível publicamente e exponha apenas Nginx/Caddy;
-- use HTTPS;
-- não reutilize senhas/chaves do ambiente de produção;
-- faça backup periódico do SQLite;
-- não exponha endpoints administrativos sem autenticação;
-- não use credenciais reais Bethesda/Microsoft/Google no servidor alternativo.
-
-## Upstream
-
-O servidor comunitário é um projeto externo. Antes de incorporarmos qualquer código diretamente aqui, precisamos respeitar a licença aplicável do upstream. Por enquanto, este repositório apenas documenta como cloná-lo e usá-lo como dependência de pesquisa.
+Veja também `docs/ROADMAP-100-PERCENT.md`.
