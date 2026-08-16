@@ -60,6 +60,7 @@ set "WORK=work\apk-patch"
 set "DECODED=%WORK%\decoded"
 set "UNSIGNED=%WORK%\revival-unsigned.apk"
 set "REPORT=%WORK%\patch-report.json"
+set "PREFLIGHT_REPORT=%WORK%\server-preflight.json"
 set "VERIFY_REPORT=%WORK%\final-apk-verification.json"
 set "OUT=output\mighty-doom-revival.apk"
 
@@ -68,7 +69,22 @@ mkdir "%WORK%" >nul 2>nul
 if not exist "output" mkdir "output" >nul 2>nul
 
 echo.
-echo [1/7] Analisando APK...
+echo [1/8] Validando servidor Revival por HTTPS...
+if "%CA_FILE%"=="" (
+  python scripts\check_revival_server.py --server "%SERVER_HOST%" --report "%PREFLIGHT_REPORT%"
+) else (
+  python scripts\check_revival_server.py --server "%SERVER_HOST%" --ca "%CA_FILE%" --report "%PREFLIGHT_REPORT%"
+)
+if errorlevel 1 (
+  echo.
+  echo [PARADO] O servidor HTTPS ainda nao esta pronto para receber o cliente.
+  echo O patcher exige /revival/health com client 1.13.1, API 24.0.0 e GameData carregado.
+  echo Corrija DNS/TLS/servidor antes de gerar um APK apontando para um destino quebrado.
+  exit /b 11
+)
+
+echo.
+echo [2/8] Analisando APK...
 python scripts\analyze_apk.py "%APK%"
 if errorlevel 1 (
   echo [ERRO] O APK nao passou pela analise inicial.
@@ -76,7 +92,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/7] Desmontando APK...
+echo [3/8] Desmontando APK...
 java -jar "%APKTOOL%" d -f "%APK%" -o "%DECODED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao desmontar o APK.
@@ -84,7 +100,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/7] Aplicando servidor e configuracao TLS...
+echo [4/8] Aplicando servidor e configuracao TLS...
 if "%CA_FILE%"=="" (
   python scripts\patch_apk.py --decoded "%DECODED%" --server "%SERVER_HOST%" --report "%REPORT%"
 ) else (
@@ -108,7 +124,7 @@ if not "%PATCH_RC%"=="0" (
 )
 
 echo.
-echo [4/7] Reconstruindo APK...
+echo [5/8] Reconstruindo APK...
 java -jar "%APKTOOL%" b "%DECODED%" -o "%UNSIGNED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao reconstruir o APK.
@@ -116,7 +132,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/7] Validando endpoint dentro do APK reconstruido...
+echo [6/8] Validando endpoint dentro do APK reconstruido...
 python scripts\verify_patched_apk.py --apk "%UNSIGNED%" --server "%SERVER_HOST%" --report "%VERIFY_REPORT%"
 if errorlevel 1 (
   echo [ERRO] APK reconstruido nao passou pelo gate do endpoint Revival.
@@ -125,7 +141,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [6/7] Alinhando, assinando e verificando assinatura...
+echo [7/8] Alinhando, assinando e verificando assinatura...
 java -jar "%SIGNER%" -a "%UNSIGNED%" --overwrite --verbose
 if errorlevel 1 (
   echo [ERRO] Falha ao alinhar/assinar o APK.
@@ -154,9 +170,10 @@ if errorlevel 1 (
 )
 
 echo.
-echo [7/7] CONCLUIDO
+echo [8/8] CONCLUIDO
 echo APK gerado e verificado: %OUT%
 echo Servidor: https://%SERVER_HOST%
+echo Preflight HTTPS: %PREFLIGHT_REPORT%
 echo Relatorio do patch: %REPORT%
 echo Relatorio final: %VERIFY_REPORT%
 echo.
