@@ -5,9 +5,10 @@ import Router from '@koa/router'
 import { bodyParser } from '@koa/bodyparser'
 
 import { installBaselineRoutes } from './baseline.js'
-import { loadRuntimeConfig, researchMode, resolveResource } from './config.js'
+import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
 import { eventProgress, eventSchedule } from './events.js'
+import { giveGameResource, inventoryWire, seedStarterBundle } from './game-data-model.js'
 import { fail, gameGuard, ok, requireUser } from './protocol.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
 
@@ -83,13 +84,22 @@ game.post('/auth/register', ctx => {
   if (ctx.get('x-ubu-token')) return fail(ctx, 403, 2200)
 
   const { user, password } = repo.createUser()
+  let starter = null
+
+  if (r.gameData && r.revival.auto_starter_bundle !== false) {
+    try {
+      starter = seedStarterBundle(repo, user.id, r)
+      if (!starter.seeded) console.warn(`[starter] ${starter.reason}`)
+    } catch (error) {
+      console.warn(`[starter] falha ao aplicar bundle: ${error.message}`)
+    }
+  }
+
   for (const entry of (r.revival.initial_resources || [])) {
     try {
-      const rid = resolveResource(entry.resource ?? entry.rid, r)
-      if ((entry.kind || 'currency') === 'currency') repo.addCurrency(user.id, rid, Number(entry.amount || 0))
-      else repo.addItem(user.id, { rid, kind: entry.kind, amount: entry.amount, level: entry.level, tier: entry.tier })
+      giveGameResource(repo, user.id, entry, r)
     } catch (error) {
-      console.warn(`Starter resource ignorado: ${error.message}`)
+      console.warn(`Starter resource custom ignorado: ${error.message}`)
     }
   }
 
@@ -162,39 +172,13 @@ authed.post('/player/update-settings', ctx => {
 })
 
 authed.post('/player/user-data', ctx => {
+  const r = currentRuntime()
   const user = repo.userById(ctx.state.user.id)
-  const items = repo.items(user.id)
-  const inventory = {
-    currencies: repo.currencies(user.id),
-    weapons: [],
-    equipment: [],
-    launchers: [],
-    energies: [],
-    ultimates: [],
-    slayers: [],
-    entitlements: [],
-    slots: repo.slots(user.id).map(x => ({ slot: x.slot_id, item: x.item_id })),
-    cosmetics: []
-  }
-  const bucket = {
-    weapon: 'weapons',
-    equipment: 'equipment',
-    launcher: 'launchers',
-    energy: 'energies',
-    ultimate: 'ultimates',
-    slayer: 'slayers',
-    cosmetic: 'cosmetics'
-  }
-  for (const item of items) {
-    const target = bucket[item.kind] || 'equipment'
-    const wireItem = { rid: item.rid, uid: item.id, level: item.level }
-    if (item.tier !== null) wireItem.tier = item.tier
-    inventory[target].push(wireItem)
-  }
   const settings = repo.settings(user.id)
+
   ok(ctx, {
     user_data: {
-      inventory,
+      inventory: inventoryWire(repo, user.id, r),
       chapter_progression: { chapters: [], challenges: [], current_run: null },
       talent_progression: { talents: [] },
       tutorial_progression: { sequences: [] },
