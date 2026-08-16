@@ -47,7 +47,7 @@ def compatible_sequence(**health_changes):
     return [
         FakeResponse(payload),
         FakeResponse(payload),
-        FakeResponse({"uts": 1, "code": 2200}, status=400),
+        FakeResponse({"uts": "2026-08-16T17:04:46.000Z", "code": 2200}, status=400),
     ]
 
 
@@ -62,6 +62,10 @@ class CheckRevivalServerTests(unittest.TestCase):
         self.assertEqual(result["gear_prefix"]["health_status"], 200)
         self.assertEqual(result["gear_prefix"]["auth_probe_status"], 400)
         self.assertEqual(result["gear_prefix"]["auth_probe_code"], 2200)
+        self.assertEqual(
+            result["gear_prefix"]["auth_probe_uts"],
+            "2026-08-16T17:04:46.000Z",
+        )
 
         calls = [call.args[0] for call in urlopen.call_args_list]
         self.assertEqual(calls[0].full_url, "https://doom.example.com/revival/health")
@@ -114,6 +118,26 @@ class CheckRevivalServerTests(unittest.TestCase):
             FakeResponse({"ok": False, "error": "not-found"}, status=404),
         ]
         with self.assertRaisesRegex(RuntimeError, "auth probe"):
+            preflight.check_server("doom.example.com", None, 2.0)
+
+    @patch("urllib.request.urlopen")
+    def test_rejects_numeric_auth_wire_timestamp_that_crashes_client(self, urlopen):
+        urlopen.side_effect = [
+            FakeResponse(health()),
+            FakeResponse(health()),
+            FakeResponse({"uts": 1786900000, "code": 2200}, status=400),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "string ISO 8601 UTC"):
+            preflight.check_server("doom.example.com", None, 2.0)
+
+    @patch("urllib.request.urlopen")
+    def test_rejects_timezone_less_auth_wire_timestamp(self, urlopen):
+        urlopen.side_effect = [
+            FakeResponse(health()),
+            FakeResponse(health()),
+            FakeResponse({"uts": "2026-08-16T17:04:46.000", "code": 2200}, status=400),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "offset UTC explícito"):
             preflight.check_server("doom.example.com", None, 2.0)
 
 

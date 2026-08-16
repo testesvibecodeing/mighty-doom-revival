@@ -14,6 +14,7 @@ contract probe. This catches reverse-proxy configurations that serve
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta
 import json
 import ssl
 import sys
@@ -106,6 +107,37 @@ def validate_health(payload: dict[str, object], require_game_data: bool) -> list
     return errors
 
 
+def validate_wire_timestamp(payload: dict[str, object], label: str) -> str:
+    """Require the wire timestamp shape consumed by client 1.13.1.
+
+    ``Ubu.GameController.ParseServerTimestamp`` ultimately feeds ``uts`` to
+    ``DateTime.Parse``. A numeric unix epoch reaches the correct auth handler
+    but crashes the client callback with ``FormatException``. The preflight
+    therefore treats a parseable, timezone-aware UTC ISO-8601 string as part
+    of the compatibility contract, not merely an implementation detail.
+    """
+    value = payload.get("uts")
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(
+            f"{label} retornou uts={value!r}; cliente 1.13.1 exige string ISO 8601 UTC"
+        )
+
+    normalized = value.strip()
+    parse_value = normalized[:-1] + "+00:00" if normalized.endswith("Z") else normalized
+    try:
+        parsed = datetime.fromisoformat(parse_value)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"{label} retornou uts={value!r}; timestamp ISO 8601 inválido"
+        ) from exc
+
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise RuntimeError(
+            f"{label} retornou uts={value!r}; timestamp deve possuir offset UTC explícito"
+        )
+    return normalized
+
+
 def check_server(host: str, ca_file: Path | None, timeout: float, require_game_data: bool = True) -> dict[str, object]:
     context = build_ssl_context(ca_file)
     canonical_url = f"https://{host}/revival/health"
@@ -144,6 +176,7 @@ def check_server(host: str, ca_file: Path | None, timeout: float, require_game_d
             "auth probe pelo prefixo Gear não atingiu o handler esperado "
             f"(HTTP {auth_status}, code={auth_payload.get('code')!r})"
         )
+    auth_uts = validate_wire_timestamp(auth_payload, "auth probe")
 
     return {
         "verified": True,
@@ -163,6 +196,7 @@ def check_server(host: str, ca_file: Path | None, timeout: float, require_game_d
             "auth_probe_url": auth_probe_url,
             "auth_probe_status": auth_status,
             "auth_probe_code": auth_payload.get("code"),
+            "auth_probe_uts": auth_uts,
             "auth_probe_content_type": auth_content_type,
         },
     }
@@ -208,7 +242,7 @@ def main() -> int:
     print(text)
     if args.report:
         Path(args.report).write_text(text + "\n", encoding="utf-8")
-    print("Revival HTTPS validado: TLS, versão/API/GameData e rota Gear do cliente estão compatíveis.")
+    print("Revival HTTPS validado: TLS, versão/API/GameData, rota Gear e wire timestamp compatíveis.")
     return 0
 
 
