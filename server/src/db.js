@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 
 function passwordHash (password) {
   return createHash('sha256').update(password, 'utf8').digest('hex')
@@ -11,9 +11,8 @@ export class Repository {
   constructor (filename) {
     const path = resolve(filename)
     mkdirSync(dirname(path), { recursive: true })
-    this.db = new Database(path)
-    this.db.pragma('journal_mode = WAL')
-    this.db.pragma('foreign_keys = ON')
+    this.db = new DatabaseSync(path)
+    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
     this.migrate()
   }
 
@@ -121,7 +120,19 @@ export class Repository {
   }
 
   tx (fn) {
-    return this.db.transaction(fn)()
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const result = fn()
+      this.db.exec('COMMIT')
+      return result
+    } catch (error) {
+      try { this.db.exec('ROLLBACK') } catch {}
+      throw error
+    }
+  }
+
+  close () {
+    this.db.close()
   }
 
   createUser () {
@@ -301,5 +312,9 @@ export class Repository {
     this.db.prepare(`
       INSERT INTO request_log (user_id, path, body_json, created_at) VALUES (?, ?, ?, ?)
     `).run(userId || null, path, body === undefined ? null : JSON.stringify(body), Math.floor(Date.now() / 1000))
+  }
+
+  requestLog (limit = 100) {
+    return this.db.prepare('SELECT * FROM request_log ORDER BY id DESC LIMIT ?').all(Math.max(1, Math.min(1000, Number(limit) || 100)))
   }
 }
