@@ -12,6 +12,15 @@ the exact same byte length:
 * longer hostname: blocked (would require rebuilding the IL2CPP metadata
   tables). Variable-length replacement is delegated to the bundle-aware
   reserializer by the Windows orchestration script.
+
+The 1.13.1 target contains several Bethesda-related host strings. Static
+inspection of the real build showed that the gameplay API base is
+``international.gear.bethesda.net`` (the literal continues with
+``/collections/doom``), while ``slayersclub.bethesda.net`` is an ancillary
+club/site URL. When the Gear host is present we therefore patch only Gear;
+otherwise older/synthetic inputs retain the previous all-known-host fallback.
+This prevents an unrelated shorter URL from blocking a perfectly safe patch
+of the real API host.
 """
 
 from __future__ import annotations
@@ -28,12 +37,13 @@ import xml.etree.ElementTree as ET
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 ET.register_namespace("android", ANDROID_NS)
 
+PRIMARY_API_HOST = "international.gear.bethesda.net"
 KNOWN_HOSTS = (
     "slayersclub.bethesda.net",
     "game.9095be396f3547555fe1039cbc894c88.net",
     # Base real da API do jogo (plataforma "Gear" da Bethesda) no build 1.13.1:
     # literal completo "https://international.gear.bethesda.net/collections/doom".
-    "international.gear.bethesda.net",
+    PRIMARY_API_HOST,
 )
 
 HOST_RE = re.compile(
@@ -150,6 +160,19 @@ def find_host_occurrences(root: Path) -> list[dict[str, object]]:
     return hits
 
 
+def select_patch_hits(hits: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Select endpoint occurrences that are safe/relevant to redirect.
+
+    The real 1.13.1 build identifies Gear as the gameplay API. If that host is
+    present, unrelated Bethesda URLs must not be rewritten and, importantly,
+    must not participate in the length/unsupported gate. For old fixtures or
+    yet-unseen variants where Gear is absent, preserve the historical fallback
+    and attempt the known hosts discovered in that input.
+    """
+    primary = [hit for hit in hits if str(hit.get("host")) == PRIMARY_API_HOST]
+    return primary or hits
+
+
 def build_url_replacement(old_url: bytes, new_host: str) -> bytes | None:
     """Build an https URL of the exact same length for ``new_host``.
 
@@ -179,8 +202,8 @@ def build_url_replacement(old_url: bytes, new_host: str) -> bytes | None:
 def same_length_patch(
     root: Path, target_host: str, hits: list[dict[str, object]]
 ) -> tuple[list[str], list[dict[str, object]]]:
-    """Swap every official host occurrence for ``target_host`` without ever
-    changing any byte offsets.
+    """Swap selected official endpoint occurrences for ``target_host`` without
+    ever changing any byte offsets.
 
     Returns ``(patched_files, unsupported_occurrences)``. An occurrence is
     unsupported when it is neither an ``https://<host>/`` URL (which can be
@@ -271,18 +294,22 @@ def main() -> int:
         return 2
 
     hits = find_host_occurrences(decoded)
+    patch_hits = select_patch_hits(hits)
+    ignored_hits = [hit for hit in hits if hit not in patch_hits]
     patched_files: list[str] = []
     unsupported: list[dict[str, object]] = []
 
-    already_present = any(str(h["host"]) == host for h in hits)
+    already_present = any(str(h["host"]) == host for h in patch_hits)
     if not already_present:
-        patched_files, unsupported = same_length_patch(decoded, host, hits)
+        patched_files, unsupported = same_length_patch(decoded, host, patch_hits)
 
     fully_patched = (already_present or patched_files) and not unsupported
     report = {
         "server_host": host,
         "ca_embedded": bool(ca),
         "known_host_hits": hits,
+        "patch_target_hits": patch_hits,
+        "ignored_known_host_hits": ignored_hits,
         "host_already_present": already_present,
         "binary_patched_files": patched_files,
         "unsupported_occurrences": unsupported,
@@ -303,12 +330,12 @@ def main() -> int:
         return 3
 
     if not already_present and not fully_patched:
-        lengths = sorted({int(h["length"]) for h in hits})
+        lengths = sorted({int(h["length"]) for h in patch_hits})
         host_len = len(host.encode("ascii"))
         if any(host_len > length for length in lengths):
             print(
                 "\nBLOQUEADO COM SEGURANÇA: o hostname solicitado possui "
-                f"{host_len} bytes, mas os hosts encontrados possuem "
+                f"{host_len} bytes, mas os hosts de endpoint selecionados possuem "
                 f"comprimento(s) {lengths}. Hostname MAIOR que o oficial exigiria "
                 "reconstruir as tabelas de metadata do IL2CPP (realocar seções "
                 "inteiras do arquivo), o que não é suportado com segurança.",
@@ -317,7 +344,7 @@ def main() -> int:
         else:
             print(
                 "\nBLOQUEADO COM SEGURANÇA: este APK tem ocorrência(ões) do host "
-                "fora de contexto https://<host>/ (ver "
+                "de endpoint fora de contexto https://<host>/ (ver "
                 '"unsupported_occurrences" no relatório), e o patch direto só '
                 "substitui URLs completas de mesmo comprimento.",
                 file=sys.stderr,
