@@ -770,6 +770,30 @@ print("Revival HTTPS validado: client_version/api_version compatíveis com o pat
 PYEOF
 
 # ---------------------------------------------------------------------------
+step "Gerando link temporário de upload do APK (válido por 24 horas)"
+
+# O token abaixo habilita o envio do APK pelo navegador em
+# https://$DOMAIN/upload/<token>. O servidor valida o arquivo
+# (runtime/upload-token.json) a cada requisição e aplica a expiração de 24h
+# sozinho, sem cron. Executar o instalador de novo gera um token novo e
+# invalida automaticamente qualquer link anterior.
+UPLOAD_TOKEN="$(openssl rand -hex 32)"
+UPLOAD_CREATED_AT="$(date +%s)"
+UPLOAD_EXPIRES_AT="$(( UPLOAD_CREATED_AT + 24 * 3600 ))"
+UPLOAD_TOKEN_FILE="$SERVER_DIR/runtime/upload-token.json"
+
+mkdir -p "$SERVER_DIR/runtime"
+printf '{\n  "token": "%s",\n  "expires_at": %d,\n  "created_at": %d\n}\n' \
+  "$UPLOAD_TOKEN" "$UPLOAD_EXPIRES_AT" "$UPLOAD_CREATED_AT" > "$UPLOAD_TOKEN_FILE"
+chown "$RUN_USER":"$RUN_USER" "$UPLOAD_TOKEN_FILE" 2>/dev/null || true
+chmod 600 "$UPLOAD_TOKEN_FILE"
+
+UPLOAD_EXPIRES_LABEL="$(date -d "@$UPLOAD_EXPIRES_AT" '+%d/%m/%Y %H:%M %Z' 2>/dev/null || true)"
+if [[ -z "$UPLOAD_EXPIRES_LABEL" ]]; then
+  UPLOAD_EXPIRES_LABEL="$(date -r "$UPLOAD_EXPIRES_AT" '+%d/%m/%Y %H:%M' 2>/dev/null || echo "daqui a 24 horas")"
+fi
+
+# ---------------------------------------------------------------------------
 # Mantém só os 20 logs de instalação mais recentes.
 ls -1t "$LOG_DIR"/install-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
 
@@ -778,10 +802,32 @@ echo "============================================================"
 echo " CONCLUÍDO: Mighty DOOM Revival está 100% no ar"
 echo "============================================================"
 echo "Domínio:                 https://$DOMAIN"
+echo "Site (abre no domínio):   https://$DOMAIN/"
 echo "Health check:             https://$DOMAIN/revival/health"
 echo "Health local:              http://127.0.0.1:8080/revival/health"
 echo "Perfil de recursos:       $RAM_PROFILE (heap ${HEAP_MB}MB, MemoryMax $MEM_MAX, TasksMax $TASKS_MAX)"
 echo "Reverse proxy:            $PROXY_KIND"
+echo ""
+echo "------------------------------------------------------------"
+echo " UPLOAD DO APK PELO NAVEGADOR (opcional)"
+echo "------------------------------------------------------------"
+echo "Para publicar o APK patcheado no botão de download do site,"
+echo "abra este link TEMPORÁRIO e arraste o arquivo .apk:"
+echo ""
+echo "  https://$DOMAIN/upload/$UPLOAD_TOKEN"
+echo ""
+echo "  Válido até: $UPLOAD_EXPIRES_LABEL (24 horas)"
+echo "  (links gerados por instalações anteriores foram invalidados)"
+echo ""
+echo "Quer ELIMINAR este link de upload imediatamente, antes das 24h"
+echo "(uso opcional)? Basta abrir o link abaixo no navegador:"
+echo ""
+echo "  https://$DOMAIN/upload-cancel/$UPLOAD_TOKEN"
+echo ""
+echo "  Depois de eliminado, ninguém consegue enviar ou substituir o"
+echo "  APK sem rodar este instalador de novo. O APK já publicado"
+echo "  continua no ar normalmente em:"
+echo "  https://$DOMAIN/download/mighty-doom-revival.apk"
 echo ""
 echo "REVIVAL_ADMIN_TOKEN atual: $(get_env_var REVIVAL_ADMIN_TOKEN)"
 echo "(guarde este token; ele autoriza POST /revival/reload)"

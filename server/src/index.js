@@ -12,6 +12,7 @@ import { inventoryWire, seedStarterBundle, giveGameResource } from './game-data-
 import { playerStatsWire, incrementPlayerStats } from './stats.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
 import { handleTutorialRequest, tutorialProgressionWire } from './tutorial.js'
+import { createSiteRouter } from './site.js'
 
 const serverRoot = resolve(import.meta.dirname, '..')
 const envPath = resolve(serverRoot, '.env')
@@ -24,6 +25,16 @@ const dbPath = configuredDb
   ? (isAbsolute(configuredDb) ? configuredDb : resolve(serverRoot, configuredDb))
   : defaultDbPath
 const repo = new Repository(dbPath)
+
+// Site estático (server/public) + upload de APK por link temporário. Os
+// diretórios são overridáveis por env para testes/Docker.
+const publicDir = process.env.PUBLIC_DIR
+  ? resolve(serverRoot, process.env.PUBLIC_DIR)
+  : resolve(serverRoot, 'public')
+const uploadDir = process.env.UPLOAD_DIR
+  ? resolve(serverRoot, process.env.UPLOAD_DIR)
+  : resolve(serverRoot, 'runtime')
+const site = createSiteRouter({ publicDir, uploadDir })
 
 function nowSeconds () {
   return Math.floor(Date.now() / 1000)
@@ -390,6 +401,9 @@ async function handle (req, res) {
       game_data_loaded: Boolean(runtime.gameData),
       packs: activePacks(runtime).length,
       events: runtime.events.filter(x => x.active !== false).length,
+      players: repo.countUsers(),
+      uptime_seconds: Math.floor(process.uptime()),
+      apk_available: site.apkInfo().available,
       research_mode: researchMode(),
       runtime: 'node-builtin-http+sqlite'
     })
@@ -410,6 +424,10 @@ async function handle (req, res) {
     if (!adminAuthorized(req)) return json(res, 401, { ok: false })
     return json(res, 200, { ok: true, requests: repo.requestLog(Number(url.searchParams.get('limit') || 100)) })
   }
+
+  // Site público (/), assets, download do APK e links temporários de upload.
+  // Retorna false para rotas que não são dele, caindo no /data e /game/*.
+  if (site.handle(req, res, path)) return
 
   if (req.method === 'GET' && path === '/data') {
     const token = req.headers.authorization
@@ -501,6 +519,7 @@ server.on('error', error => {
 server.listen(port, host, () => {
   console.log(`${runtime.revival.server_name} ouvindo em http://${host}:${port}`)
   console.log(`SQLite: ${dbPath}`)
+  console.log(`Site público: ${publicDir}`)
   if (!runtime.gameData) console.warn(`ATENÇÃO: game-data.json ausente em ${runtime.paths.gameDataPath}`)
 })
 

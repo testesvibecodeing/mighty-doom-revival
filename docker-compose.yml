@@ -17,5 +17,6 @@ services:
       REVIVAL_ADMIN_TOKEN: change-me
     volumes:
       - ./server/runtime:/app/runtime
+      - ./server/public/download:/app/public/download
       - ./server/data:/app/data:ro
       - ./server/config:/app/config:ro

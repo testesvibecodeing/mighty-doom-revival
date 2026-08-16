@@ -347,16 +347,18 @@ fi
 step "Dados/config locais do repositório"
 
 if [[ "$PURGE_DATA" == "1" ]]; then
-  echo "Apagando server/.env, server/config/*.json gerados, server/data/ e server/runtime/..."
+  echo "Apagando server/.env, server/config/*.json gerados, server/data/, server/runtime/"
+  echo "e o APK publicado por upload (server/public/download/)..."
   rm -f "$SERVER_DIR/.env" \
         "$SERVER_DIR/config/revival.json" \
         "$SERVER_DIR/config/packs.json" \
         "$SERVER_DIR/config/events.json"
   rm -rf "$SERVER_DIR/data" "$SERVER_DIR/runtime"
+  rm -f "$SERVER_DIR/public/download/mighty-doom-revival.apk"
   echo "[OK] Dados e configuração locais removidos."
 else
-  echo "Flag --purge-data não usada: server/.env, server/config/*.json, server/data/ e"
-  echo "server/runtime/ preservados (podem conter progresso de jogadores)."
+  echo "Flag --purge-data não usada: server/.env, server/config/*.json, server/data/,"
+  echo "server/runtime/ e o APK publicado preservados (podem conter progresso de jogadores)."
 fi
 
 # ---------------------------------------------------------------------------

@@ -156,6 +156,10 @@ export class Repository {
     return this.db.prepare('SELECT * FROM users WHERE token = ?').get(token) || null
   }
 
+  countUsers () {
+    return this.db.prepare('SELECT COUNT(*) AS total FROM users').get().total
+  }
+
   login (id, password) {
     const user = this.userById(id)
     if (!user || user.password_hash !== passwordHash(password)) return null

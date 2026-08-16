@@ -150,7 +150,9 @@ Como este repositório é público, a forma recomendada de colocar o Revival Ser
 - roda a suíte de testes do servidor como gate de deploy (aborta se algo quebrar);
 - sobe o servidor como serviço `systemd` (reinício automático, limites de RAM/CPU do perfil);
 - ativa HTTPS automático via Let's Encrypt (nginx+certbot ou Caddy) para o domínio informado;
-- valida `http://127.0.0.1:8080/revival/health` e depois `https://SEU_DOMINIO/revival/health` antes de terminar.
+- valida `http://127.0.0.1:8080/revival/health` e depois `https://SEU_DOMINIO/revival/health` antes de terminar;
+- serve o **site** (`server/public`) no próprio domínio: `https://SEU_DOMINIO/` abre o `index.html`, que mostra dados reais do servidor (status, jogadores, pacotes, eventos, uptime, APK) e tem fundo interativo em three.js;
+- imprime no final um **link temporário de upload do APK** (24h) para publicar o APK patcheado no download do site, e logo abaixo o link para **eliminar esse upload imediatamente** (opcional). Rodar o instalador de novo gera um link novo e invalida os anteriores.
 
 ### Perfis de recursos (otimização por RAM da VPS)
 
