@@ -4,44 +4,59 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_DIR="$ROOT/server"
 
-for cmd in node npm; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "[ERRO] $cmd não encontrado. Use Node.js 24+." >&2
-    exit 2
-  fi
-done
-
-NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])')"
-if (( NODE_MAJOR < 24 )); then
-  echo "[ERRO] Node.js 24+ necessário. Encontrado: $(node --version)" >&2
+if ! command -v node >/dev/null 2>&1; then
+  echo '[ERRO] Node.js não encontrado. Instale Node.js 22.5+; Node 24 LTS é recomendado.' >&2
   exit 2
 fi
 
-cp -n "$SERVER_DIR/.env.example" "$SERVER_DIR/.env" || true
-cp -n "$SERVER_DIR/config/revival.example.json" "$SERVER_DIR/config/revival.json" || true
-cp -n "$SERVER_DIR/config/packs.example.json" "$SERVER_DIR/config/packs.json" || true
-cp -n "$SERVER_DIR/config/events.example.json" "$SERVER_DIR/config/events.json" || true
+echo '[1/4] Validando Node.js e SQLite nativo...'
+if ! node -e "const s=require('node:sqlite'); const db=new s.DatabaseSync(':memory:'); db.exec('select 1'); db.close()" >/dev/null 2>&1; then
+  echo "[ERRO] node:sqlite não está disponível em $(node --version). Use Node.js 22.5+; Node 24 LTS é recomendado." >&2
+  exit 2
+fi
+node --version
+
+cp -n "$SERVER_DIR/.env.example" "$SERVER_DIR/.env" 2>/dev/null || true
+cp -n "$SERVER_DIR/config/revival.example.json" "$SERVER_DIR/config/revival.json" 2>/dev/null || true
+cp -n "$SERVER_DIR/config/packs.example.json" "$SERVER_DIR/config/packs.json" 2>/dev/null || true
+cp -n "$SERVER_DIR/config/events.example.json" "$SERVER_DIR/config/events.json" 2>/dev/null || true
 mkdir -p "$SERVER_DIR/runtime" "$SERVER_DIR/data"
 
-cd "$SERVER_DIR"
-echo '[1/3] Instalando dependências...'
-npm install
+echo '[2/4] Verificando sintaxe do servidor...'
+for file in \
+  "$SERVER_DIR/src/index.js" \
+  "$SERVER_DIR/src/chapters.js" \
+  "$SERVER_DIR/src/config.js" \
+  "$SERVER_DIR/src/db.js" \
+  "$SERVER_DIR/src/events.js" \
+  "$SERVER_DIR/src/game-data-model.js" \
+  "$SERVER_DIR/src/store.js" \
+  "$SERVER_DIR/test/smoke.mjs"; do
+  node --check "$file"
+done
 
-echo '[2/3] Verificando sintaxe...'
-npm run check
+echo '[3/4] Executando teste real end-to-end local...'
+node "$SERVER_DIR/test/smoke.mjs"
 
-echo '[3/3] Preparação concluída.'
+echo '[4/4] Preparação concluída.'
 cat <<'EOF'
+
+Nenhum npm install é necessário: o servidor usa apenas módulos nativos do Node.
 
 IMPORTANTE: edite server/.env e troque REVIVAL_ADMIN_TOKEN=change-me.
 
 Para iniciar:
-  cd server
-  npm start
+  ./scripts/start-server.sh
 
 Health check:
   http://127.0.0.1:8080/revival/health
-
-Para compatibilidade completa, coloque o game-data validado em:
-  server/data/game-data.json
 EOF
+
+if [[ ! -f "$SERVER_DIR/data/game-data.json" ]]; then
+  cat <<'EOF'
+
+[AVISO] server/data/game-data.json ainda não existe.
+Para bootstrap de pesquisa:
+  python3 scripts/fetch-community-gamedata.py
+EOF
+fi
