@@ -39,6 +39,9 @@ const gameData = {
     ]
   }],
   inventory: { slots: [{ id: 10, tag: 'slot_primary_weapon' }, { id: 11, tag: 'slot_slayer' }] },
+  daily_rewards: {
+    days: [{ resources: [{ resource: 'coins', amount: 25 }] }]
+  },
   idle_reward: { generation_period: 60, chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }] }
 }
 
@@ -165,6 +168,14 @@ try {
   assert.equal(dataResponse.status, 200)
   assert.equal((await dataResponse.json()).bundles[0].tag, 'starter')
 
+  const dailyBefore = await post('/game/daily-rewards/get-state', {}, token)
+  assert.equal(dailyBefore.state.claimable, true)
+  await post('/game/daily-rewards/claim', {}, token)
+  const dailyDuplicate = await post('/game/daily-rewards/claim', {}, token, 400)
+  assert.equal(dailyDuplicate.reason, 'already-claimed')
+  const afterDaily = await post('/game/player/user-data', {}, token)
+  assert.equal(afterDaily.user_data.inventory.currencies[0].amount, 2025)
+
   const store = await post('/game/store/get', {}, token)
   assert.equal(store.store_items[0].id, 900100)
   await post('/game/store/purchase', { item: 900100 }, token)
@@ -173,7 +184,7 @@ try {
   assert.equal(quota.reason, 'quota')
 
   const afterPurchases = await post('/game/player/user-data', {}, token)
-  assert.equal(afterPurchases.user_data.inventory.currencies[0].amount, 1000)
+  assert.equal(afterPurchases.user_data.inventory.currencies[0].amount, 1025)
 
   const schedule = await post('/game/events/get-schedule', {}, token)
   assert.equal(schedule.scheduled_events[0].id, 7001)
@@ -190,7 +201,8 @@ try {
   const persisted = await post('/game/player/user-data', {}, token)
   assert.equal(persisted.user_data.chapter_progression.chapters[0].chapter, 101)
 
-  await post('/game/daily-rewards/get-state', {}, token)
+  const dailyAfter = await post('/game/daily-rewards/get-state', {}, token)
+  assert.equal(dailyAfter.state.claimable, false)
   await post('/game/idle-rewards/get-state', {}, token)
   await post('/game/session/heartbeat', {}, token)
 
