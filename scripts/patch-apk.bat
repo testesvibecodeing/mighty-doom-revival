@@ -42,6 +42,18 @@ if errorlevel 1 exit /b %ERRORLEVEL%
 if not exist ".tools\uber-apk-signer.jar" call "scripts\setup-patcher-tools.bat"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
+echo Verificando suporte bundle-aware...
+python -c "import UnityPy,sys; sys.exit(0 if getattr(UnityPy,'__version__','') == '1.25.3' else 1)" >nul 2>nul
+if errorlevel 1 (
+  echo Instalando UnityPy 1.25.3 para reserializacao segura de bundles Unity...
+  python -m pip install --disable-pip-version-check "UnityPy==1.25.3"
+  if errorlevel 1 (
+    echo [ERRO] Nao foi possivel instalar UnityPy 1.25.3.
+    echo Execute manualmente: python -m pip install UnityPy==1.25.3
+    exit /b 3
+  )
+)
+
 set "APKTOOL=.tools\apktool.jar"
 set "SIGNER=.tools\uber-apk-signer.jar"
 set "WORK=work\apk-patch"
@@ -78,14 +90,19 @@ if "%CA_FILE%"=="" (
   python scripts\patch_apk.py --decoded "%DECODED%" --server "%SERVER_HOST%" --ca "%CA_FILE%" --report "%REPORT%"
 )
 set "PATCH_RC=%ERRORLEVEL%"
+
+if "%PATCH_RC%"=="4" (
+  echo.
+  echo Hostname com tamanho diferente detectado. Tentando patch bundle-aware...
+  python scripts\patch_bundle_from_report.py --decoded "%DECODED%" --server "%SERVER_HOST%" --report "%REPORT%"
+  set "PATCH_RC=!ERRORLEVEL!"
+)
+
 if not "%PATCH_RC%"=="0" (
   echo.
-  echo [PARADO] O patcher recusou uma alteracao que poderia corromper o bundle Unity.
+  echo [PARADO] O patcher nao conseguiu provar uma alteracao segura do bundle Unity.
+  echo Nenhum patch binario de tamanho variavel foi feito no escuro.
   echo Relatorio: %REPORT%
-  echo.
-  echo Para o APK oficial 1.13.1, o host recomendado para o primeiro teste e:
-  echo   d.debruinsistemas.com.br
-  echo porque possui o mesmo tamanho do host oficial conhecido.
   exit /b %PATCH_RC%
 )
 
