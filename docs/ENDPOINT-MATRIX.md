@@ -12,7 +12,7 @@ Legenda:
 | Módulo | Estado | Escopo |
 |---|---:|---|
 | auth | 🧪 | registro local, login por device, token e bootstrap do starter bundle |
-| player | 🧪 | game-data-token, user-data, settings, stats baseline |
+| player | 🧪 | game-data-token, user-data, settings, stats baseline; user-data agora reflete talentos persistidos |
 | inventory | 🧪 | wire de inventário, slots, equip sequence, equip |
 | session | 🧪 | heartbeat e refresh |
 | store | 🧪 | catálogo Revival, quota e compra transacional por moeda interna |
@@ -21,14 +21,14 @@ Legenda:
 | events | 🧪 | schedule, args e estado por jogador |
 | battle-pass | 🔬 | schedule/state preparados; claims, tiers, season e stats pendentes |
 | chapters | 🧪 | start/update/revive/end persistentes; user-data reflete current_run; grants/stage rewards ainda aguardam schema real |
-| daily-rewards | 🧪 | get-state baseline; claim pendente |
-| idle-rewards | 🧪 | get-state + geração por progresso; claims/boost pendentes |
+| daily-rewards | 🧪 | get-state + claim diário transacional/persistente; wire final ainda precisa ser validado no APK real |
+| idle-rewards | 🧪 | get-state + geração por progresso + claim persistente; boost/schema final pendentes |
 | inbox | 🧪 | lista vazia segura; grants/messages pendentes |
 | reward-tracks | 🧪 | lista baseline; progress/claim pendentes |
 | gear | 🔬 | upgrade, multi-upgrade e cosméticos pendentes |
 | slayers | 🔬 | upgrade e cosméticos pendentes |
-| talents | 🔬 | árvore, compra/upgrade e estado pendentes |
-| quests | 🔬 | definições, progresso, claim e rotação pendentes |
+| talents | 🧪 | get/buy, requisitos, custos e persistência no user-data; upgrade/schema final pendentes |
+| quests | 🔬 | baseline diária vazia; definições, progresso, claim e rotação pendentes |
 | tutorial | 🔬 | sequências/progresso pendentes |
 | identity | 🧪 | identidade local; links externos rejeitados |
 | xbox/msal | ⛔ | dependência externa será substituída quando não for necessária ao gameplay |

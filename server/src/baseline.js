@@ -1,5 +1,5 @@
 import { fail, ok } from './protocol.js'
-import { dailyRewardState, idleRewardState } from './rewards.js'
+import { claimDailyReward, dailyRewardState, idleRewardState } from './rewards.js'
 
 /**
  * Endpoints whose wire shape is known and whose implementation is safe even
@@ -30,6 +30,17 @@ export function installBaselineRoutes (router, repo, runtimeProvider) {
         claimable: current.claimable
       }
     })
+  })
+
+  router.post('/daily-rewards/claim', ctx => {
+    const runtime = runtimeProvider()
+    const result = claimDailyReward(repo, ctx.state.user.id, runtime)
+    if (!result.ok) return fail(ctx, 400, 2000, { reason: result.reason })
+
+    // The preserved reference route returned only the common response envelope.
+    // Keep the client wire conservative while the actual grant is persisted in
+    // SQLite and becomes visible through player/user-data and get-state.
+    ok(ctx)
   })
 
   router.post('/idle-rewards/get-state', ctx => {

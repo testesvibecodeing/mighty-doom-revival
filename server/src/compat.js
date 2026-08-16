@@ -1,6 +1,7 @@
 import { handleBattlePassRequest } from './battle-pass.js'
 import { handleProgressionRequest } from './progression.js'
 import { claimDailyReward, claimIdleReward, startOfUtcDayEpoch } from './rewards.js'
+import { playerUserDataWire } from './user-data.js'
 
 function playerLevelWire (user) {
   return {
@@ -17,6 +18,15 @@ export function handleCompatRequest (path, body, userId, repo, runtime) {
 
   const progression = handleProgressionRequest(path, body, userId, repo, runtime)
   if (progression) return progression
+
+  // Intercept the legacy user-data path before index.js reaches its older
+  // hardcoded talent_progression response. This keeps purchased talents and
+  // the rest of the persisted player state visible after reconnect/restart.
+  if (path === '/game/player/user-data') {
+    const user = repo.userById(userId)
+    if (!user) return { error: [401, 2101] }
+    return { data: playerUserDataWire(repo, user, runtime) }
+  }
 
   if (path === '/game/daily-rewards/claim') {
     const result = claimDailyReward(repo, userId, runtime)
