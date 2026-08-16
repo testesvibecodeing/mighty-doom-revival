@@ -83,6 +83,7 @@ def main() -> int:
         assert app.get(f"{{{ANDROID_NS}}}networkSecurityConfig") == "@xml/network_security_config"
         network_xml = (decoded / "res" / "xml" / "network_security_config.xml").read_text(encoding="utf-8")
         assert TEST_HOST in network_xml
+        assert OFFICIAL_HOST not in network_xml
 
     with tempfile.TemporaryDirectory(prefix="mighty-doom-patch-block-") as tmp:
         root = Path(tmp)
