@@ -4,6 +4,12 @@
 The patcher is expensive and the client hardcodes an HTTPS host. This gate makes
 sure the requested hostname resolves to a compatible Revival server with valid
 TLS and the expected Mighty DOOM client/API versions before apktool starts.
+
+Besides the canonical health endpoint, the preflight exercises the exact Gear
+collection prefix baked into Mighty DOOM 1.13.1 and performs a non-mutating auth
+contract probe. This catches reverse-proxy configurations that serve
+``/revival/health`` correctly but fail the real client path
+``/collections/doom/game/...`` before an APK is rebuilt and signed.
 """
 from __future__ import annotations
 
@@ -19,6 +25,7 @@ from patch_apk import normalize_host
 
 EXPECTED_CLIENT_VERSION = "1.13.1"
 EXPECTED_API_VERSION = "24.0.0"
+GEAR_COLLECTION = "doom"
 
 
 def build_ssl_context(ca_file: Path | None) -> ssl.SSLContext:
@@ -27,32 +34,62 @@ def build_ssl_context(ca_file: Path | None) -> ssl.SSLContext:
     return ssl.create_default_context(cafile=str(ca_file))
 
 
-def check_server(host: str, ca_file: Path | None, timeout: float, require_game_data: bool = True) -> dict[str, object]:
-    url = f"https://{host}/revival/health"
+def read_json_response(response, limit: int = 1024 * 1024) -> tuple[int, str, dict[str, object]]:
+    status = int(getattr(response, "status", response.getcode()))
+    content_type = str(response.headers.get("Content-Type", ""))
+    raw = response.read(limit)
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"HTTP {status} não retornou JSON UTF-8 válido") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"HTTP {status} retornou JSON incompatível")
+    return status, content_type, payload
+
+
+def get_json(url: str, context: ssl.SSLContext, timeout: float) -> tuple[int, str, dict[str, object]]:
     request = urllib.request.Request(
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": "Mighty-DOOM-Revival-Patcher/1.0",
+            "User-Agent": "Mighty-DOOM-Revival-Patcher/1.1",
         },
         method="GET",
     )
-    context = build_ssl_context(ca_file)
-
     with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
-        status = int(getattr(response, "status", response.getcode()))
-        content_type = str(response.headers.get("Content-Type", ""))
-        raw = response.read(1024 * 1024)
+        return read_json_response(response)
 
-    if status != 200:
-        raise RuntimeError(f"health retornou HTTP {status}")
+
+def post_json(
+    url: str,
+    payload: dict[str, object],
+    context: ssl.SSLContext,
+    timeout: float,
+    expected_http_error: int | None = None,
+) -> tuple[int, str, dict[str, object]]:
+    raw = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=raw,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(raw)),
+            "User-Agent": "Mighty-DOOM-Revival-Patcher/1.1",
+            "x-ubu-apiversion": EXPECTED_API_VERSION,
+        },
+        method="POST",
+    )
     try:
-        payload = json.loads(raw.decode("utf-8"))
-    except Exception as exc:
-        raise RuntimeError("health não retornou JSON UTF-8 válido") from exc
-    if not isinstance(payload, dict):
-        raise RuntimeError("health retornou JSON incompatível")
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
+            return read_json_response(response)
+    except urllib.error.HTTPError as exc:
+        if expected_http_error is None or exc.code != expected_http_error:
+            raise
+        return read_json_response(exc)
 
+
+def validate_health(payload: dict[str, object], require_game_data: bool) -> list[str]:
     errors: list[str] = []
     if payload.get("ok") is not True:
         errors.append("campo ok não é true")
@@ -66,12 +103,51 @@ def check_server(host: str, ca_file: Path | None, timeout: float, require_game_d
         )
     if require_game_data and payload.get("game_data_loaded") is not True:
         errors.append("game_data_loaded não é true")
+    return errors
+
+
+def check_server(host: str, ca_file: Path | None, timeout: float, require_game_data: bool = True) -> dict[str, object]:
+    context = build_ssl_context(ca_file)
+    canonical_url = f"https://{host}/revival/health"
+    gear_health_url = f"https://{host}/collections/{GEAR_COLLECTION}/revival/health"
+    auth_probe_url = f"https://{host}/collections/{GEAR_COLLECTION}/game/auth/register"
+
+    status, content_type, payload = get_json(canonical_url, context, timeout)
+    if status != 200:
+        raise RuntimeError(f"health retornou HTTP {status}")
+    errors = validate_health(payload, require_game_data)
     if errors:
         raise RuntimeError("servidor Revival incompatível: " + "; ".join(errors))
 
+    # The patched 1.13.1 client retains /collections/doom after the host swap.
+    # A proxy can accidentally make /revival/health work while rejecting this
+    # path, so verify the exact prefix before spending time on apktool/signing.
+    gear_status, _, gear_payload = get_json(gear_health_url, context, timeout)
+    if gear_status != 200:
+        raise RuntimeError(f"health com prefixo Gear retornou HTTP {gear_status}")
+    gear_errors = validate_health(gear_payload, require_game_data)
+    if gear_errors:
+        raise RuntimeError("rota Gear incompatível: " + "; ".join(gear_errors))
+
+    # Non-mutating API contract probe: an intentionally wrong client_version
+    # must be routed to the Revival auth handler and rejected with game code
+    # 2200. If the proxy/path is wrong we normally see 404/HTML instead.
+    auth_status, auth_content_type, auth_payload = post_json(
+        auth_probe_url,
+        {"client_version": "revival-preflight-invalid"},
+        context,
+        timeout,
+        expected_http_error=400,
+    )
+    if auth_status != 400 or auth_payload.get("code") != 2200:
+        raise RuntimeError(
+            "auth probe pelo prefixo Gear não atingiu o handler esperado "
+            f"(HTTP {auth_status}, code={auth_payload.get('code')!r})"
+        )
+
     return {
         "verified": True,
-        "url": url,
+        "url": canonical_url,
         "http_status": status,
         "content_type": content_type,
         "server": payload.get("server"),
@@ -80,6 +156,15 @@ def check_server(host: str, ca_file: Path | None, timeout: float, require_game_d
         "game_data_loaded": payload.get("game_data_loaded"),
         "research_mode": payload.get("research_mode"),
         "runtime": payload.get("runtime"),
+        "gear_prefix": {
+            "collection": GEAR_COLLECTION,
+            "health_url": gear_health_url,
+            "health_status": gear_status,
+            "auth_probe_url": auth_probe_url,
+            "auth_probe_status": auth_status,
+            "auth_probe_code": auth_payload.get("code"),
+            "auth_probe_content_type": auth_content_type,
+        },
     }
 
 
@@ -113,7 +198,7 @@ def main() -> int:
             require_game_data=not args.allow_missing_game_data,
         )
     except (urllib.error.URLError, TimeoutError, ssl.SSLError, OSError) as exc:
-        print(f"ERRO de rede/TLS ao acessar https://{host}/revival/health: {exc}", file=sys.stderr)
+        print(f"ERRO de rede/TLS ao validar https://{host}: {exc}", file=sys.stderr)
         return 3
     except RuntimeError as exc:
         print(f"ERRO: {exc}", file=sys.stderr)
@@ -123,7 +208,7 @@ def main() -> int:
     print(text)
     if args.report:
         Path(args.report).write_text(text + "\n", encoding="utf-8")
-    print("Revival HTTPS validado: versão/API/GameData compatíveis com o patcher.")
+    print("Revival HTTPS validado: TLS, versão/API/GameData e rota Gear do cliente estão compatíveis.")
     return 0
 
 
