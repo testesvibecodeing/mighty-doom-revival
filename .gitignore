@@ -56,6 +56,7 @@ reports/
 .idea/
 .DS_Store
 Thumbs.db
+.claude/
 
 # Claude Code local/personal settings (per-machine, not team-shared)
 .claude/settings.local.json
