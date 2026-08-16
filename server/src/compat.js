@@ -1,9 +1,5 @@
 import { handleBattlePassRequest } from './battle-pass.js'
-
-function startOfUtcDayEpoch () {
-  const now = new Date()
-  return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000)
-}
+import { claimDailyReward, claimIdleReward, startOfUtcDayEpoch } from './rewards.js'
 
 function playerLevelWire (user) {
   return {
@@ -19,18 +15,18 @@ export function handleCompatRequest (path, body, userId, repo, runtime) {
   if (battlePass) return battlePass
 
   if (path === '/game/daily-rewards/claim') {
-    // The preserved public backend also leaves claim reward calculation as a
-    // TODO. Keep an explicit persistent claim marker instead of letting this
-    // fall through research mode; actual rewards will be filled from GameData.
-    const state = repo.getState(userId, 'daily-rewards', 'state', {
-      day: 1,
-      last_claim: 0,
-      pending: [],
-      claimed: []
-    })
-    const now = Math.floor(Date.now() / 1000)
-    repo.setState(userId, 'daily-rewards', 'state', { ...state, last_claim: now })
-    return { data: { resources: [] } }
+    const result = claimDailyReward(repo, userId, runtime)
+    if (!result.ok) return { error: [400, 2000, { reason: result.reason }] }
+    return { data: { resources: result.resources, claimed_day: result.claimed_day } }
+  }
+
+  if (
+    path === '/game/idle-rewards/claim' ||
+    path === '/game/idle-rewards/claim-rewards'
+  ) {
+    const result = claimIdleReward(repo, userId, runtime)
+    if (!result.ok) return { error: [400, 2000, { reason: result.reason, state: result.state }] }
+    return { data: { resources: result.resources, periods: result.periods } }
   }
 
   if (path === '/game/quests/get-daily-quests') {
