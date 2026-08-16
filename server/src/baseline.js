@@ -1,31 +1,9 @@
 import { fail, ok } from './protocol.js'
-
-function startOfUtcDayEpoch () {
-  const now = new Date()
-  return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000)
-}
-
-function chooseIdleGeneration (gameData, chapterProgression) {
-  const idle = gameData?.idle_reward
-  const table = Array.isArray(idle?.chapter_idle_generation) ? idle.chapter_idle_generation : []
-  let chosen = null
-  for (const row of table) {
-    if (typeof row?.chapter_progress !== 'number') continue
-    if (row.chapter_progress > chapterProgression) continue
-    if (chosen === null || row.chapter_progress >= chosen.chapter_progress) chosen = row
-  }
-  return {
-    idle_generation: chosen?.idle_generation ?? [],
-    generation_period: idle?.generation_period ?? 0
-  }
-}
+import { dailyRewardState, idleRewardState } from './rewards.js'
 
 /**
  * Endpoints whose wire shape is known and whose implementation is safe even
  * before the full game-data/progression layer has been reconstructed.
- *
- * More complex systems (chapters, upgrades, quests, battle pass claims) stay
- * in Research Mode until their invariants can be validated against the client.
  */
 export function installBaselineRoutes (router, repo, runtimeProvider) {
   router.post('/session/heartbeat', ctx => ok(ctx))
@@ -39,37 +17,24 @@ export function installBaselineRoutes (router, repo, runtimeProvider) {
   router.post('/reward-tracks/get-all', ctx => ok(ctx, { tracks: [] }))
 
   router.post('/daily-rewards/get-state', ctx => {
-    const dayStart = startOfUtcDayEpoch()
-    const state = repo.getState(ctx.state.user.id, 'daily-rewards', 'state', {
-      day: 1,
-      last_claim: 0,
-      pending: [],
-      claimed: []
-    })
+    const runtime = runtimeProvider()
+    const current = dailyRewardState(repo, ctx.state.user.id, runtime)
     ok(ctx, {
       state: {
-        day_start: dayStart,
-        day_end: dayStart + 86400,
-        day: state.day ?? 1,
-        last_claim: state.last_claim ?? 0,
-        pending: Array.isArray(state.pending) ? state.pending : [],
-        claimed: Array.isArray(state.claimed) ? state.claimed : []
+        day_start: current.dayStart,
+        day_end: current.dayStart + 86400,
+        day: current.state.day,
+        last_claim: current.state.last_claim,
+        pending: current.state.pending,
+        claimed: current.state.claimed,
+        claimable: current.claimable
       }
     })
   })
 
   router.post('/idle-rewards/get-state', ctx => {
     const runtime = runtimeProvider()
-    const user = repo.userById(ctx.state.user.id)
-    const generation = chooseIdleGeneration(runtime.gameData, user.chapter_progression)
-    ok(ctx, {
-      state: {
-        last_claim: repo.getState(user.id, 'idle-rewards', 'last_claim', 0),
-        boost_available: 0,
-        next_claim: 0,
-        ...generation
-      }
-    })
+    ok(ctx, { state: idleRewardState(repo, ctx.state.user.id, runtime) })
   })
 
   router.post('/inventory/get-equip-sequence-id', ctx => {
