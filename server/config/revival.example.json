@@ -1,0 +1,8 @@
+{
+  "server_name": "Mighty DOOM Revival",
+  "api_version": "24.0.0",
+  "client_version": "1.13.1",
+  "game_data_token": "revival-local-game-data",
+  "game_data_version_id": "revival-local-v1",
+  "initial_resources": []
+}

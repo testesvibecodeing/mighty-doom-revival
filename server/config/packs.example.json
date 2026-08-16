@@ -1,0 +1,29 @@
+{
+  "packs": [
+    {
+      "id": 900001,
+      "tag": "revival_example_pack",
+      "active": false,
+      "display_type": 0,
+      "priority": 100,
+      "cost": [
+        {
+          "resource": "SUBSTITUIR_TAG_DA_MOEDA_DO_JOGO",
+          "kind": "currency",
+          "amount": 2500
+        }
+      ],
+      "contents": [
+        {
+          "resource": "SUBSTITUIR_TAG_DO_RECURSO",
+          "kind": "currency",
+          "amount": 100
+        }
+      ],
+      "quota": {
+        "period": "daily",
+        "max": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "events": [
+    {
+      "id": 990001,
+      "event_definition_id": 990001,
+      "active": false,
+      "always": true,
+      "availability": 1,
+      "event_type": 0,
+      "channel": "game_mode",
+      "args": {},
+      "progress_template": {
+        "event_id": 990001
+      }
+    }
+  ]
+}
