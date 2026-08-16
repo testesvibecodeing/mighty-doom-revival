@@ -42,16 +42,39 @@ def health(**changes):
     return payload
 
 
+def compatible_sequence(**health_changes):
+    payload = health(**health_changes)
+    return [
+        FakeResponse(payload),
+        FakeResponse(payload),
+        FakeResponse({"uts": 1, "code": 2200}, status=400),
+    ]
+
+
 class CheckRevivalServerTests(unittest.TestCase):
     @patch("urllib.request.urlopen")
-    def test_accepts_compatible_server(self, urlopen):
-        urlopen.return_value = FakeResponse(health())
+    def test_accepts_compatible_server_and_exact_gear_client_path(self, urlopen):
+        urlopen.side_effect = compatible_sequence()
         result = preflight.check_server("doom.example.com", None, 2.0)
         self.assertTrue(result["verified"])
         self.assertEqual(result["client_version"], "1.13.1")
         self.assertEqual(result["api_version"], "24.0.0")
-        request = urlopen.call_args.args[0]
-        self.assertEqual(request.full_url, "https://doom.example.com/revival/health")
+        self.assertEqual(result["gear_prefix"]["health_status"], 200)
+        self.assertEqual(result["gear_prefix"]["auth_probe_status"], 400)
+        self.assertEqual(result["gear_prefix"]["auth_probe_code"], 2200)
+
+        calls = [call.args[0] for call in urlopen.call_args_list]
+        self.assertEqual(calls[0].full_url, "https://doom.example.com/revival/health")
+        self.assertEqual(
+            calls[1].full_url,
+            "https://doom.example.com/collections/doom/revival/health",
+        )
+        self.assertEqual(
+            calls[2].full_url,
+            "https://doom.example.com/collections/doom/game/auth/register",
+        )
+        self.assertEqual(calls[2].get_header("X-ubu-apiversion"), "24.0.0")
+        self.assertEqual(json.loads(calls[2].data), {"client_version": "revival-preflight-invalid"})
 
     @patch("urllib.request.urlopen")
     def test_rejects_wrong_client_version(self, urlopen):
@@ -67,12 +90,31 @@ class CheckRevivalServerTests(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_can_relax_game_data_for_development_probe(self, urlopen):
-        urlopen.return_value = FakeResponse(health(game_data_loaded=False))
+        urlopen.side_effect = compatible_sequence(game_data_loaded=False)
         result = preflight.check_server(
             "doom.example.com", None, 2.0, require_game_data=False
         )
         self.assertTrue(result["verified"])
         self.assertFalse(result["game_data_loaded"])
+
+    @patch("urllib.request.urlopen")
+    def test_rejects_proxy_that_drops_gear_prefix(self, urlopen):
+        urlopen.side_effect = [
+            FakeResponse(health()),
+            FakeResponse({"ok": False, "error": "not-found"}, status=200),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "rota Gear incompatível"):
+            preflight.check_server("doom.example.com", None, 2.0)
+
+    @patch("urllib.request.urlopen")
+    def test_rejects_when_auth_probe_does_not_reach_game_handler(self, urlopen):
+        urlopen.side_effect = [
+            FakeResponse(health()),
+            FakeResponse(health()),
+            FakeResponse({"ok": False, "error": "not-found"}, status=404),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "auth probe"):
+            preflight.check_server("doom.example.com", None, 2.0)
 
 
 if __name__ == "__main__":
