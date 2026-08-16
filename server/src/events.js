@@ -20,18 +20,23 @@ function active (event, now) {
 }
 
 function wireEvent (event, archive = false) {
-  return {
+  // O cliente 1.13.1 desserializa cada evento do schedule com parse estrito.
+  // O cluster do DTO no global-metadata é exatamente: id, event_definition_id,
+  // start_time, end_time, availability, min_api_version, max_api_version,
+  // stop_time, args — sem "event_type". Campos numéricos não-nullable que
+  // chegam como null explícito derrubam o parse ("Malformed response payload"),
+  // então campos sem valor são omitidos, nunca enviados como null.
+  const wire = {
     id: event.id,
     event_definition_id: event.event_definition_id ?? event.id,
     start_time: archive ? null : asEpoch(event.start_time),
     end_time: archive ? null : asEpoch(event.end_time),
     availability: event.availability ?? 1,
-    min_api_version: event.min_api_version ?? null,
-    max_api_version: event.max_api_version ?? null,
-    stop_time: null,
-    event_type: event.event_type ?? 0,
     args: Buffer.from(JSON.stringify(event.args || {}), 'utf8').toString('base64')
   }
+  if (event.min_api_version != null) wire.min_api_version = event.min_api_version
+  if (event.max_api_version != null) wire.max_api_version = event.max_api_version
+  return wire
 }
 
 export function eventSchedule (runtime) {

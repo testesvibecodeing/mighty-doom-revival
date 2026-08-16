@@ -206,6 +206,19 @@ try {
 
   const schedule = await post('/game/events/get-schedule', {}, token)
   assert.equal(schedule.scheduled_events[0].id, 7001)
+  // Contrato do cliente 1.13.1: o DTO do schedule (cluster do global-metadata)
+  // é id, event_definition_id, start_time, end_time, availability,
+  // min_api_version, max_api_version, stop_time, args. Campos numéricos
+  // não-nullable enviados como null explícito derrubam o parse do cliente
+  // ("Malformed response payload" após get-schedule, boot aborta após 3
+  // tentativas), então valores ausentes são omitidos e "event_type" (que não
+  // existe no DTO) nunca é enviado.
+  for (const event of schedule.scheduled_events) {
+    assert.equal(event.event_type, undefined, 'event_type não faz parte do DTO do cliente')
+    for (const field of ['min_api_version', 'max_api_version', 'stop_time']) {
+      assert.notEqual(event[field], null, `${field} não pode ir como null para o cliente 1.13.1`)
+    }
+  }
   const eventState = await post('/game/events/get-progress', {}, token)
   assert.equal(eventState.game_mode_events_progress[0].event_id, 7001)
 

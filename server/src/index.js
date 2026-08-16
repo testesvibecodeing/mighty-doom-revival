@@ -41,10 +41,21 @@ function nowSeconds () {
 }
 
 function wire (data = {}, code = 1000) {
-  // O cliente 1.13.1 faz DateTime.Parse(uts) em Ubu.GameController.ParseServerTimestamp
-  // (StartSession recebe o timestamp como string). Unix epoch numérico derruba o
-  // register/login com FormatException, então o wire é ISO 8601 UTC.
-  return { uts: new Date().toISOString(), code, ...data }
+  // O cliente 1.13.1 faz parse estrito do timestamp do servidor em
+  // Ubu.GameController.ParseServerTimestamp (StartSession). Bisseção no
+  // emulador confirmou: a chave do wire é "uts" sozinha, no formato
+  // "yyyy-MM-ddTHH:mm:ss" UTC (unix epoch, ISO com espaço e chaves
+  // timestamp/utc_timestamp são ignoradas ou rejeitadas).
+  const uts = formatServerTimestamp(new Date())
+  return { uts, code, ...data }
+}
+
+function formatServerTimestamp (date) {
+  const pad = (n, w = 2) => String(n).padStart(w, '0')
+  return (
+    `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}` +
+    `T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`
+  )
 }
 
 function json (res, status, payload) {
@@ -359,6 +370,11 @@ function handleAuthed (path, body, user, req) {
 
   if (path === '/game/player/user-data') return { data: playerUserData(repo.userById(user.id)) }
 
+  // O cliente 1.13.1 faz foreach em ArmoryController.Init(upgrades); sem o
+  // array no wire a desserializacao deixa null e a iteracao NRE-derruba o boot
+  // da sessao logo apos o registro/login.
+  if (path === '/game/armory/get') return { data: { upgrades: [] } }
+
   if (path === '/game/store/get') return { data: storePayload() }
   if (path === '/game/store/get-offers') return { data: { store_items: [], iap_items: [], ad_items: [], offers: [] } }
   if (path === '/game/store/get-daily-offers' || path === '/game/store/activate-daily-offers') return { data: { daily_offers: [] } }
@@ -500,6 +516,12 @@ async function handle (req, res) {
 const host = process.env.HOST || '0.0.0.0'
 const port = Number.parseInt(process.env.PORT || '8080')
 const server = createServer((req, res) => {
+  const startedAt = Date.now()
+  res.on('finish', () => {
+    if (req.url?.startsWith('/game') || req.url === '/data' || (req.url || '').startsWith('/collections')) {
+      console.log(`[req] ${req.method} ${req.url} -> ${res.statusCode} ${res.getHeader('content-length') || '?'}B ${Date.now() - startedAt}ms`)
+    }
+  })
   handle(req, res).catch(error => {
     console.error(error)
     if (!res.headersSent) fail(res, 500, 2000)

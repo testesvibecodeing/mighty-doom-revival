@@ -2,10 +2,19 @@ export function nowSeconds () {
   return Math.floor(Date.now() / 1000)
 }
 
+export function formatServerTimestamp (date = new Date()) {
+  const pad = (n, w = 2) => String(n).padStart(w, '0')
+  return (
+    `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}` +
+    `T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`
+  )
+}
+
 export function wire (data = {}, code = 1000) {
-  // O cliente 1.13.1 faz DateTime.Parse(uts) em ParseServerTimestamp; o wire
-  // precisa ser string ISO 8601 UTC, não unix epoch numérico.
-  return { uts: new Date().toISOString(), code, ...data }
+  // O cliente 1.13.1 faz parse estrito do uts em ParseServerTimestamp; a chave
+  // do wire é "uts" sozinha no formato "yyyy-MM-ddTHH:mm:ss" UTC (confirmado
+  // por bisseção no emulador; unix epoch e "yyyy-MM-dd HH:mm:ss" falham).
+  return { uts: formatServerTimestamp(), code, ...data }
 }
 
 export function ok (ctx, data = {}) {
