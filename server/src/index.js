@@ -13,7 +13,8 @@ import { fail, gameGuard, ok, requireUser } from './protocol.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
 
 let runtime = loadRuntimeConfig()
-const dbPath = process.env.DB_PATH || 'server/runtime/revival.sqlite3'
+const defaultDbPath = resolve(import.meta.dirname, '..', 'runtime', 'revival.sqlite3')
+const dbPath = process.env.DB_PATH ? resolve(process.cwd(), process.env.DB_PATH) : defaultDbPath
 const repo = new Repository(dbPath)
 const app = new Koa({ proxy: String(process.env.TRUST_PROXY || 'true').toLowerCase() !== 'false' })
 const root = new Router()
@@ -84,11 +85,10 @@ game.post('/auth/register', ctx => {
   if (ctx.get('x-ubu-token')) return fail(ctx, 403, 2200)
 
   const { user, password } = repo.createUser()
-  let starter = null
 
   if (r.gameData && r.revival.auto_starter_bundle !== false) {
     try {
-      starter = seedStarterBundle(repo, user.id, r)
+      const starter = seedStarterBundle(repo, user.id, r)
       if (!starter.seeded) console.warn(`[starter] ${starter.reason}`)
     } catch (error) {
       console.warn(`[starter] falha ao aplicar bundle: ${error.message}`)
