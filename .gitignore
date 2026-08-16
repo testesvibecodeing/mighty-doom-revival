@@ -1,0 +1,47 @@
+# Proprietary game files - never commit
+*.apk
+*.xapk
+*.apks
+*.aab
+input/
+output/
+work/
+decompiled/
+jadx-out/
+dump/
+original/
+
+# Unity / reverse engineering generated data
+*.assets.resS
+il2cpp-output/
+Il2CppDumper-output/
+
+# Local certificates / signing material
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+*.pem
+!docs/examples/*.pem.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+.env
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs / temporary files
+*.log
+*.tmp
+*.bak
