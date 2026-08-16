@@ -1,4 +1,5 @@
 import { giveGameResource } from './game-data-model.js'
+import { tutorialSequences } from './game-data-schema.js'
 
 const NS = 'tutorial'
 const STATE_KEY = 'sequences'
@@ -12,14 +13,8 @@ function sequenceId (value) {
   return null
 }
 
-function definitions (runtime) {
-  return Array.isArray(runtime.gameData?.tutorial_sequences)
-    ? runtime.gameData.tutorial_sequences
-    : []
-}
-
 function definitionById (runtime, id) {
-  return definitions(runtime).find(value => sequenceId(value) === id) || null
+  return tutorialSequences(runtime.gameData).find(value => sequenceId(value) === id) || null
 }
 
 function completedRows (repo, userId) {
