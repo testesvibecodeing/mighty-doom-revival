@@ -37,6 +37,42 @@ function missionPoints (entry) {
   return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0
 }
 
+function missionStatId (entry) {
+  const mission = entry?.mission ?? entry
+  const candidates = [
+    mission?.stat_id,
+    mission?.stat?.id,
+    mission?.objective?.stat_id,
+    mission?.objective?.stat?.id,
+    entry?.stat_id
+  ]
+  for (const value of candidates) {
+    if (Number.isInteger(value)) return value
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function missionTarget (entry) {
+  const mission = entry?.mission ?? entry
+  const candidates = [
+    mission?.target,
+    mission?.amount,
+    mission?.required,
+    mission?.count,
+    mission?.objective?.target,
+    mission?.objective?.amount,
+    mission?.objective?.required,
+    mission?.objective?.count,
+    entry?.target
+  ]
+  for (const value of candidates) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  return null
+}
+
 function defaultMissionProgress (pass) {
   return missionDefinitions(pass)
     .map(entry => missionId(entry))
@@ -95,6 +131,46 @@ export function setBattlePassMissionProgress (repo, userId, runtime, seasonId, m
   if (completed) row.completed = true
   repo.setState(userId, NS, stateKey(seasonId), state)
   return true
+}
+
+export function applyBattlePassStatTotals (repo, userId, runtime, totals) {
+  if (!totals || typeof totals !== 'object') return []
+  const updates = []
+
+  for (const pass of storyBattlePasses(runtime.gameData)) {
+    if (!available(runtime, pass)) continue
+    const state = battlePassState(repo, userId, runtime, pass.id)
+    if (!state) continue
+
+    let changed = false
+    for (const definition of missionDefinitions(pass)) {
+      const id = missionId(definition)
+      const statId = missionStatId(definition)
+      const target = missionTarget(definition)
+      if (!Number.isInteger(id) || statId === null || target === null) continue
+
+      const raw = totals[String(statId)] ?? totals[statId]
+      const total = Number(raw)
+      if (!Number.isFinite(total) || total < 0) continue
+
+      const row = state.mission_progress.find(item => item.mission_id === id)
+      if (!row || row.claimed) continue
+
+      const next = Math.min(target, total)
+      const completed = next >= target
+      if (Number(row.progress || 0) === next && Boolean(row.completed) === completed) continue
+
+      row.progress = next
+      row.completed = completed
+      row.claim_state = completed ? 2 : 1
+      changed = true
+      updates.push({ season_id: pass.id, mission_id: id, progress: next, target, completed })
+    }
+
+    if (changed) repo.setState(userId, NS, stateKey(pass.id), state)
+  }
+
+  return updates
 }
 
 function alreadyClaimed (state, tierId, rewardId) {
