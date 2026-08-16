@@ -49,6 +49,9 @@ jobs:
       - name: Patcher exact-length regression
         run: python scripts/test_patch_apk.py
 
+      - name: Patcher primary Gear endpoint regression
+        run: python scripts/test_patch_primary_api_host.py
+
       - name: Patcher bundle-aware logic regression
         run: python scripts/test_patch_unity_bundle.py
 
