@@ -12,11 +12,12 @@ where npm >nul 2>nul || (echo [ERRO] npm nao encontrado no PATH.& exit /b 2)
 
 for /f "tokens=1 delims=." %%V in ('node -p "process.versions.node"') do set "NODE_MAJOR=%%V"
 if %NODE_MAJOR% LSS 24 (
-  echo [ERRO] Node.js 24+ necessario. Encontrado: 
+  echo [ERRO] Node.js 24+ necessario. Encontrado:
   node --version
   exit /b 2
 )
 
+if not exist "server\.env" copy /Y "server\.env.example" "server\.env" >nul
 if not exist "server\config\revival.json" copy /Y "server\config\revival.example.json" "server\config\revival.json" >nul
 if not exist "server\config\packs.json" copy /Y "server\config\packs.example.json" "server\config\packs.json" >nul
 if not exist "server\config\events.json" copy /Y "server\config\events.example.json" "server\config\events.json" >nul
@@ -37,6 +38,8 @@ echo [3/3] Preparacao concluida.
 popd
 
 echo.
+echo IMPORTANTE: edite server\.env e troque REVIVAL_ADMIN_TOKEN=change-me.
+echo.
 echo Para iniciar:
 echo   cd server
 echo   npm start
@@ -44,6 +47,6 @@ echo.
 echo Health check:
 echo   http://127.0.0.1:8080/revival/health
 echo.
-echo IMPORTANTE: para compatibilidade completa ainda sera necessario
- echo colocar o game-data validado em server\data\game-data.json.
+echo Para compatibilidade completa ainda sera necessario colocar o
+ echo game-data validado em server\data\game-data.json.
 exit /b 0
