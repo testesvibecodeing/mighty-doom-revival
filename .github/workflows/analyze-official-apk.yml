@@ -1,0 +1,62 @@
+name: Analyze official Mighty DOOM APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/analyze-official-apk.yml'
+      - 'scripts/fetch-uptodown-apk.py'
+      - 'scripts/analyze_apk.py'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare directories
+        run: mkdir -p input reports
+
+      - name: Download and verify official 1.13.1 APK
+        run: python scripts/fetch-uptodown-apk.py --output input/mighty-doom.apk
+
+      - name: Analyze APK without exporting proprietary content
+        run: |
+          python scripts/analyze_apk.py input/mighty-doom.apk \
+            --json-out reports/apk-1.13.1.json \
+            --md-out reports/apk-1.13.1.md
+
+      - name: Record runner metadata
+        run: |
+          {
+            echo '# CI metadata'
+            echo
+            echo "- Run: $GITHUB_RUN_ID"
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Date UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo '- APK binary was deleted before artifact upload.'
+          } > reports/ci.md
+
+      - name: Delete proprietary APK before artifact handling
+        if: always()
+        run: rm -f input/mighty-doom.apk input/*.part
+
+      - name: Upload sanitized reports only
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mighty-doom-apk-analysis
+          path: reports/
+          if-no-files-found: error
+          retention-days: 7
