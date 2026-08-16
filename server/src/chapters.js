@@ -1,5 +1,3 @@
-import { fail, ok } from './protocol.js'
-
 const NS = 'chapters'
 
 function asInt (value, fallback = null) {
@@ -65,57 +63,48 @@ export function chapterProgressionWire (repo, userId) {
   return progression(repo, userId)
 }
 
-export function installChapterRoutes (router, repo) {
-  router.post('/chapters/start', ctx => {
-    const userId = ctx.state.user.id
+export function handleChapterRequest (path, body, userId, repo) {
+  if (path === '/game/chapters/start') {
     const state = progression(repo, userId)
-    if (state.current_run) return fail(ctx, 409, 2000, { reason: 'run-already-active' })
-
-    const run = runFromBody(ctx.request.body)
-    if (!run) return fail(ctx, 400, 2200, { reason: 'chapter-required' })
-
+    if (state.current_run) return { error: [409, 2000, { reason: 'run-already-active' }] }
+    const run = runFromBody(body)
+    if (!run) return { error: [400, 2200, { reason: 'chapter-required' }] }
     saveProgression(repo, userId, { ...state, current_run: run })
-    ok(ctx, { current_run: run })
-  })
+    return { data: { current_run: run } }
+  }
 
-  router.post('/chapters/update', ctx => {
-    const userId = ctx.state.user.id
+  if (path === '/game/chapters/update') {
     const state = progression(repo, userId)
-    if (!state.current_run) return fail(ctx, 409, 2000, { reason: 'no-active-run' })
-
-    const currentRun = mergeRun(state.current_run, ctx.request.body)
+    if (!state.current_run) return { error: [409, 2000, { reason: 'no-active-run' }] }
+    const currentRun = mergeRun(state.current_run, body)
     saveProgression(repo, userId, { ...state, current_run: currentRun })
-    ok(ctx, { current_run: currentRun })
-  })
+    return { data: { current_run: currentRun } }
+  }
 
-  router.post('/chapters/revive', ctx => {
-    const userId = ctx.state.user.id
+  if (path === '/game/chapters/revive') {
     const state = progression(repo, userId)
-    if (!state.current_run) return fail(ctx, 409, 2000, { reason: 'no-active-run' })
-
+    if (!state.current_run) return { error: [409, 2000, { reason: 'no-active-run' }] }
     const currentRun = {
       ...state.current_run,
       revives: Math.max(0, Number(state.current_run.revives || 0)) + 1,
       updated_at: Math.floor(Date.now() / 1000)
     }
     saveProgression(repo, userId, { ...state, current_run: currentRun })
-    ok(ctx, { current_run: currentRun })
-  })
+    return { data: { current_run: currentRun } }
+  }
 
-  router.post('/chapters/end', ctx => {
-    const userId = ctx.state.user.id
+  if (path === '/game/chapters/end') {
     const state = progression(repo, userId)
-    if (!state.current_run) return fail(ctx, 409, 2000, { reason: 'no-active-run' })
-
-    const finalRun = mergeRun(state.current_run, ctx.request.body)
-    const next = recordCompletion(state, finalRun, ctx.request.body)
+    if (!state.current_run) return { error: [409, 2000, { reason: 'no-active-run' }] }
+    const finalRun = mergeRun(state.current_run, body)
+    const next = recordCompletion(state, finalRun, body)
     saveProgression(repo, userId, next)
-    ok(ctx, { chapter_progression: next, rewards: [] })
-  })
+    return { data: { chapter_progression: next, rewards: [] } }
+  }
 
-  // The client may request stage rewards separately. Until the exact reward
-  // table is validated, return an explicit empty grant instead of allowing the
-  // research fallback to pretend that a reward was delivered.
-  router.post('/chapters/stage-rewards', ctx => ok(ctx, { rewards: [] }))
-  router.post('/chapters/claim-stage-rewards', ctx => ok(ctx, { rewards: [] }))
+  if (path === '/game/chapters/stage-rewards' || path === '/game/chapters/claim-stage-rewards') {
+    return { data: { rewards: [] } }
+  }
+
+  return null
 }
