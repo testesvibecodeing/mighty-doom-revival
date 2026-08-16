@@ -9,6 +9,7 @@ import { Repository } from './db.js'
 import { eventProgress, eventSchedule } from './events.js'
 import { inventoryWire, seedStarterBundle, giveGameResource } from './game-data-model.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
+import { handleTutorialRequest, tutorialProgressionWire } from './tutorial.js'
 
 const serverRoot = resolve(import.meta.dirname, '..')
 const envPath = resolve(serverRoot, '.env')
@@ -141,7 +142,7 @@ function playerUserData (user) {
       inventory: inventoryWire(repo, user.id, runtime),
       chapter_progression: chapterProgressionWire(repo, user.id),
       talent_progression: { talents: [] },
-      tutorial_progression: { sequences: [] },
+      tutorial_progression: tutorialProgressionWire(repo, user.id),
       account_age: Math.max(0, nowSeconds() - user.created_at),
       player: {
         level: { current: user.level, max: user.level, details_current: {}, details_next: {} },
@@ -316,6 +317,9 @@ function handleAuthed (path, body, user, req) {
   const chapter = handleChapterRequest(path, body, user.id, repo)
   if (chapter) return chapter
 
+  const tutorial = handleTutorialRequest(path, body, user.id, repo, runtime)
+  if (tutorial) return tutorial
+
   if (path === '/game/player/game-data-token') {
     return {
       data: {
@@ -460,6 +464,18 @@ const server = createServer((req, res) => {
     if (!res.headersSent) fail(res, 500, 2000)
     else res.destroy()
   })
+})
+
+server.on('error', error => {
+  if (error?.code === 'EADDRINUSE') {
+    console.error(`[ERRO] Porta ${port} já está em uso em ${host}. Altere PORT no server/.env ou encerre o processo que ocupa a porta.`)
+  } else if (error?.code === 'EACCES') {
+    console.error(`[ERRO] Sem permissão para abrir ${host}:${port}.`)
+  } else {
+    console.error('[ERRO] Falha ao iniciar servidor:', error)
+  }
+  try { repo.close() } catch {}
+  process.exitCode = 2
 })
 
 server.listen(port, host, () => {
