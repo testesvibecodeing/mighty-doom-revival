@@ -4,7 +4,8 @@ import { resolve } from 'node:path'
 const ROOT = resolve(import.meta.dirname, '..')
 
 function pathFromEnv (name, fallback) {
-  return resolve(process.cwd(), process.env[name] || fallback)
+  const configured = process.env[name]
+  return configured ? resolve(process.cwd(), configured) : resolve(ROOT, fallback)
 }
 
 function readJson (path, fallback) {
@@ -41,10 +42,10 @@ function indexGameData (root) {
 }
 
 export function loadRuntimeConfig () {
-  const gameDataPath = pathFromEnv('GAME_DATA_PATH', 'server/data/game-data.json')
-  const revivalPath = pathFromEnv('REVIVAL_CONFIG_PATH', 'server/config/revival.json')
-  const packsPath = pathFromEnv('PACKS_CONFIG_PATH', 'server/config/packs.json')
-  const eventsPath = pathFromEnv('EVENTS_CONFIG_PATH', 'server/config/events.json')
+  const gameDataPath = pathFromEnv('GAME_DATA_PATH', 'data/game-data.json')
+  const revivalPath = pathFromEnv('REVIVAL_CONFIG_PATH', 'config/revival.json')
+  const packsPath = pathFromEnv('PACKS_CONFIG_PATH', 'config/packs.json')
+  const eventsPath = pathFromEnv('EVENTS_CONFIG_PATH', 'config/events.json')
 
   const gameData = readJson(gameDataPath, null)
   const revival = readJson(revivalPath, {
