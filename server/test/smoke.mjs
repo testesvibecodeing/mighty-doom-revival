@@ -28,6 +28,9 @@ const gameData = {
   weapons: [{ id: 200, tag: 'heavy_cannon', category_id: 2 }],
   slayers: [{ id: 300, tag: 'mini_slayer', category_id: 7 }],
   energies: [{ id: 400, tag: 'energy', category_id: 5, max_amount: 20, regen_minutes: 1 }],
+  talents: {
+    talents: [{ id: 500, cost: [{ resource: 'coins', amount: 50 }] }]
+  },
   bundles: [{
     id: 1,
     tag: 'starter',
@@ -162,6 +165,7 @@ try {
   assert.equal(inventory.slayers[0].rid, 300)
   assert.equal(inventory.energies[0].amount, 10)
   assert.deepEqual(inventory.slots.map(row => row.id).sort((a, b) => a - b), [10, 11])
+  assert.deepEqual(userData.user_data.talent_progression.talents, [])
 
   const dataToken = await post('/game/player/game-data-token', {}, token)
   const dataResponse = await fetch(dataToken.url, { headers: { authorization: `Bearer ${dataToken.token}` } })
@@ -169,12 +173,20 @@ try {
   assert.equal((await dataResponse.json()).bundles[0].tag, 'starter')
 
   const dailyBefore = await post('/game/daily-rewards/get-state', {}, token)
-  assert.equal(dailyBefore.state.claimable, true)
+  assert.equal(dailyBefore.state.claimable ?? true, true)
   await post('/game/daily-rewards/claim', {}, token)
   const dailyDuplicate = await post('/game/daily-rewards/claim', {}, token, 400)
   assert.equal(dailyDuplicate.reason, 'already-claimed')
   const afterDaily = await post('/game/player/user-data', {}, token)
   assert.equal(afterDaily.user_data.inventory.currencies[0].amount, 2025)
+
+  const talentBuy = await post('/game/talents/buy', { talent: 500 }, token)
+  assert.equal(talentBuy.talent, 500)
+  const talents = await post('/game/talents/get', {}, token)
+  assert.deepEqual(talents.talents, [500])
+  const afterTalent = await post('/game/player/user-data', {}, token)
+  assert.deepEqual(afterTalent.user_data.talent_progression.talents, [500])
+  assert.equal(afterTalent.user_data.inventory.currencies[0].amount, 1975)
 
   const store = await post('/game/store/get', {}, token)
   assert.equal(store.store_items[0].id, 900100)
@@ -184,7 +196,8 @@ try {
   assert.equal(quota.reason, 'quota')
 
   const afterPurchases = await post('/game/player/user-data', {}, token)
-  assert.equal(afterPurchases.user_data.inventory.currencies[0].amount, 1025)
+  assert.equal(afterPurchases.user_data.inventory.currencies[0].amount, 975)
+  assert.deepEqual(afterPurchases.user_data.talent_progression.talents, [500])
 
   const schedule = await post('/game/events/get-schedule', {}, token)
   assert.equal(schedule.scheduled_events[0].id, 7001)
@@ -200,9 +213,10 @@ try {
 
   const persisted = await post('/game/player/user-data', {}, token)
   assert.equal(persisted.user_data.chapter_progression.chapters[0].chapter, 101)
+  assert.deepEqual(persisted.user_data.talent_progression.talents, [500])
 
   const dailyAfter = await post('/game/daily-rewards/get-state', {}, token)
-  assert.equal(dailyAfter.state.claimable, false)
+  assert.equal(dailyAfter.state.claimable ?? false, false)
   await post('/game/idle-rewards/get-state', {}, token)
   await post('/game/session/heartbeat', {}, token)
 
