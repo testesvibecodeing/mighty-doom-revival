@@ -6,6 +6,7 @@ import Router from '@koa/router'
 import { bodyParser } from '@koa/bodyparser'
 
 import { installBaselineRoutes } from './baseline.js'
+import { chapterProgressionWire, installChapterRoutes } from './chapters.js'
 import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
 import { eventProgress, eventSchedule } from './events.js'
@@ -161,6 +162,7 @@ authed.use(async (ctx, next) => {
 })
 
 installBaselineRoutes(authed, repo, currentRuntime)
+installChapterRoutes(authed, repo)
 
 authed.post('/player/game-data-token', ctx => {
   const r = currentRuntime()
@@ -184,7 +186,7 @@ authed.post('/player/user-data', ctx => {
   ok(ctx, {
     user_data: {
       inventory: inventoryWire(repo, user.id, r),
-      chapter_progression: { chapters: [], challenges: [], current_run: null },
+      chapter_progression: chapterProgressionWire(repo, user.id),
       talent_progression: { talents: [] },
       tutorial_progression: { sequences: [] },
       account_age: Math.max(0, Math.floor(Date.now() / 1000) - user.created_at),
