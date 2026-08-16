@@ -1,16 +1,10 @@
 name: Revival server CI
 
+# Temporariamente manual: o GitHub está recusando iniciar runners nesta conta
+# por configuração de Billing/Spending Limit. Reative push/pull_request quando
+# Actions voltar a iniciar jobs normalmente.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/server-ci.yml'
-      - 'server/**'
-      - 'docker-compose.yml'
-  pull_request:
-    paths:
-      - 'server/**'
-      - 'docker-compose.yml'
 
 permissions:
   contents: read
