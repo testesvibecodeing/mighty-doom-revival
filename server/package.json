@@ -1,22 +1,17 @@
 {
   "name": "mighty-doom-revival-server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Standalone clean-room compatibility server for personal Mighty DOOM preservation",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "check": "node --check src/index.js && node --check src/baseline.js && node --check src/chapters.js && node --check src/game-data-model.js && node --check src/config.js && node --check src/db.js && node --check src/protocol.js && node --check src/store.js && node --check src/events.js"
+    "check": "node --check src/index.js && node --check src/chapters.js && node --check src/game-data-model.js && node --check src/config.js && node --check src/db.js && node --check src/store.js && node --check src/events.js && node --check test/smoke.mjs",
+    "smoke": "node test/smoke.mjs",
+    "test": "npm run check && npm run smoke"
   },
   "engines": {
-    "node": ">=24.0.0",
-    "npm": ">=11.0.0"
-  },
-  "dependencies": {
-    "@koa/bodyparser": "^6.1.0",
-    "@koa/router": "^15.4.0",
-    "better-sqlite3": "^12.8.0",
-    "koa": "^3.1.2"
+    "node": ">=22.5.0"
   }
 }
