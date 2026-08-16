@@ -26,12 +26,12 @@ Este arquivo é o ponto de retomada técnico do projeto. Atualize-o quando um fl
 | Ads externos | ⛔ | desativados |
 | Custom events | ✅ | schedule/progress testados |
 | Battle Pass arquivado | ✅/🧪 | start/mission/tier/premium reward testados; progressão automática por stats ainda pendente |
-| Daily rewards | 🧪 | get-state + claim marker; recompensa real pendente |
-| Idle rewards | 🧪 | estado/generation baseline; claim/boost pendentes |
+| Daily rewards | ✅/🧪 | estado, claim e persistência cobertos por regressão; validar payload/recompensas no APK real |
+| Idle rewards | ✅/🧪 | geração, claim e persistência cobertos por regressão; boost e validação no APK real pendentes |
 | Daily quests | 🧪 | endpoint explícito; geração/progresso/claim pendentes |
-| Gear upgrades/cosmetics | 🔬 | protocolo conhecido, implementação Revival pendente |
-| Slayer upgrades/cosmetics | 🔬 | protocolo conhecido, implementação Revival pendente |
-| Talents | 🔬 | `/talents/buy` e GameData conhecidos, implementação pendente |
+| Gear upgrades | 🧪 | upgrade e multi-upgrade transacionais por custos do GameData; validar schema real do dataset/APK |
+| Slayer upgrades | 🧪 | upgrade transacional com moedas/recursos internos e level cap; validar schema real do dataset/APK |
+| Talents | 🧪 | get/buy, pré-requisitos, custos e persistência implementados; validar payload real do cliente |
 | Reward tracks | 🔬 | baseline existe; progress/claim pendentes |
 | Inbox | 🧪 | lista segura vazia; mensagens/grants pendentes |
 | Identity externa | ⛔ | Google/Game Center/Xbox não necessários ao servidor pessoal |
@@ -51,6 +51,20 @@ Formato confirmado pelo backend comunitário preservado:
 - `story_battle_passes`
 
 `server/src/game-data-schema.js` normaliza esse layout e também aceita alguns nomes usados por snapshots alternativos.
+
+## Progressão Gear / Slayer / Talents
+
+`server/src/progression.js` acrescenta uma camada conservadora para os endpoints conhecidos de progressão:
+
+- `/game/gear/upgrade`;
+- `/game/gear/multi-upgrade`;
+- `/game/slayers/upgrade`;
+- `/game/talents/get`;
+- `/game/talents/buy`.
+
+O servidor nunca inventa um upgrade gratuito quando o GameData não fornece custo: retorna `upgrade-cost-missing`/`talent-cost-missing`. Custos são debitados de forma transacional usando apenas recursos/moedas internas já existentes no perfil. Falha de saldo, cap de nível ou pré-requisito causa rollback integral.
+
+A regressão sintética em `server/test/progression.mjs` cobre upgrade simples, multi-upgrade, cap, Slayer com dois recursos de custo, pré-requisito de talento, compra e proteção contra compra duplicada. Ainda é obrigatório confirmar os nomes/campos exatos do GameData final e os payloads emitidos pelo APK 1.13.1.
 
 ## Battle Pass / modo arquivo
 
@@ -119,11 +133,11 @@ Os testes locais são a fonte atual de validação.
 
 ## Próxima ordem de trabalho
 
-1. validar/importar GameData comunitário completo contra `game-data-schema.js`;
-2. implementar Gear, Slayer e Talents usando custos/limites do GameData;
-3. implementar Daily/Idle rewards e Quests completos;
-4. completar chapter rewards/loot e progressão de jogador;
-5. alimentar progressão de Battle Pass via stats/missões;
+1. validar/importar GameData comunitário completo contra `game-data-schema.js` e os novos leitores de custo de progressão;
+2. implementar Daily Quests completos e Reward Tracks;
+3. completar chapter rewards/loot e progressão de jogador;
+4. alimentar progressão de Battle Pass via stats/missões;
+5. implementar inbox/grants necessários pelos eventos preservados;
 6. executar `scripts/analyze-official-apk.bat` em ambiente com acesso ao APK;
 7. executar `scripts/patch-apk.bat` no APK real;
 8. apontar `d.debruinsistemas.com.br` para um Revival HTTPS válido;
