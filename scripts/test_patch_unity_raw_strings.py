@@ -68,10 +68,15 @@ def main() -> int:
         raise AssertionError("raw binary hostname without Unity string envelope was patched")
 
     # Non-zero padding is not a valid aligned Unity string candidate and must
-    # remain blocked.
-    payload = source.encode()
-    malformed = len(payload).to_bytes(4, "little") + payload
-    malformed += b"\xff" * (((4 + len(payload) + 3) & ~3) - (4 + len(payload)))
+    # remain blocked. `source` (KNOWN_HOSTS[0]) is 24 bytes, so its 4-byte
+    # length prefix plus payload already lands on a 4-byte boundary with no
+    # padding at all -- there would be nothing to corrupt. Use `other`
+    # (KNOWN_HOSTS[1], 41 bytes) instead: its prefix+payload is unaligned, so
+    # real padding bytes exist and can be poisoned with non-zero bytes.
+    payload = other.encode()
+    pad_len = (((4 + len(payload) + 3) & ~3) - (4 + len(payload)))
+    assert pad_len > 0, "test host must require real alignment padding"
+    malformed = len(payload).to_bytes(4, "little") + payload + (b"\xff" * pad_len)
     try:
         patch_serialized_strings(malformed, target)
     except RawStringPatchError:
