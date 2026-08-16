@@ -1,4 +1,5 @@
 import { resolveResource } from './config.js'
+import { giveGameResource } from './game-data-model.js'
 
 function utcBucket (period) {
   const d = new Date()
@@ -83,7 +84,7 @@ export function purchasePack (repo, userId, itemId, runtime) {
     amount: Number(x.amount || 0),
     kind: x.kind || 'currency'
   }))
-  if (costs.some(x => x.kind !== 'currency' || x.amount < 0)) {
+  if (costs.some(x => x.kind !== 'currency' || !Number.isFinite(x.amount) || x.amount < 0)) {
     return { ok: false, reason: 'invalid-cost' }
   }
   for (const cost of costs) {
@@ -95,16 +96,8 @@ export function purchasePack (repo, userId, itemId, runtime) {
     for (const cost of costs) repo.addCurrency(userId, cost.rid, -cost.amount)
 
     for (const reward of (pack.contents || [])) {
-      const rid = resolveResource(reward.resource ?? reward.rid, runtime)
-      const kind = reward.kind || 'currency'
-      const wire = wireResource(reward, runtime)
-      if (kind === 'currency') {
-        repo.addCurrency(userId, rid, Number(reward.amount || 0))
-        grants.push(wire)
-      } else {
-        const uid = repo.addItem(userId, { ...wire, kind })
-        grants.push({ ...wire, uid })
-      }
+      const grant = giveGameResource(repo, userId, reward, runtime)
+      grants.push(grant.wire)
     }
     repo.incrementPurchase(userId, itemId, bucket)
   })
