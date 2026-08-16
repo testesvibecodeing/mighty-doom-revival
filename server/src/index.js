@@ -4,6 +4,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { loadEnvFile } from 'node:process'
 
 import { chapterProgressionWire, handleChapterRequest } from './chapters.js'
+import { handleCompatRequest } from './compat.js'
 import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
 import { eventProgress, eventSchedule } from './events.js'
@@ -313,6 +314,9 @@ function handleBaseline (path, body, user) {
 function handleAuthed (path, body, user, req) {
   const baseline = handleBaseline(path, body, user)
   if (baseline) return baseline
+
+  const compat = handleCompatRequest(path, body, user.id, repo, runtime)
+  if (compat) return compat
 
   const chapter = handleChapterRequest(path, body, user.id, repo)
   if (chapter) return chapter
