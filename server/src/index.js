@@ -9,6 +9,7 @@ import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
 import { eventProgress, eventSchedule } from './events.js'
 import { inventoryWire, seedStarterBundle, giveGameResource } from './game-data-model.js'
+import { playerStatsWire, incrementPlayerStats } from './stats.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
 import { handleTutorialRequest, tutorialProgressionWire } from './tutorial.js'
 
@@ -148,7 +149,7 @@ function playerUserData (user) {
       player: {
         level: { current: user.level, max: user.level, details_current: {}, details_next: {} },
         chapter_progression: user.chapter_progression,
-        stats: []
+        stats: playerStatsWire(repo, user.id)
       },
       total_attempt_count: user.attempt_count,
       player_settings: settings
@@ -307,7 +308,10 @@ function handleBaseline (path, body, user) {
     return { data: { sequence_id: repo.getState(user.id, 'inventory', 'equip_sequence_id', 0) } }
   }
 
-  if (path === '/game/player/increment-stats') return { data: {} }
+  if (path === '/game/player/increment-stats') {
+    incrementPlayerStats(repo, user.id, body, runtime)
+    return { data: {} }
+  }
   return null
 }
 
