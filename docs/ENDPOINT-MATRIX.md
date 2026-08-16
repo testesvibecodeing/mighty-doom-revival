@@ -20,7 +20,7 @@ Legenda:
 | ads | ⛔ | anúncios externos desativados |
 | events | 🧪 | schedule, args e estado por jogador |
 | battle-pass | 🔬 | schedule/state preparados; claims, tiers, season e stats pendentes |
-| chapters | 🔬 | start/update/end/revive/stage rewards pendentes |
+| chapters | 🧪 | start/update/revive/end persistentes; user-data reflete current_run; grants/stage rewards ainda aguardam schema real |
 | daily-rewards | 🧪 | get-state baseline; claim pendente |
 | idle-rewards | 🧪 | get-state + geração por progresso; claims/boost pendentes |
 | inbox | 🧪 | lista vazia segura; grants/messages pendentes |
@@ -44,6 +44,18 @@ Com `game-data.json` carregado, o registro tenta reproduzir o bootstrap necessá
 5. equipa automaticamente a primeira arma e o primeiro Slayer concedidos pelo starter bundle.
 
 Isso evita hardcode de IDs e permite seguir exatamente a cópia de game data usada pelo cliente.
+
+## Estado de capítulos
+
+O Revival agora persiste o ciclo básico de uma tentativa de capítulo em `user_state`:
+
+1. `/chapters/start` cria `current_run` com capítulo/challenge/stage;
+2. `/chapters/update` preserva avanço, checkpoint e stats recebidos;
+3. `/chapters/revive` incrementa o contador de revives da tentativa atual;
+4. `/chapters/end` encerra a tentativa e registra a conclusão básica;
+5. `/player/user-data` devolve a mesma progressão persistida após reiniciar o servidor.
+
+Os endpoints de stage rewards respondem grant vazio de forma explícita até o formato real ser validado. Eles não usam o fallback genérico do `RESEARCH_MODE`, evitando marcar recompensa fictícia como entregue.
 
 ## Categorias de recurso modeladas
 
