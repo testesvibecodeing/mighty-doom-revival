@@ -15,6 +15,22 @@
 
 const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js')
 
+// Vertex shader do quad fullscreen (clip space direto, ignora a câmera).
+const SMOKE_VERT = `
+varying vec2 vUv;
+void main(){
+  vUv = uv;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}`
+
+// Vertex shader padrão dos materiais de superfície (disco/anel do portal).
+const SURFACE_VERT = `
+varying vec2 vUv;
+void main(){
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`
+
 const SMOKE_FRAG = `
 uniform float uTime;
 uniform vec2 uRes;
@@ -120,6 +136,7 @@ export function startHellScene (canvas) {
   const isSmall = Math.min(innerWidth, innerHeight) < 700
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, isSmall ? 1.5 : 1.75))
   renderer.setSize(innerWidth, innerHeight)
+  renderer.setClearColor(0x050201, 1)
   renderer.autoClear = false
 
   // --- pass 1: fumaça de fundo (fullscreen) ---
@@ -131,15 +148,18 @@ export function startHellScene (canvas) {
     uMouse: { value: new THREE.Vector2(0.62, 0.4) },
     uSurge: { value: 0 }
   }
-  smokeScene.add(new THREE.Mesh(
+  const smokeMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),
     new THREE.ShaderMaterial({
+      vertexShader: SMOKE_VERT,
       fragmentShader: SMOKE_FRAG,
       uniforms: smokeUniforms,
       depthWrite: false,
       depthTest: false
     })
-  ))
+  )
+  smokeMesh.frustumCulled = false
+  smokeScene.add(smokeMesh)
 
   // --- cena principal: portal + brasas ---
   const scene = new THREE.Scene()
@@ -153,6 +173,7 @@ export function startHellScene (canvas) {
   portal.add(new THREE.Mesh(
     new THREE.CircleGeometry(2.05, 72),
     new THREE.ShaderMaterial({
+      vertexShader: SURFACE_VERT,
       fragmentShader: PORTAL_DISC_FRAG,
       uniforms: discUniforms,
       transparent: true,
@@ -165,6 +186,7 @@ export function startHellScene (canvas) {
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(2.18, 0.055, 12, 128),
     new THREE.ShaderMaterial({
+      vertexShader: SURFACE_VERT,
       fragmentShader: PORTAL_RING_FRAG,
       uniforms: ringUniforms,
       transparent: true,
@@ -192,14 +214,16 @@ export function startHellScene (canvas) {
     portal.add(runes)
   }
 
+  let portalBaseScale = 1
   const placePortal = () => {
     if (isSmall) {
-      portal.position.set(0, 1.15, -3.2)
-      portal.scale.setScalar(0.62)
+      portal.position.set(0, 1.05, -3.2)
+      portalBaseScale = 0.72
     } else {
       portal.position.set(4.05, -0.2, -1.6)
-      portal.scale.setScalar(1)
+      portalBaseScale = 1
     }
+    portal.scale.setScalar(portalBaseScale)
   }
   placePortal()
 
@@ -303,7 +327,7 @@ export function startHellScene (canvas) {
     ring.rotation.z = t * 0.12
     runes.rotation.z = -t * 0.09
     const pulse = 1 + Math.sin(t * 1.35) * 0.035 + surge * 0.1
-    portal.scale.setScalar((isSmall ? 0.62 : 1) * pulse)
+    portal.scale.setScalar(portalBaseScale * pulse)
     embers.rotation.z = Math.sin(t * 0.05) * 0.03
 
     camera.position.x += (mx * 0.55 - camera.position.x) * 0.04
