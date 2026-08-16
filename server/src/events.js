@@ -1,3 +1,6 @@
+import { activeBattlePassStates } from './battle-pass.js'
+import { archiveMode, storyBattlePasses } from './game-data-schema.js'
+
 function asEpoch (value) {
   if (value === null || value === undefined) return null
   if (typeof value === 'number') return value
@@ -16,20 +19,42 @@ function active (event, now) {
   return true
 }
 
+function wireEvent (event, archive = false) {
+  return {
+    id: event.id,
+    event_definition_id: event.event_definition_id ?? event.id,
+    start_time: archive ? null : asEpoch(event.start_time),
+    end_time: archive ? null : asEpoch(event.end_time),
+    availability: event.availability ?? 1,
+    min_api_version: event.min_api_version ?? null,
+    max_api_version: event.max_api_version ?? null,
+    stop_time: null,
+    event_type: event.event_type ?? 0,
+    args: Buffer.from(JSON.stringify(event.args || {}), 'utf8').toString('base64')
+  }
+}
+
 export function eventSchedule (runtime) {
   const now = Math.floor(Date.now() / 1000)
-  return runtime.events.filter(x => active(x, now)).map(x => ({
-    id: x.id,
-    event_definition_id: x.event_definition_id ?? x.id,
-    start_time: asEpoch(x.start_time),
-    end_time: asEpoch(x.end_time),
-    availability: x.availability ?? 1,
-    min_api_version: x.min_api_version ?? null,
-    max_api_version: x.max_api_version ?? null,
-    stop_time: null,
-    event_type: x.event_type ?? 0,
-    args: Buffer.from(JSON.stringify(x.args || {}), 'utf8').toString('base64')
-  }))
+  const schedule = []
+  const ids = new Set()
+
+  for (const event of runtime.events.filter(x => active(x, now))) {
+    const wire = wireEvent(event, false)
+    schedule.push(wire)
+    ids.add(String(wire.id))
+  }
+
+  const archive = archiveMode(runtime)
+  for (const pass of storyBattlePasses(runtime.gameData)) {
+    if (Number(pass?.availability ?? 1) < 1) continue
+    if (!archive && !active(pass, now)) continue
+    if (ids.has(String(pass.id))) continue
+    schedule.push(wireEvent(pass, archive))
+    ids.add(String(pass.id))
+  }
+
+  return schedule
 }
 
 export function eventProgress (repo, userId, runtime) {
@@ -48,5 +73,12 @@ export function eventProgress (repo, userId, runtime) {
     else if (channel === 'store_offer') result.store_offer_events_states.push(state)
     else result.game_mode_events_progress.push(state)
   }
+
+  const existing = new Set(result.battle_pass_events_states.map(state => String(state?.season_id ?? state?.event_id ?? '')))
+  for (const state of activeBattlePassStates(repo, userId, runtime)) {
+    if (existing.has(String(state.season_id))) continue
+    result.battle_pass_events_states.push(state)
+  }
+
   return result
 }
