@@ -22,20 +22,19 @@ ARM64 / IL2CPP
 
 Instale e deixe no `PATH`:
 
-- Python 3.11+
+- Python 3.11+ (com `UnityPy==1.25.3`; o patcher instala sozinho se faltar)
 - Java/JDK 17+
-- apktool
-- Android SDK Build Tools (`zipalign` e `apksigner`)
 - ADB, recomendado para instalação/testes
+
+O `apktool.jar` e o `uber-apk-signer.jar` são baixados automaticamente para
+`.tools\` pelo `scripts\setup-patcher-tools.bat`/`.sh` — não é preciso instalar
+apktool/zipalign/apksigner do Android SDK; o signer cuida de alinhar e assinar.
 
 Confirme no Prompt/PowerShell:
 
 ```bat
 python --version
 java -version
-apktool --version
-zipalign -h
-apksigner version
 adb version
 ```
 
@@ -103,6 +102,12 @@ Depois de `apktool d`, o patcher:
   string literals do IL2CPP) procurando hosts conhecidos;
 - troca cada ocorrência do host oficial por outra de **exatamente o mesmo
   tamanho binário** (detalhes abaixo);
+- no fallback bundle-aware, varre **todos** os `.bundle` de `assets/aa/` com
+  UnityPy: reescreve o campo do host em objetos serializados (typetree) e, se
+  restarem bytes oficiais, aplica o patch raw-string em strings Unity
+  comprovadas (com comprimento/alinhamento válidos);
+- zera o `m_Crc` do catálogo Addressables para cada bundle alterado
+  (detalhes abaixo);
 - recompila, alinha e assina o APK.
 
 ## Como o patch lida com o tamanho (e por que hostname maior é bloqueado)
@@ -139,14 +144,49 @@ slayersclub.bethesda.net                  -> 24 bytes ASCII
 game.9095be396f3547555fe1039cbc894c88.net -> 41 bytes ASCII
 ```
 
-## Próxima etapa: patch bundle-aware / metadata-aware
+## Patch bundle-aware (implementado e validado no 1.13.1)
 
-Para aceitar um hostname maior que o oficial, o patcher vai precisar
-reconstruir corretamente as duas seções do `global-metadata.dat` citadas
-acima (e ainda o caminho bundle-aware para Addressables, caso um build futuro
-mova o endpoint para lá). Até isso existir, use um hostname com no máximo
-24 bytes — `check_patch_length.py` avisa o limite antes de você perder tempo
-com o apktool.
+No build real 1.13.1, o endpoint da API de gameplay **não** está como ASCII
+no `global-metadata.dat` — ele vive dentro de bundles Addressables
+comprimidos em LZ4, como campo de um objeto Unity serializado (o
+`ProdGameServer` guarda a `baseUrl`). Por isso um scan ASCII cru do ZIP não
+encontra nada: é preciso deixar a UnityPy decodificar o bundle e resserializar
+o objeto com o novo host. Quando o patch direto (etapa 4) devolve exit 4, o
+patcher reexecuta com `--sweep-all-bundles`:
+
+1. para cada `assets/aa/**/*.bundle`, `patch_bundle()` resserializa objetos
+   serializáveis cujo campo string contém um host oficial;
+2. se ainda restarem bytes oficiais no payload bruto, `patch_raw_bundle()`
+   só troca o que for comprovadamente uma string Unity serializada
+   (comprimento/alinhamento consistentes) — nada de busca-e-substituição às
+   cegas;
+3. se **algo** mudou no bundle, `zero_catalog_crc()` zera o `m_Crc` daquele
+   bundle no `assets/aa/catalog.json`.
+
+### Por que zerar o m_Crc do catálogo
+
+O `catalog.json` do Addressables guarda, por bundle, o `AssetBundleRequestOptions`
+com o CRC **do build oficial** (serializado como JSON UTF-16LE dentro do
+base64 de `m_ExtraDataString`). Qualquer resserialização muda o CRC real e a
+Unity recusa carregar o bundle em runtime com `CRC Mismatch ... Will not
+load AssetBundle` — o load de cena cai com um `RemoteProviderException`
+"Invalid path" enganoso no logcat. A Unity só valida CRC quando o valor é
+não-zero, então o zero_catalog_crc troca os dígitos por `"0"` + espaços
+(comprimento em bytes idêntico; espaço entre tokens é JSON válido), sem
+deslocar os offsets do stream apontados pelas entradas do catálogo. O bundle
+é identificado pelo hash de 32 hex presente no nome do arquivo.
+
+Esse foi o último bloqueio do 1.13.1: sem o zero, o APK patcheado abria o
+menu e derrubava ao carregar a cena; com o zero, o jogo carrega e joga
+normalmente (validado em emulador Android com gameplay completo).
+
+### Validação no 1.13.1
+
+O pipeline completo (`patch-apk.bat` → bundle-aware → assinatura) foi
+executado no APK real 1.13.1 e o APK resultante foi instalado em um emulador
+Android: registro de conta, login, bootstrap de sessão e um run completo do
+estágio 1-1 (vitória, recompensas, desbloqueio do 1-2) contra o servidor
+Revival em VPS.
 
 ## Certificado HTTPS
 
@@ -185,12 +225,20 @@ adb install output\mighty-doom-revival.apk
 
 ## Diagnóstico
 
-Se o patcher parar com `needs_bundle_aware_patch`, isso não é uma falha inesperada: significa que ele encontrou a configuração, mas se recusou a corromper o bundle ao trocar por uma string de tamanho diferente.
+Se o patcher parar com `needs_raw_object_mapping` /
+`needs_typetree_mapping` / `needs_object_mapping`, isso não é uma falha
+inesperada: significa que ele encontrou bytes do host oficial em um bundle,
+mas se recusou a alterá-los sem provar que a troca é estruturalmente segura
+(string Unity serializada com comprimento/alinhamento consistentes).
 
-O arquivo abaixo terá os detalhes:
+O arquivo abaixo terá os detalhes, incluindo type/path_id dos objetos
+envolvidos para um mapeamento manual:
 
 ```text
 work\apk-patch\patch-report.json
 ```
 
-Quando tivermos o APK alvo em mãos, esse relatório mais a análise direta do bundle será a base para concluir o patcher de hostname arbitrário.
+No emulador, `adb logcat` é o instrumento principal: `CRC Mismatch` /
+`RemoteProviderException` apontam para um bundle alterado sem o zero do
+catálogo; `Malformed response payload` aponta para o contrato JSON do
+servidor, não para o APK.

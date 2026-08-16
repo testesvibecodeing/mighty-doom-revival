@@ -1103,12 +1103,13 @@ adb install output/mighty-doom-revival.apk</code></pre>
         <ul class="checklist" id="dod-checklist">
           <li><input type="checkbox" id="dod-1"><label for="dod-1">APK validado por SHA-256</label></li>
           <li><input type="checkbox" id="dod-2"><label for="dod-2">APK patchado com sucesso (etapa 05)</label></li>
-          <li><input type="checkbox" id="dod-3"><label for="dod-3">APK assinado e instalado no celular</label></li>
+          <li><input type="checkbox" id="dod-3"><label for="dod-3">APK assinado e instalado no celular/emulador</label></li>
           <li><input type="checkbox" id="dod-4"><label for="dod-4">Jogo abre sem crashar</label></li>
           <li><input type="checkbox" id="dod-5"><label for="dod-5">HTTPS/TLS conecta (sem erro de certificado)</label></li>
           <li><input type="checkbox" id="dod-6"><label for="dod-6">Login/auth funciona</label></li>
           <li><input type="checkbox" id="dod-7"><label for="dod-7">Menu e inventário aparecem</label></li>
-          <li><input type="checkbox" id="dod-8"><label for="dod-8">Progresso se mantém ao fechar e reabrir o jogo</label></li>
+          <li><input type="checkbox" id="dod-8"><label for="dod-8">Partida completa funciona (PLAY → combate → vitória → recompensas)</label></li>
+          <li><input type="checkbox" id="dod-9"><label for="dod-9">Progresso se mantém ao fechar e reabrir o jogo</label></li>
         </ul>
 
         <h3>Problemas comuns</h3>
@@ -1127,9 +1128,19 @@ adb install output/mighty-doom-revival.apk</code></pre>
                 <td>instale Node.js 24 LTS</td>
               </tr>
               <tr>
-                <td>Patcher para em <code class="inline">needs_bundle_aware_patch</code></td>
-                <td>hostname escolhido tem tamanho diferente do host original dentro do bundle Unity</td>
-                <td>veja <code class="inline">work/apk-patch/patch-report.json</code>; use um hostname com no máximo 24 bytes (menor funciona: o patcher preenche a URL com padding)</td>
+                <td>Patcher para em <code class="inline">needs_raw_object_mapping</code> / <code class="inline">needs_typetree_mapping</code></td>
+                <td>restaram bytes do host oficial em um bundle que não puderam ser provados como string Unity serializada segura</td>
+                <td>veja <code class="inline">work/apk-patch/patch-report.json</code> (type/path_id dos objetos); o limite de 24 bytes só se aplica às ocorrências no <code class="inline">global-metadata.dat</code> — o caminho bundle-aware resserializa e aceita qualquer comprimento</td>
+              </tr>
+              <tr>
+                <td>Jogo abre o menu e trava/fecha ao carregar a cena (<code class="inline">CRC Mismatch</code> / <code class="inline">RemoteProviderException</code> no logcat)</td>
+                <td>um bundle Addressables foi alterado mas o <code class="inline">m_Crc</code> dele não foi zerado no <code class="inline">assets/aa/catalog.json</code></td>
+                <td>o patcher atual zera sozinho após qualquer mutação; se o sintoma aparecer, rode o patcher novamente a partir do APK original</td>
+              </tr>
+              <tr>
+                <td>Logcat mostra <code class="inline">Malformed response payload</code> e o boot aborta após 3 tentativas</td>
+                <td>contrato JSON do servidor: campo numérico não-nullable indo como <code class="inline">null</code> (ex.: <code class="inline">min_api_version</code> no schedule) ou campo fora do DTO</td>
+                <td>consulte o contrato confirmado em <code class="inline">docs/IMPLEMENTATION-STATUS.md</code>; o servidor atual já omite nulls no schedule</td>
               </tr>
               <tr>
                 <td><code class="inline">install.sh</code> falha ao emitir o certificado HTTPS</td>

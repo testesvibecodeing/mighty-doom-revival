@@ -25,7 +25,7 @@ Este arquivo é o ponto de retomada técnico do projeto. Atualize-o quando um fl
 | Store Revival | ✅ | compra transacional, quotas e moeda interna |
 | IAP dinheiro real | ⛔ | explicitamente bloqueado |
 | Ads externos | ⛔ | desativados |
-| Custom events | ✅ | schedule/progress testados |
+| Custom events | ✅ | schedule/progress testados e validados no cliente real (get-schedule/get-progress no boot da sessão) |
 | Battle Pass arquivado | ✅/🧪 | start/mission/tier/premium reward testados; missões declarativas por stat agora recebem progresso automático |
 | Daily rewards | ✅/🧪 | estado, claim e persistência cobertos por regressão; validar payload/recompensas no APK real |
 | Idle rewards | ✅/🧪 | geração, claim e persistência cobertos por regressão; boost e validação no APK real pendentes |
@@ -128,18 +128,21 @@ O APK real 1.13.1 (`input/mighty-doom.apk`, SHA-256 alvo confirmado) foi baixado
 - Novo gate `scripts/check_patch_length.py` roda antes do apktool (só lê o ZIP) e avisa incompatibilidade de comprimento antes do usuário esperar o decode; já plugado em `patch-apk.bat`/`.sh`.
 - Manifest/TLS são atualizados; hostname incompatível é recusado antes de alterar o bundle/metadata; verificação final rejeita APK que ainda contenha hosts oficiais.
 - Login local (`/game/auth/register` + `/game/auth/login-device`) testado via smoke test real; login social (`/game/auth/login-google-play-games`, `/game/auth/login-game-center`, `/game/identity/link-*`) já é rejeitado pelo servidor (400/2000) — decisão do projeto: bloqueio no servidor é suficiente, sem remover o botão da UI do cliente por ora.
+- **Pipeline completo executado no APK real 1.13.1**: `apktool d`/`b`, patch direto + fallback bundle-aware com `--sweep-all-bundles` (o endpoint da API vive em um bundle Addressables LZ4 como campo de objeto Unity serializado — `ProdGameServer.baseUrl` — não como ASCII no `global-metadata.dat`), patch raw-string com prova estrutural, assinatura com `uber-apk-signer` (`output/mighty-doom-revival.apk`).
+- **CRC do catálogo Addressables**: qualquer bundle resserializado precisa do `m_Crc` zerado no `assets/aa/catalog.json` (JSON UTF-16LE dentro do base64 de `m_ExtraDataString`; a Unity só valida CRC não-zero). Sem isso o app abre o menu e derruba o load de cena com `CRC Mismatch` / `RemoteProviderException` "Invalid path". Implementado em `zero_catalog_crc` com substituição de mesmo comprimento; regressão em `tests/test_zero_catalog_crc.py`.
+- **Instalado e jogado em emulador Android real** (conta criada via register dentro do app, login-device, bootstrap de sessão completo — login-device → game-data-token → user-data → armory/get → get-schedule → get-progress → session/refresh — menu com eventos do servidor, e gameplay completa do estágio 1-1: combate, vitória, recompensas e desbloqueio do 1-2).
+- Handshake HTTPS do APK real contra o Revival confirmado (Let's Encrypt na VPS; requisições do emulador visíveis no access.log).
 
-Testes: `scripts/test_patch_apk.py`, `scripts/test_patch_unity_bundle.py`, `scripts/test_check_patch_length.py` e `scripts/test_verify_patched_apk.py`.
+### Contrato do cliente 1.13.1 confirmado no emulador
+
+- `uts`: a chave do timestamp do servidor é `uts` **sozinha**, formato `yyyy-MM-ddTHH:mm:ss` UTC (bisseção: unix epoch, `yyyy-MM-dd HH:mm:ss` e chaves extras falham no `ParseServerTimestamp` do `StartSession`).
+- `armory/get`: `ArmoryController.Init(upgrades)` faz `foreach` — sem o array no wire a desserialização deixa null e NRE-derruba o boot; resposta envia `upgrades: []`.
+- `events/get-schedule`: o DTO do cliente (cluster do `global-metadata`) é `id, event_definition_id, start_time, end_time, availability, min_api_version, max_api_version, stop_time, args` — **sem** `event_type`; campos numéricos não-nullable enviados como `null` explícito derrubam o parse com "Malformed response payload" (boot aborta após 3 tentativas). Valores ausentes são omitidos; regressão no smoke test.
 
 ### Ainda NÃO validado
 
-- reconstrução completa (`apktool d`/`b`) do APK real ainda não foi executada neste ambiente (exige Java + `.tools/apktool.jar`, não presentes aqui);
-- reserialização de tamanho variável do `global-metadata.dat` ainda não existe — bloqueia hostnames **maiores** que 24 bytes (inclui `doom.debruinsistemas.com.br`, 27 bytes); hostnames de até 24 bytes já são suportados via padding de userinfo na URL;
-- reconstrução/assinatura do APK real ainda não foi instalada em Android;
-- handshake HTTPS do APK real contra Revival ainda não foi confirmado;
-- gameplay real no cliente ainda não foi confirmado.
-
-Não marcar o projeto como jogável/100% antes desses testes.
+- reserialização de tamanho variável do `global-metadata.dat` ainda não existe — bloqueia hostnames **maiores** que 24 bytes no patch direto (inclui `doom.debruinsistemas.com.br`, 27 bytes); o caminho bundle-aware cobre o endpoint de API deste build independentemente disso;
+- progressão além do 1-2 (capítulos avançados, gear/slayers/talents com o dataset real, daily quests, reward tracks, inbox) ainda depende dos payloads reais do cliente — a base está jogável, o miolo de progressão segue na ordem de trabalho abaixo.
 
 ## Infra/CI
 
@@ -154,10 +157,11 @@ Os testes locais são a fonte atual de validação.
 3. completar chapter rewards/loot e progressão de jogador;
 4. ligar todas as missões preservadas ao fluxo de stats observado no cliente;
 5. implementar inbox/grants necessários pelos eventos preservados;
-6. executar `scripts/analyze-official-apk.bat` em ambiente com acesso ao APK;
-7. executar `scripts/patch-apk.bat` no APK real;
-8. apontar `d.debruinsistemas.com.br` para um Revival HTTPS válido;
-9. instalar APK assinado em Android e capturar `/revival/requests`;
-10. eliminar endpoints ainda vistos apenas em `RESEARCH_MODE`;
-11. repetir fluxos até o cliente não depender de fallback de pesquisa;
-12. só então declarar o caminho server + patcher + client como jogável.
+6. eliminar endpoints ainda vistos apenas em `RESEARCH_MODE`;
+7. repetir fluxos no emulador até o cliente não depender de fallback de pesquisa;
+8. estender a validação de gameplay além do início do capítulo 1 (gear, slayers, talents, battle pass com o dataset real).
+
+Concluído nesta fase: patcher end-to-end no APK real (bundle-aware + CRC do
+catálogo), APK assinado instalado em emulador, conta criada e logada pelo
+próprio cliente, bootstrap de sessão completo e gameplay real validada
+(1-1 até a vitória com desbloqueio do 1-2) contra o Revival em VPS com HTTPS.
