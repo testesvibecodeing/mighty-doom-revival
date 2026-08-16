@@ -12,6 +12,14 @@ def unity_string(text: str) -> bytes:
     return len(payload).to_bytes(4, "little") + payload + (b"\x00" * (padded - end))
 
 
+def unaligned_unity_string(prefix: bytes, text: str) -> bytes:
+    payload = text.encode("utf-8")
+    start = len(prefix)
+    payload_end = start + 4 + len(payload)
+    aligned_end = (payload_end + 3) & ~3
+    return prefix + len(payload).to_bytes(4, "little") + payload + (b"\x00" * (aligned_end - payload_end))
+
+
 def main() -> int:
     source = KNOWN_HOSTS[0]
     other = KNOWN_HOSTS[1]
@@ -31,6 +39,16 @@ def main() -> int:
     assert patched.count(target.encode("ascii")) == 2
     assert f"https://{target}/game/auth/register".encode() in patched
     assert f"telemetry=https://{target}/events".encode() in patched
+
+    # The uint32 prefix itself is not guaranteed to begin at an absolute
+    # 4-byte offset inside the object's raw payload. A valid string following
+    # an unaligned field must still be patchable when its length, UTF-8 data
+    # and zero alignment padding uniquely prove the region.
+    unaligned = unaligned_unity_string(b"\x01\x02\x03", f"https://{source}/game/auth/login-device")
+    unaligned_patched, unaligned_info = patch_serialized_strings(unaligned, target)
+    assert unaligned_info == {"changed": True, "replacements": 1, "regions": 1}
+    assert source.encode("ascii") not in unaligned_patched
+    assert f"https://{target}/game/auth/login-device".encode() in unaligned_patched
 
     # Same-length is supported too; the helper still updates the serialized
     # string structurally rather than performing a blind file-wide replace.
