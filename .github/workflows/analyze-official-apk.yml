@@ -1,12 +1,10 @@
 name: Analyze official Mighty DOOM APK
 
+# Temporariamente manual: o runner da conta está sendo bloqueado por
+# Billing/Spending Limit. Quando Actions voltar a executar jobs, este workflow
+# pode voltar a ser acionado por alterações nos scripts de análise.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/analyze-official-apk.yml'
-      - 'scripts/fetch-uptodown-apk.py'
-      - 'scripts/analyze_apk.py'
 
 permissions:
   contents: read
