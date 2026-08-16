@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Patch a decoded Mighty DOOM APK tree for a self-hosted endpoint.
 
-Safety rule: this version only changes a hardcoded Unity hostname when the new
-hostname has the exact same byte length. Arbitrary-length replacement requires
-bundle-aware reserialization and will be implemented after validating the real
-1.13.1 APK used by the project.
+The fast path changes a hardcoded Unity hostname only when the replacement has
+the exact same byte length. Variable-length replacement is delegated to the
+bundle-aware reserializer by the Windows orchestration script.
 """
 
 from __future__ import annotations
@@ -68,10 +67,10 @@ def write_network_security(decoded: Path, host: str, ca: Path | None) -> None:
     xml_dir.mkdir(parents=True, exist_ok=True)
     target = xml_dir / "network_security_config.xml"
 
-    domains = []
-    for item in (host, *KNOWN_HOSTS):
-        if item not in domains:
-            domains.append(item)
+    # The patched client should explicitly trust only the Revival endpoint.
+    # Keeping official hosts here would make a stale/unpatched endpoint look
+    # legitimate and would defeat the final APK verification gate.
+    domains = [host]
 
     trust = ['            <certificates src="system"/>']
     if ca is not None:
@@ -183,7 +182,6 @@ def main() -> int:
     hits = find_host_occurrences(decoded)
     patched_files: list[str] = []
 
-    # No binary replacement is needed if the requested host is already embedded.
     already_present = any(str(h["host"]) == host for h in hits)
     if not already_present:
         patched_files = exact_length_patch(decoded, host, hits)
@@ -215,9 +213,7 @@ def main() -> int:
         print(
             "\nBLOQUEADO COM SEGURANÇA: o hostname solicitado possui "
             f"{len(host.encode('ascii'))} bytes, mas os hosts encontrados possuem "
-            f"comprimento(s) {lengths}. Alterar o tamanho dentro de um Unity bundle "
-            "sem reserializá-lo pode corromper o jogo. Envie o APK para concluirmos "
-            "o patch bundle-aware.",
+            f"comprimento(s) {lengths}. O fluxo deve continuar pelo patch bundle-aware.",
             file=sys.stderr,
         )
         return 4
