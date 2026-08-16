@@ -1,15 +1,18 @@
-// Configuração do site Mighty DOOM Revival.
+// Configuração do site público de uma instância Revival.
 //
-// Por padrão o site é servido pelo próprio Revival Server (server/public),
-// então health/APK/download são resolvidos no MESMO domínio automaticamente.
-// Só preencha os campos abaixo se o site rodar em um host diferente do server.
-window.MD_CONFIG = {
-  // Ex.: "https://doom.seudominio.com" (sem barra final). Vazio = mesmo domínio.
+// O site é servido pelo próprio servidor Revival por padrão.
+// Vazio = same-origin. Não há URL nem mecanismo para buscar APK de terceiros.
+window.REVIVAL_CONFIG = {
+  // Ex.: "https://revival.seudominio.com". Vazio = domínio atual.
   serverUrl: "",
-  // Endpoint de saúde. Vazio = "<serverUrl>/revival/health".
+
+  // Vazio = "<serverUrl>/revival/health".
   healthUrl: "",
-  // Metadados do APK publicado. Vazio = "<serverUrl>/revival/apk".
+
+  // Metadados do pacote configurado OPCIONALMENTE publicado pelo administrador
+  // desta instância. Vazio = "<serverUrl>/revival/apk".
   apkInfoUrl: "",
-  // Página do projeto (botão GitHub).
+
+  // Repositório central de código/documentação.
   githubUrl: "https://github.com/testesvibecodeing/mighty-doom-revival"
 };
