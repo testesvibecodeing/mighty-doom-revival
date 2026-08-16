@@ -1,4 +1,5 @@
 import { handleBattlePassRequest } from './battle-pass.js'
+import { handleProgressionRequest } from './progression.js'
 import { claimDailyReward, claimIdleReward, startOfUtcDayEpoch } from './rewards.js'
 
 function playerLevelWire (user) {
@@ -13,6 +14,9 @@ function playerLevelWire (user) {
 export function handleCompatRequest (path, body, userId, repo, runtime) {
   const battlePass = handleBattlePassRequest(path, body, userId, repo, runtime)
   if (battlePass) return battlePass
+
+  const progression = handleProgressionRequest(path, body, userId, repo, runtime)
+  if (progression) return progression
 
   if (path === '/game/daily-rewards/claim') {
     const result = claimDailyReward(repo, userId, runtime)
