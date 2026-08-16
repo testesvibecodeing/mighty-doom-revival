@@ -158,6 +158,11 @@ try {
   const login = await post('/game/auth/login-device', { client_version: '1.13.1', user_id: userId, password })
   assert.equal(login.token, token)
 
+  // O APK real chama a API com o path completo da base Gear:
+  // https://<host>/collections/doom/game/...
+  const gearLogin = await post('/collections/doom/game/auth/login-device', { client_version: '1.13.1', user_id: userId, password })
+  assert.equal(gearLogin.token, token)
+
   const userData = await post('/game/player/user-data', {}, token)
   const inventory = userData.user_data.inventory
   assert.deepEqual(inventory.currencies, [{ rid: 100, amount: 2000 }])

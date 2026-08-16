@@ -365,9 +365,21 @@ function handleAuthed (path, body, user, req) {
   return null
 }
 
+// O cliente oficial monta as URLs a partir da base da API Gear
+// ("https://international.gear.bethesda.net/collections/doom"). O patch de
+// hostname preserva o path do literal, então as chamadas do APK chegam como
+// "/collections/doom/game/...". Normalizamos removendo esse prefixo antes de
+// rotear; as rotas internas continuam sendo apenas "/game/*".
+const GEAR_COLLECTION_PREFIX = /^\/collections\/[A-Za-z0-9._-]+(?=\/|$)/
+
+function normalizePath (pathname) {
+  if (!GEAR_COLLECTION_PREFIX.test(pathname)) return pathname
+  return pathname.replace(GEAR_COLLECTION_PREFIX, '') || '/'
+}
+
 async function handle (req, res) {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`)
-  const path = url.pathname
+  const path = normalizePath(url.pathname)
 
   if (req.method === 'GET' && path === '/revival/health') {
     return json(res, 200, {

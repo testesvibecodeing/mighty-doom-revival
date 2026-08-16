@@ -18,6 +18,7 @@ from typing import Any
 KNOWN_HOSTS = (
     "slayersclub.bethesda.net",
     "game.9095be396f3547555fe1039cbc894c88.net",
+    "international.gear.bethesda.net",
 )
 UNITYPY_VERSION = "1.25.3"
 

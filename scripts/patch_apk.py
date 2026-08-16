@@ -31,6 +31,9 @@ ET.register_namespace("android", ANDROID_NS)
 KNOWN_HOSTS = (
     "slayersclub.bethesda.net",
     "game.9095be396f3547555fe1039cbc894c88.net",
+    # Base real da API do jogo (plataforma "Gear" da Bethesda) no build 1.13.1:
+    # literal completo "https://international.gear.bethesda.net/collections/doom".
+    "international.gear.bethesda.net",
 )
 
 HOST_RE = re.compile(

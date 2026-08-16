@@ -20,6 +20,7 @@ from typing import BinaryIO
 KNOWN_HOSTS = (
     b"slayersclub.bethesda.net",
     b"game.9095be396f3547555fe1039cbc894c88.net",
+    b"international.gear.bethesda.net",
 )
 MAX_PATTERN = max(map(len, KNOWN_HOSTS))
 
