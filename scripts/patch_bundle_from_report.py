@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Continue a blocked APK patch using Unity object reserialization."""
+"""Continue a blocked APK patch using safe Unity object reserialization."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ from pathlib import Path
 
 from patch_apk import normalize_host
 from patch_unity_bundle import UnityPyUnavailable, patch_bundle
+from patch_unity_raw_strings import RawStringPatchError, patch_raw_bundle
 
 
 def _candidate_summary(results: list[dict]) -> dict:
@@ -27,6 +28,22 @@ def _candidate_summary(results: list[dict]) -> dict:
         "serializable_references": sum(int(x.get("serialized_references", 0)) for x in serializable),
         "raw_only_references": sum(int(x.get("raw_references", 0)) for x in raw_only),
     }
+
+
+def _all_official_raw_refs(path: Path) -> int:
+    """Count official hosts after all patch stages without exporting payloads."""
+    from patch_unity_bundle import KNOWN_HOSTS, _load_unitypy
+
+    UnityPy = _load_unitypy()
+    env = UnityPy.load(str(path))
+    total = 0
+    for obj in env.objects:
+        try:
+            raw = bytes(obj.get_raw_data())
+        except Exception:
+            continue
+        total += sum(raw.count(host.encode("ascii")) for host in KNOWN_HOSTS)
+    return total
 
 
 def main() -> int:
@@ -61,12 +78,41 @@ def main() -> int:
                 return 2
             if not candidate.is_file():
                 continue
+
+            # Stage 1: prefer normal Unity typetree/object patching.
             result = patch_bundle(candidate, host)
             result["path"] = rel
+
+            # Stage 2: if official host bytes remain, only patch them when they
+            # are provably Unity serialized UTF-8 strings with length/alignment.
+            remaining_raw = _all_official_raw_refs(candidate)
+            if remaining_raw:
+                raw_result = patch_raw_bundle(candidate, host)
+                raw_result["path"] = rel
+                result["raw_string_patch"] = raw_result
+                result["raw_string_replacements"] = int(raw_result.get("replacements", 0))
+                result["changed"] = bool(result.get("changed") or raw_result.get("changed"))
+                result["verified"] = bool(result.get("verified") or raw_result.get("verified"))
+                result["replacements"] = int(result.get("replacements", 0)) + int(raw_result.get("replacements", 0))
+
+            final_raw = _all_official_raw_refs(candidate)
+            result["remaining_official_raw_references"] = final_raw
+            if final_raw:
+                raise RawStringPatchError(
+                    f"{rel}: {final_raw} referência(s) oficial(is) permaneceram após typetree + raw-string patch"
+                )
             results.append(result)
     except UnityPyUnavailable as exc:
         print(f"ERRO: {exc}", file=sys.stderr)
         return 5
+    except RawStringPatchError as exc:
+        report["status"] = "needs_raw_object_mapping"
+        report["raw_string_blocker"] = str(exc)
+        report["bundle_aware"] = results
+        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"BLOQUEADO COM SEGURANÇA: {exc}", file=sys.stderr)
+        print(f"Mapa salvo em: {report_path}", file=sys.stderr)
+        return 4
     except Exception as exc:
         print(f"ERRO no patch bundle-aware: {exc}", file=sys.stderr)
         return 4
@@ -80,14 +126,14 @@ def main() -> int:
             report["status"] = "needs_typetree_mapping"
             detail = (
                 f"{candidates['raw_only_references']} referência(s) localizada(s) em payload bruto de "
-                f"{len(candidates['raw_only'])} objeto(s), mas sem typetree serializável. "
+                f"{len(candidates['raw_only'])} objeto(s), mas sem uma string Unity serializada comprovável. "
                 "O relatório contém type/path_id para mapear o objeto sem alterar bytes no escuro."
             )
         else:
             report["status"] = "needs_object_mapping"
             detail = (
                 "o hostname foi localizado no bundle bruto do APK, mas o parser Unity não o associou "
-                "a um objeto serializável nem a um payload de objeto individual."
+                "a um objeto serializável nem a uma string raw estruturada."
             )
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"BLOQUEADO COM SEGURANÇA: {detail}", file=sys.stderr)
@@ -97,6 +143,7 @@ def main() -> int:
     report["status"] = "ok_bundle_aware"
     report["bundle_aware_patched_files"] = [x["path"] for x in changed]
     report["bundle_aware_replacements"] = sum(int(x.get("replacements", 0)) for x in changed)
+    report["raw_string_replacements"] = sum(int(x.get("raw_string_replacements", 0)) for x in changed)
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     print(json.dumps({
@@ -104,6 +151,7 @@ def main() -> int:
         "server_host": host,
         "patched_files": report["bundle_aware_patched_files"],
         "replacements": report["bundle_aware_replacements"],
+        "raw_string_replacements": report["raw_string_replacements"],
         "serializable_candidates": len(candidates["serializable"]),
         "raw_only_candidates": len(candidates["raw_only"]),
     }, indent=2, ensure_ascii=False))
