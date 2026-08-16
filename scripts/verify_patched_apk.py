@@ -3,6 +3,12 @@
 
 This verifier intentionally inspects only metadata/byte indicators needed for
 interoperability. It does not extract or publish proprietary assets.
+
+For the 1.13.1 target, static analysis identified
+``international.gear.bethesda.net`` as the gameplay API base. Other Bethesda
+URLs such as Slayers Club may legitimately remain in the client and are not a
+proof that gameplay still points at an official service. The final gate
+therefore rejects stale *gameplay API* hosts, not every Bethesda-related URL.
 """
 from __future__ import annotations
 
@@ -13,10 +19,11 @@ import sys
 import zipfile
 from pathlib import Path
 
-from patch_apk import KNOWN_HOSTS, normalize_host
+from patch_apk import KNOWN_HOSTS, PRIMARY_API_HOST, normalize_host
 
 SEARCH_PREFIXES = ("assets/aa/",)
-SEARCH_SUFFIXES = (".json", ".txt", ".xml")
+SEARCH_SUFFIXES = (".json", ".txt", ".xml", "global-metadata.dat")
+FORBIDDEN_ENDPOINT_HOSTS = (PRIMARY_API_HOST,)
 
 
 def sha256_file(path: Path) -> str:
@@ -33,9 +40,11 @@ def should_scan(name: str) -> bool:
 
 def scan_apk(apk: Path, target_host: str) -> dict[str, object]:
     target = target_host.encode("ascii")
-    official = {host: host.encode("ascii") for host in KNOWN_HOSTS}
+    known = {host: host.encode("ascii") for host in KNOWN_HOSTS}
+    forbidden = {host: host.encode("ascii") for host in FORBIDDEN_ENDPOINT_HOSTS}
     target_hits: list[dict[str, object]] = []
-    official_hits: list[dict[str, object]] = []
+    known_host_hits: list[dict[str, object]] = []
+    forbidden_endpoint_hits: list[dict[str, object]] = []
     scanned_files = 0
 
     with zipfile.ZipFile(apk, "r") as archive:
@@ -53,10 +62,15 @@ def scan_apk(apk: Path, target_host: str) -> dict[str, object]:
             if count:
                 target_hits.append({"path": name, "count": count})
 
-            for host, raw in official.items():
+            for host, raw in known.items():
                 count = data.count(raw)
                 if count:
-                    official_hits.append({"path": name, "host": host, "count": count})
+                    known_host_hits.append({"path": name, "host": host, "count": count})
+
+            for host, raw in forbidden.items():
+                count = data.count(raw)
+                if count:
+                    forbidden_endpoint_hits.append({"path": name, "host": host, "count": count})
 
         return {
             "apk": apk.name,
@@ -65,9 +79,14 @@ def scan_apk(apk: Path, target_host: str) -> dict[str, object]:
             "scanned_files": scanned_files,
             "server_host": target_host,
             "target_hits": target_hits,
-            "official_host_hits": official_hits,
+            "known_host_hits": known_host_hits,
+            # Keep the historical key for downstream report consumers, but it
+            # now means stale official *gameplay endpoint* occurrences only.
+            "official_host_hits": forbidden_endpoint_hits,
+            "forbidden_endpoint_hits": forbidden_endpoint_hits,
             "target_occurrences": sum(int(x["count"]) for x in target_hits),
-            "official_occurrences": sum(int(x["count"]) for x in official_hits),
+            "official_occurrences": sum(int(x["count"]) for x in forbidden_endpoint_hits),
+            "known_host_occurrences": sum(int(x["count"]) for x in known_host_hits),
         }
 
 
@@ -101,18 +120,18 @@ def main() -> int:
 
     if not result["target_occurrences"]:
         print(
-            "ERRO: hostname Revival não foi encontrado nas áreas de rede/Addressables do APK final.",
+            "ERRO: hostname Revival não foi encontrado nas áreas de rede/Addressables/IL2CPP do APK final.",
             file=sys.stderr,
         )
         return 4
     if result["official_occurrences"]:
         print(
-            "ERRO: o APK final ainda contém hostname(s) oficial(is) nas áreas verificadas; instalação recusada.",
+            "ERRO: o APK final ainda contém o hostname oficial da API Gear; instalação recusada.",
             file=sys.stderr,
         )
         return 5
 
-    print("APK final validado: endpoint Revival presente e hosts oficiais ausentes nas áreas verificadas.")
+    print("APK final validado: endpoint Revival presente e API Gear oficial ausente nas áreas verificadas.")
     return 0
 
 
