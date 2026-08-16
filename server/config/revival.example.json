@@ -4,6 +4,8 @@
   "client_version": "1.13.1",
   "game_data_token": "revival-local-game-data",
   "game_data_version_id": "revival-local-v1",
+  "archive_mode": true,
+  "unlock_premium_battle_pass": true,
   "auto_starter_bundle": true,
   "initial_resources": []
 }
