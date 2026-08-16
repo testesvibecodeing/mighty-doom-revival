@@ -16,7 +16,7 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -26,6 +26,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install sanitized Unity inspection dependency
+        run: python -m pip install --disable-pip-version-check UnityPy==1.25.3
 
       - name: Prepare directories
         run: mkdir -p input reports
@@ -39,6 +42,12 @@ jobs:
             --json-out reports/apk-1.13.1.json \
             --md-out reports/apk-1.13.1.md
 
+      - name: Map endpoint-holding Unity objects ephemerally
+        run: |
+          python scripts/inspect_apk_unity_candidates.py input/mighty-doom.apk \
+            --report reports/apk-1.13.1.json \
+            --json-out reports/apk-1.13.1-unity-candidates.json
+
       - name: Record runner metadata
         run: |
           {
@@ -47,7 +56,7 @@ jobs:
             echo "- Run: $GITHUB_RUN_ID"
             echo "- Commit: $GITHUB_SHA"
             echo "- Date UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo '- APK binary was deleted before artifact upload.'
+            echo '- APK and temporary Unity bundle bytes were deleted before artifact upload.'
           } > reports/ci.md
 
       - name: Delete proprietary APK before artifact handling
