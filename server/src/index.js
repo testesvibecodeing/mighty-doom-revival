@@ -49,6 +49,19 @@ function nowSeconds () {
   return Math.floor(Date.now() / 1000)
 }
 
+// Contador de fallbacks do RESEARCH_MODE por rota. O gate de convergência
+// (scripts/verify_everything.py e o harness ADB) lê /revival/research e
+// FALHA se um fluxo já validado no cliente ainda depender de resposta vazia
+// de pesquisa. Enquanto um endpoint vive de fallback, ele não está done.
+const researchFallbacks = new Map()
+
+function recordResearchFallback (path) {
+  const entry = researchFallbacks.get(path) || { count: 0, first_seen: nowSeconds(), last_seen: nowSeconds() }
+  entry.count += 1
+  entry.last_seen = nowSeconds()
+  researchFallbacks.set(path, entry)
+}
+
 function wire (data = {}, code = 1000) {
   // O cliente 1.13.1 faz parse estrito do timestamp do servidor em
   // Ubu.GameController.ParseServerTimestamp (StartSession). Bisseção no
@@ -649,6 +662,23 @@ async function handle (req, res) {
   // Link temporário (10 min) para trocar os dados de acesso do Super Admin.
   if (await handleAdminRecover(req, res, path, { repo, tokenFile: adminRecoverTokenFile })) return
 
+  // Estado do RESEARCH_MODE para o gate de convergência: quantos fallbacks
+  // (endpoint desconhecido respondido com ok() vazio) aconteceram desde o
+  // boot deste processo, por rota. Só expõe contagens — nenhum dado de
+  // jogador. verify_everything.py/client_harness.py falham se houver
+  // fallback em fluxo validado.
+  if (req.method === 'GET' && path === '/revival/research') {
+    const fallbacks = [...researchFallbacks.entries()]
+      .map(([fallbackPath, entry]) => ({ path: fallbackPath, ...entry }))
+      .sort((a, b) => b.count - a.count)
+    return json(res, 200, {
+      ok: true,
+      research_mode: researchMode(),
+      fallback_total: fallbacks.reduce((sum, entry) => sum + entry.count, 0),
+      fallback_endpoints: fallbacks
+    })
+  }
+
   if (req.method === 'GET' && path === '/revival/requests') {
     if (!adminAuthorized(req)) return json(res, 401, { ok: false })
     return json(res, 200, { ok: true, requests: repo.requestLog(Number(url.searchParams.get('limit') || 100)) })
@@ -718,6 +748,7 @@ async function handle (req, res) {
 
   if (researchMode()) {
     console.warn(`[research] endpoint ainda não implementado: ${path}`)
+    recordResearchFallback(path)
     return ok(res)
   }
   return fail(res, 404, 2000)

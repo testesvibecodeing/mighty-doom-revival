@@ -1,0 +1,25 @@
+{
+  "endpoint": "game/armory/get",
+  "provenance": "server-replay",
+  "captured_at": "2026-08-17T10:36:00Z",
+  "sanitized": true,
+  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "request": {
+    "method": "POST",
+    "path": "/game/armory/get",
+    "headers": {
+      "content-type": "application/json",
+      "x-ubu-apiversion": "24.0.0",
+      "x-ubu-token": "<token>"
+    },
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "upgrades": []
+    }
+  }
+}

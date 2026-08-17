@@ -1,93 +1,301 @@
 # Matriz de compatibilidade da API
 
-Esta matriz acompanha o trabalho necessário para chegar ao máximo de funcionalidades acessíveis pelo cliente Android 1.13.1.
+<!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
+     Não edite à mão: rode o script. -->
 
-Legenda:
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T10:36:38Z ·
+116 rotas `game/*` extraídas do global-metadata.dat v29
+do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
-- ✅ implementado no Revival;
-- 🧪 base implementada, aguardando validação no APK real;
-- 🔬 schema/semântica ainda em pesquisa;
-- ⛔ serviço externo deliberadamente removido.
+DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
+`persistence_validated` nulo = não aplicável):
+`schema_extracted` · `implemented` · `request_observed` · `response_observed` ·
+`client_validated` · `persistence_validated` · `regression_test` · `uses_fallback=false`.
 
-| Módulo | Estado | Escopo |
-|---|---:|---|
-| auth | 🧪 | registro local, login por device, token e bootstrap do starter bundle |
-| player | 🧪 | game-data-token, user-data, settings, stats baseline; user-data agora reflete talentos persistidos |
-| inventory | 🧪 | wire de inventário, slots, equip sequence, equip |
-| session | 🧪 | heartbeat e refresh |
-| store | 🧪 | catálogo Revival, quota e compra transacional por moeda interna |
-| iap | ⛔ | dinheiro real desativado |
-| ads | ⛔ | anúncios externos desativados |
-| events | 🧪 | schedule, args e estado por jogador |
-| battle-pass | 🧪 | temporadas arquivadas visíveis, start-season, missões, pontos, tiers, grants e persistência; wire final ainda precisa ser validado no APK real |
-| chapters | 🧪 | start/update/revive/end persistentes; user-data reflete current_run; grants/stage rewards ainda aguardam schema real |
-| daily-rewards | 🧪 | get-state + claim diário transacional/persistente; wire final ainda precisa ser validado no APK real |
-| idle-rewards | 🧪 | get-state + geração por progresso + claim persistente; boost/schema final pendentes |
-| inbox | 🧪 | lista vazia segura; grants/messages pendentes |
-| reward-tracks | 🧪 | lista, progresso e claim persistentes com grants; wire final ainda precisa ser validado no APK real |
-| gear | 🔬 | upgrade, multi-upgrade e cosméticos pendentes |
-| slayers | 🔬 | upgrade e cosméticos pendentes |
-| talents | 🧪 | get/buy, requisitos, custos e persistência no user-data; upgrade/schema final pendentes |
-| quests | 🔬 | baseline diária vazia; definições, progresso, claim e rotação pendentes |
-| tutorial | 🔬 | sequências/progresso pendentes |
-| identity | 🧪 | identidade local; links externos rejeitados |
-| xbox/msal | ⛔ | dependência externa será substituída quando não for necessária ao gameplay |
+| Módulo | Pri | Endpoints | ✅ DoD | 🧪 impl. | ❌ falta | 🔬 schema | Estado |
+|---|---:|---:|---:|---:|---:|---:|---|
+| [gear](#gear) | 1 | 5 | 0 | 2 | 3 | 0 | 🧪 em convergência |
+| [slayers](#slayers) | 2 | 2 | 0 | 1 | 1 | 0 | 🧪 em convergência |
+| [talents](#talents) | 3 | 1 | 0 | 1 | 0 | 0 | 🧪 em convergência |
+| [chapters](#chapters) | 4 | 13 | 0 | 5 | 8 | 0 | 🧪 em convergência |
+| [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 0 | 🧪 em convergência |
+| [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
+| [inbox](#inbox) | 7 | 4 | 0 | 1 | 3 | 0 | 🧪 em convergência |
+| [player](#player) | 8 | 7 | 0 | 5 | 2 | 0 | 🧪 em convergência |
+| [events](#events) | 9 | 11 | 0 | 2 | 9 | 0 | 🧪 em convergência |
+| [battle-pass](#battle-pass) | 10 | 9 | 0 | 3 | 6 | 0 | 🧪 em convergência |
+| [daily-rewards](#daily-rewards) | 11 | 2 | 0 | 2 | 0 | 0 | 🧪 em convergência |
+| [idle-rewards](#idle-rewards) | 12 | 4 | 0 | 2 | 2 | 0 | 🧪 em convergência |
+| [store](#store) | 13 | 10 | 0 | 5 | 5 | 0 | 🧪 em convergência |
+| [inventory](#inventory) | 14 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
+| [armory](#armory) | 15 | 2 | 0 | 1 | 1 | 0 | 🧪 em convergência |
+| [tutorial](#tutorial) | 16 | 1 | 0 | 1 | 0 | 0 | 🧪 em convergência |
+| [session](#session) | 17 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
+| [auth](#auth) | 18 | 5 | 0 | 4 | 1 | 0 | 🧪 em convergência |
+| [identity](#identity) | 19 | 8 | 0 | 3 | 5 | 0 | 🧪 em convergência |
+| [devices](#devices) | 20 | 4 | 0 | 0 | 4 | 0 | ❌ nada implementado |
+| [codes](#codes) | 21 | 1 | 0 | 0 | 1 | 0 | ❌ nada implementado |
+| [xbox](#xbox) | 22 | 4 | 0 | 0 | 4 | 0 | ❌ nada implementado |
+| [bnet](#bnet) | 23 | 1 | 0 | 0 | 1 | 0 | ❌ nada implementado |
+| [ads ⛔](#ads) | 99 | 4 | 0 | 4 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
+| [iap ⛔](#iap) | 99 | 6 | 0 | 6 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
 
-## Bootstrap crítico
+## Detalhe por módulo
 
-Com `game-data.json` carregado, o registro tenta reproduzir o bootstrap necessário do cliente:
+### gear
 
-1. encontra o bundle com tag `starter`;
-2. concede seus recursos usando as categorias do game data;
-3. persiste moedas, energias, itens, cosméticos e entitlements por tipo;
-4. encontra os slots `slot_primary_weapon` e `slot_slayer` por tag;
-5. equipa automaticamente a primeira arma e o primeiro Slayer concedidos pelo starter bundle.
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/gear/apply-cosmetic` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/gear/dismantle` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/gear/fuse` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/gear/multi-upgrade` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/gear/upgrade` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 
-Isso evita hardcode de IDs e permite seguir exatamente a cópia de game data usada pelo cliente.
+### slayers
 
-## Battle Pass arquivado
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/slayers/apply-cosmetic` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/slayers/upgrade` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 
-Em `archive_mode`, temporadas preservadas agora aparecem no progresso de eventos antes do primeiro `start-season`, usando um estado inicial não persistido. Isso permite que o cliente descubra e renderize a temporada restaurada sem bloquear a criação do estado real quando iniciar a temporada. Depois do início, missões, pontos, claims de tiers e grants passam a usar o estado persistido do jogador.
+### talents
 
-## Estado de capítulos
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/talents/buy` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 
-O Revival agora persiste o ciclo básico de uma tentativa de capítulo em `user_state`:
+### chapters
 
-1. `/chapters/start` cria `current_run` com capítulo/challenge/stage;
-2. `/chapters/update` preserva avanço, checkpoint e stats recebidos;
-3. `/chapters/revive` incrementa o contador de revives da tentativa atual;
-4. `/chapters/end` encerra a tentativa e registra a conclusão básica;
-5. `/player/user-data` devolve a mesma progressão persistida após reiniciar o servidor.
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/chapters/ad-ability-reroll` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/ad-revive` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/claim-challenge-reward` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/claim-rewards` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/claim-stage-reward` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/chapters/claim-vip-reward` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/claim-vip-rewards-all` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/claim-vip-rewards-chapter` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/end` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: vitória do 1-1, recompensas, 1-2 desbloqueado; current_run persistido. |
+| `game/chapters/redeem-voucher` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/chapters/revive` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/chapters/start` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: partida completa do estágio 1-1 no emulador. |
+| `game/chapters/update` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: avanço nas 5 salas do 1-1. |
 
-Os endpoints de stage rewards respondem grant vazio de forma explícita até o formato real ser validado. Eles não usam o fallback genérico do `RESEARCH_MODE`, evitando marcar recompensa fictícia como entregue.
+### quests
 
-## Categorias de recurso modeladas
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/quests/claim-daily-quest` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/quests/claim-milestone` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/quests/get-daily-quests` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
 
-O Revival reconhece as categorias observadas no backend de referência:
+### reward-tracks
 
-| Categoria | Tipo |
-|---:|---|
-| 1 | currency |
-| 2 | weapon |
-| 3 | equipment |
-| 4 | launcher |
-| 5 | energy |
-| 6 | ultimate |
-| 7 | slayer |
-| 8 | entitlement |
-| 9 | cosmetic |
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/reward-tracks/claim` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/reward-tracks/get-all` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
+| `game/reward-tracks/get-track` | · | · | · | · | · | — | · | · | — | não implementado |
 
-Quando a categoria não estiver explícita, o servidor tenta classificar pela coleção correspondente do `game-data.json`.
+### inbox
 
-## Critério para marcar ✅
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/inbox/claim` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/inbox/delete` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/inbox/get-messages` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
+| `game/inbox/read` | · | · | · | · | · | — | · | · | — | não implementado |
 
-Um módulo só passa para ✅ depois de:
+### player
 
-1. observarmos a chamada do APK patchado;
-2. validarmos request e response reais;
-3. persistirmos os efeitos necessários;
-4. testarmos reinício do servidor sem perda de progresso;
-5. confirmarmos o fluxo na UI do jogo;
-6. adicionarmos teste de regressão.
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/player/game-data-token` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: bootstrap completo no emulador; /data baixado com o token. |
+| `game/player/increment-stats` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/player/level-up` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/player/set-push-token` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/player/stats` | · | · | · | · | · | — | · | ✅ | — | não implementado |
+| `game/player/update-settings` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/player/user-data` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: user-data no bootstrap e refletindo progressão persistida após restart do servidor. |
 
-`RESEARCH_MODE=true` existe justamente para não fingir compatibilidade: endpoints desconhecidos são registrados até serem implementados com comportamento conhecido.
+### events
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/events/activate-store-offer-event` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/end-game-mode-event` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/game-mode-event-ad-ability-reroll` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/game-mode-event-ad-revive` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/game-mode-event-redeem-voucher` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/game-mode-event-revive` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/get-instance` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/get-progress` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: eventos do menu com progresso/timers vindos do servidor. |
+| `game/events/get-schedule` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: menu com eventos do servidor (Slayers Energy / Speedrun Challenge) no emulador. |
+| `game/events/start-game-mode-event` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/update-game-mode-event-progress` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### battle-pass
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/battle-pass/buy-next-track-tier` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/battle-pass/claim-mission` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/battle-pass/claim-track-all` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/battle-pass/claim-track-reward` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/battle-pass/claim-track-tier` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/battle-pass/end-season` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/battle-pass/prestige` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/battle-pass/redeem-premium-entitlement` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/battle-pass/start-season` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+
+### daily-rewards
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/daily-rewards/claim` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/daily-rewards/get-state` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+
+### idle-rewards
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/idle-rewards/ad-boost` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/idle-rewards/boost` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/idle-rewards/claim` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/idle-rewards/get-state` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+
+### store
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/store/activate-daily-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/store/activate-offer` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/ad-purchase` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/get` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/store/get-daily-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/store/get-items` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/get-offer-items` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/get-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/store/get-player-offers` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/purchase` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+
+### inventory
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/inventory/equip` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/inventory/exchange-currency` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/inventory/get-equip-sequence-id` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
+
+### armory
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/armory/get` | ✅ | · | ✅ | ✅ | ✅ | — | · | ✅ | — | RELATORIO-STATUS 2026-08-16: boot completo; upgrades:[] evita o NRE do ArmoryController.Init. |
+| `game/armory/upgrade` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### tutorial
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/tutorial/complete-sequence` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+
+### session
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/session/heartbeat` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/session/refresh` | ✅ | · | ✅ | ✅ | ✅ | — | · | ✅ | — | RELATORIO-STATUS 2026-08-16: session/refresh contínuo durante o combate (keepalive). |
+| `game/session/update-legal` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### auth
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/auth/login-device` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: login-device no bootstrap do emulador, resposta aceita pelo cliente. |
+| `game/auth/login-game-center` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/auth/login-google-play-games` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/auth/login-xbox` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/auth/register` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: registro da conta revivaltest feito pelo cliente no emulador, boot completo sem erros no logcat. |
+
+### identity
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/identity/authorize-xbox` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/identity/describe-conflict` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/identity/link-game-center` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/identity/link-google-play-games` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/identity/link-xbox` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/identity/list` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
+| `game/identity/resolve-conflict` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/identity/unlink` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### devices
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/devices/describe` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/devices/list` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/devices/register` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/devices/unregister` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### codes
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/codes/redeem` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### xbox
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/xbox/claim-perk` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/xbox/get-game-pass` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/xbox/get-gamertag` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/xbox/get-perks` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### bnet
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/bnet/claim-slayers-club` | · | · | · | · | · | — | · | · | — | não implementado |
+
+### ads
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/ads/begin-watch` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/ads/cancel-watch` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/ads/get-state` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/ads/refresh-token` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+
+### iap
+
+| Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| `game/iap/begin-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/iap/cancel-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/iap/confirm-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/iap/get-purchase-history-info` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/iap/recover-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/iap/validate-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+
+## Rotas legadas do servidor (não existem no cliente)
+
+Implementadas em `server/src` mas ausentes das 116 rotas do metadata —
+provável erro de transcrição histórico. Candidatas a remoção;
+nenhum cliente 1.13.1 as chama.
+
+- `game/chapters/claim-stage-rewards`
+- `game/chapters/stage-rewards`
+- `game/idle-rewards/claim-rewards`
+- `game/quests/claim`
+- `game/quests/claim-daily-milestone`
+- `game/reward-tracks/claim-reward`
+- `game/reward-tracks/claim-tier`
+- `game/reward-tracks/get-progress`
+- `game/reward-tracks/get-state`
+- `game/talents/get`

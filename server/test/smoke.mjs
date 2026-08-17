@@ -242,6 +242,29 @@ try {
   assert.equal(iap.iap_disabled, true)
 
   await post('/game/future/unknown-endpoint', { probe: 1 }, token)
+
+  // Gate de convergência: o contador de fallbacks do RESEARCH_MODE precisa
+  // registrar exatamente o endpoint desconhecido chamado acima — e NENHUMA
+  // rota do fluxo já implementado pode aparecer como fallback. Se uma rota
+  // conhecida cair aqui, ela respondeu ok() vazio em vez do contrato real.
+  const research = await fetch(`${base}/revival/research`)
+  assert.equal(research.status, 200)
+  const researchState = await research.json()
+  assert.equal(researchState.research_mode, true)
+  const probed = researchState.fallback_endpoints.find(row => row.path === '/game/future/unknown-endpoint')
+  assert.ok(probed, 'fallback do endpoint desconhecido deve ser contado')
+  assert.equal(probed.count, 1)
+  const implementedPaths = new Set([
+    '/game/auth/register', '/game/auth/login-device', '/game/player/user-data',
+    '/game/player/game-data-token', '/game/daily-rewards/get-state', '/game/daily-rewards/claim',
+    '/game/talents/buy', '/game/talents/get', '/game/store/get', '/game/store/purchase',
+    '/game/events/get-schedule', '/game/events/get-progress', '/game/chapters/start',
+    '/game/chapters/update', '/game/chapters/revive', '/game/chapters/end',
+    '/game/idle-rewards/get-state', '/game/session/heartbeat'
+  ])
+  const leaked = researchState.fallback_endpoints.filter(row => implementedPaths.has(row.path))
+  assert.deepEqual(leaked, [], 'rota implementada não pode depender de fallback de pesquisa')
+
   const requests = await fetch(`${base}/revival/requests?limit=20`, {
     headers: { authorization: 'Bearer smoke-admin' }
   })

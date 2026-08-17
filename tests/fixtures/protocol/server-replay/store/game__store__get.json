@@ -1,0 +1,32 @@
+{
+  "endpoint": "game/store/get",
+  "provenance": "server-replay",
+  "captured_at": "2026-08-17T10:36:00Z",
+  "sanitized": true,
+  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "request": {
+    "method": "POST",
+    "path": "/game/store/get",
+    "headers": {
+      "content-type": "application/json",
+      "x-ubu-apiversion": "24.0.0",
+      "x-ubu-token": "<token>"
+    },
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "day_start_epoch": 1786924800,
+      "day_end_epoch": 1787011200,
+      "week_start_epoch": 1786838400,
+      "week_end_epoch": 1787443200,
+      "store_quota_purchases": [],
+      "store_items": [],
+      "iap_items": [],
+      "ad_items": []
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "endpoint": "game/quests/get-daily-quests",
+  "provenance": "server-replay",
+  "captured_at": "2026-08-17T10:36:00Z",
+  "sanitized": true,
+  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "request": {
+    "method": "POST",
+    "path": "/game/quests/get-daily-quests",
+    "headers": {
+      "content-type": "application/json",
+      "x-ubu-apiversion": "24.0.0",
+      "x-ubu-token": "<token>"
+    },
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "day_start_epoch": 1786924800,
+      "day_end_epoch": 1787011200,
+      "quests": [],
+      "milestones": []
+    }
+  }
+}

@@ -35,7 +35,11 @@ propósito. O detalhe operacional está nas skills (`.claude/skills/`) e em `doc
    valor é **omitido**.
 7. **Separe fato de hipótese** em tudo que escrever: `CONFIRMADO` (medido nesta
    base, com o comando que mediu) vs `A VERIFICAR` (hipótese). Não promova hipótese
-   a fato porque "faz sentido".
+   a fato porque "faz sentido". **Antes de tentar consertar algo, consulte
+   `research/DEAD-ENDS.md`** — hipótese refutada só volta com evidência nova.
+   Endpoint não é "done" porque responde 200: o DoD por rota vive em
+   `compatibility.json` (8 gates) e quem seleciona o próximo trabalho é
+   `scripts/next_task.py`.
 8. **Não edite `server/config/revival.json`, `packs.json`, `events.json`** — são
    runtime local e estão no `.gitignore`. Mexa nos `*.example.json` correspondentes.
 9. **Rode a suíte antes de dizer "pronto"** (bloco Verificação abaixo). Se algo
@@ -56,6 +60,15 @@ propósito. O detalhe operacional está nas skills (`.claude/skills/`) e em `doc
 | `scripts/verify_patched_apk.py` | Verificação do endpoint dentro do APK (obrigatória) |
 | `scripts/inject_loading_screen.py` / `loading_screen_editor.py` | Loading screen custom (CLI + GUI Tkinter) |
 | `scripts/check_revival_server.py` | Preflight HTTPS do servidor (health + `uts`) |
+| `compatibility.json` | **Fonte de verdade dos 116 endpoints** — DoD por rota, evidências e fallbacks; gerada por script, não editada à mão |
+| `scripts/dump_il2cpp_metadata.py` | Extrator read-only do `global-metadata.dat` v29 (rotas `game/*`; teste com metadata sintético) |
+| `scripts/generate_endpoint_matrix.py` | Sincroniza `compatibility.json` (campos derivados de `server/src`, `server/test`, fixtures) e regenera `docs/ENDPOINT-MATRIX.md`; `--check` é gate de CI |
+| `scripts/next_task.py` | Seleciona deterministicamente o próximo gap (módulo por prioridade → primeiro gate DoD falso) |
+| `scripts/verify_everything.py` | **Gate único de conclusão**: npm test + regressões Python + sync do registro + coerência + servidor vivo/APK opcionais |
+| `scripts/client_harness.py` | Valida fluxo no cliente/emulador via ADB (logcat, assinaturas fatais, sequência de endpoints, fallbacks; exit != 0 = fluxo falhou) |
+| `scripts/capture_protocol_fixtures.mjs` | Captura fixtures `server-replay` de req/res sanitizados |
+| `tests/fixtures/protocol/` | Pares req/res reais sanitizados; provenance `client` (harness) liga `request/response_observed` no registro |
+| `research/DEAD-ENDS.md` | Hipóteses refutadas com evidência — **consulte antes de tentar consertar qualquer coisa** |
 | `scripts/patch-apk.{bat,sh}` | Orquestração fim-a-fim em 8 passos |
 | `server/src/index.js` | HTTP builtin, roteamento `/game/*`, `/revival/*`, `/data`; **envelope vivo `wire()`/`ok()`/`fail()` nas linhas 52/84/88** |
 | `server/src/protocol.js` + `baseline.js` | **Código legado/morto** — nada os importa (só `baseline.js` importa `protocol.js`). Não os use em código novo; o envelope real é o local do `index.js` |
@@ -91,6 +104,23 @@ comandos exatos, os exit codes e as armadilhas já pagas neste projeto.
 ---
 
 ## Verificação
+
+```bash
+# Gate único (npm test do servidor + regressões Python + sync do registro +
+# coerência do compatibility.json; opcional --server/--apk para o resto)
+python scripts/verify_everything.py
+
+# Próximo gap determinístico (módulo por prioridade, gate DoD)
+python scripts/next_task.py
+
+# Resincronizar registro/matriz após implementar algo
+python scripts/generate_endpoint_matrix.py
+```
+
+Ciclo por funcionalidade (obrigatório): extrair contrato → implementar →
+teste servidor → `scripts/client_harness.py` no emulador → persistência após
+restart → `generate_endpoint_matrix.py --set/--note` com a evidência → commit
+→ `next_task.py`.
 
 ```bash
 # Servidor (a suíte que o CI roda)

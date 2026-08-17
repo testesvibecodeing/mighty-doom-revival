@@ -1,0 +1,41 @@
+{
+  "endpoint": "game/chapters/end",
+  "provenance": "server-replay",
+  "captured_at": "2026-08-17T10:36:00Z",
+  "sanitized": true,
+  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "request": {
+    "method": "POST",
+    "path": "/game/chapters/end",
+    "headers": {
+      "content-type": "application/json",
+      "x-ubu-apiversion": "24.0.0",
+      "x-ubu-token": "<token>"
+    },
+    "body": {
+      "stage": 5,
+      "success": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "loot": [],
+      "chapter_progression": {
+        "chapters": [
+          {
+            "chapter": 101,
+            "completed": true,
+            "best_stage": 5,
+            "completed_at": 1786962982
+          }
+        ],
+        "challenges": [],
+        "current_run": null
+      },
+      "rewards": []
+    }
+  }
+}

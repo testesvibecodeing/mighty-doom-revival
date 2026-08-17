@@ -1,0 +1,44 @@
+{
+  "endpoint": "game/chapters/update",
+  "provenance": "server-replay",
+  "captured_at": "2026-08-17T10:36:00Z",
+  "sanitized": true,
+  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "request": {
+    "method": "POST",
+    "path": "/game/chapters/update",
+    "headers": {
+      "content-type": "application/json",
+      "x-ubu-apiversion": "24.0.0",
+      "x-ubu-token": "<token>"
+    },
+    "body": {
+      "stage": 3,
+      "checkpoint": "c3"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "min_update_time": null,
+      "current_run": {
+        "chapter": 101,
+        "challenge": 0,
+        "stage": 3,
+        "started_at": 1786962982,
+        "updated_at": 1786962982,
+        "revives": 0,
+        "weapons": [],
+        "gear": [],
+        "stats": [],
+        "payload": {
+          "stage": 3,
+          "checkpoint": "c3"
+        },
+        "checkpoint": "c3"
+      }
+    }
+  }
+}

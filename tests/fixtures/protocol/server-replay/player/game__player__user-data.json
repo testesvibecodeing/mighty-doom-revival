@@ -1,0 +1,99 @@
+{
+  "endpoint": "game/player/user-data",
+  "provenance": "server-replay",
+  "captured_at": "2026-08-17T10:36:00Z",
+  "sanitized": true,
+  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "request": {
+    "method": "POST",
+    "path": "/game/player/user-data",
+    "headers": {
+      "content-type": "application/json",
+      "x-ubu-apiversion": "24.0.0",
+      "x-ubu-token": "<token>"
+    },
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "user_data": {
+        "inventory": {
+          "currencies": [
+            {
+              "rid": 100,
+              "amount": 2000
+            }
+          ],
+          "weapons": [
+            {
+              "uid": 1,
+              "level": 1,
+              "cosmetic": null,
+              "rid": 200,
+              "tier": 1
+            }
+          ],
+          "equipment": [],
+          "launchers": [],
+          "energies": [
+            {
+              "rid": 400,
+              "amount": 10,
+              "regen_epoch": 1786963042
+            }
+          ],
+          "ultimates": [],
+          "slayers": [
+            {
+              "uid": 2,
+              "level": 1,
+              "cosmetic": null,
+              "rid": 300,
+              "tier": 1
+            }
+          ],
+          "entitlements": [],
+          "slots": [
+            {
+              "id": 10,
+              "item": 1
+            },
+            {
+              "id": 11,
+              "item": 2
+            }
+          ],
+          "cosmetics": []
+        },
+        "chapter_progression": {
+          "chapters": [],
+          "challenges": [],
+          "current_run": null
+        },
+        "talent_progression": {
+          "talents": []
+        },
+        "tutorial_progression": {
+          "sequences": []
+        },
+        "account_age": 0,
+        "player": {
+          "level": {
+            "current": 1,
+            "max": 1,
+            "details_current": {},
+            "details_next": {}
+          },
+          "chapter_progression": 0,
+          "stats": []
+        },
+        "total_attempt_count": 0,
+        "player_settings": null,
+        "last_login": 0
+      }
+    }
+  }
+}
