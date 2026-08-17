@@ -5,6 +5,23 @@ description: Triagem de logcat do Mighty DOOM patchado até a causa raiz — bar
 
 # Diagnóstico de boot — do logcat à causa raiz
 
+## Antes de abrir o logcat — triagem de 60 segundos
+
+O sintoma "barra em 100%" já foi **causado e corrigido** mais de uma vez neste
+projeto. Antes de diagnosticar de novo, elimine as causas de ambiente, em ordem de
+probabilidade histórica:
+
+1. **Servidor desatualizado** — o fix do `events/get-schedule` ("Malformed response
+   payload" por `event_type`/`null` no wire) entrou em `d8909f3`. No servidor:
+   `git log --oneline -1` precisa ser `d8909f3` ou posterior, e o processo precisa
+   ter sido **reiniciado** depois do pull.
+2. **APK antigo** — gerado antes do `zero_catalog_crc`, ou apontando para outro
+   host. Rode `verify_patched_apk.py` no arquivo que está no dispositivo.
+3. **Servidor respondendo?** — `curl -s https://<host>/revival/health` precisa
+   devolver `client_version 1.13.1`, `api_version 24.0.0`, `game_data_loaded: true`.
+
+Só depois dessas três é que o problema é de wire/conteúdo — aí sim, capture logcat.
+
 ## Capturar
 
 ```bash
@@ -27,6 +44,23 @@ grep -nE "Malformed response payload|Failed to launch|not a well formed JWT|CRC 
 
 Ruído esperado no emulador, **ignore**: `goldfish_vulkan: exportSyncFdForQSRILocked
 ... Bad file descriptor` repetido a cada frame. Não é causa de nada.
+
+## Ocorrências medidas nesta base (2026-08-16/17)
+
+Contadas com `grep -c` sobre os logcats preservados em `work/apk-patch/`:
+
+| Assinatura | boot-logcat | boot2 | boot3 | boot6 |
+|---|---:|---:|---:|---:|
+| `Session token ... not a well formed JWT` | 0 | 0 | 0 | **3** |
+| `Malformed response payload` | 0 | 0 | 0 | **3** |
+| `Failed to launch ... Aborting.` | 0 | 0 | 0 | **1** |
+| `CRC Mismatch` | 0 | **1** | 0 | 0 |
+| `Cant find corresponding data tool data` | 0 | 0 | 0 | **39** |
+
+Leitura: `boot2` é a regressão de CRC (assinatura 4). `boot6` é o ciclo completo de
+falha de boot: JWT malformado → payload malformado → 3 tentativas → abort, com as
+39 linhas de ability = **13 abilities únicas × 3 tentativas**. Use essas contagens
+como régua: um boot saudável não tem **nenhuma** das cinco assinaturas.
 
 ## Assinaturas conhecidas
 

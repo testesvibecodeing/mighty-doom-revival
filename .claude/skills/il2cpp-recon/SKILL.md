@@ -133,7 +133,8 @@ não como substituto dela:
 | `2400–2410` | IAP |
 | `3000–3131` | erro de servidor / plataformas |
 
-O servidor usa hoje `1000`, `2000`, `2101`, `2200` (`server/src/protocol.js`).
+O servidor usa hoje `1000`, `2000`, `2101`, `2200` (envelope local em
+`server/src/index.js:52-88`; `protocol.js` é legado, não referencie).
 
 ## Script reutilizável
 
@@ -157,9 +158,15 @@ python scripts/dump_il2cpp_metadata.py --apk input/mighty-doom.apk --routes
 grep -o "game/[a-z0-9/-]*" server/src/*.js | sort -u
 ```
 
-`server/src/index.js` responde hoje ~30 caminhos `game/*` diretamente, mais o que
-`compat.js`, `chapters.js` e `tutorial.js` agrupam — contra 116 no cliente. A
-diferença é o roadmap (`docs/ENDPOINT-MATRIX.md`, `docs/ROADMAP-100-PERCENT.md`).
+Medido em 2026-08-17: **57 caminhos `/game/*` distintos** implementados
+(`index.js` + `compat.js`, `chapters.js`, `tutorial.js`, `quests.js`,
+`battle-pass.js`, `reward-tracks.js`, `progression.js`), contra 116 no cliente —
+gap de 59. Os domínios cobertos: auth, session, identity, inbox, reward-tracks,
+daily-rewards, idle-rewards, inventory, player, armory, store, events, chapters,
+battle-pass, talents, gear, slayers, quests, tutorial (mais os catch-alls
+`iap/*` e `ads/*` desligados de propósito). Domínios **sem nenhuma rota**:
+`codes`, `devices`, `xbox`, `bnet`. A diferença é o roadmap
+(`docs/ENDPOINT-MATRIX.md`, `docs/ROADMAP-100-PERCENT.md`).
 
 ## Não faça
 

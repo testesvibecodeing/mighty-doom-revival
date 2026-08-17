@@ -17,7 +17,13 @@ description: Pipeline fim-a-fim de patch do APK do Mighty DOOM 1.13.1 — trocar
 
 - UnityPy tem versão fixada: **1.25.3**. Outra versão reserializa diferente e
   invalida os testes.
-- Ferramentas em `.tools/` são baixadas por `scripts/setup-patcher-tools.{bat,sh}`.
+- Ferramentas em `.tools/` são baixadas por `scripts/setup-patcher-tools.{bat,sh}`,
+  com versões e SHA-256 **pinados**: **Apktool 3.0.3**, **uber-apk-signer 1.3.0**.
+  Não atualize "para ver se resolve" — o pipeline inteiro (e os testes) foi
+  calibrado nesses binários.
+- Tamanhos de referência desta base: entrada `input/mighty-doom.apk` =
+  615.229.698 bytes; saída `output/mighty-doom-revival.apk` ≈ 650 MB (cresce pelo
+  padding do apktool/assinatura — é normal).
 
 ## Caminho feliz
 
@@ -40,6 +46,35 @@ Faz 8 passos, nesta ordem, e para no primeiro erro:
 8. copia para `output/mighty-doom-revival.apk`.
 
 Se você rodar passos manualmente, **não pule 6 nem a re-verificação do 7**.
+
+### Exit codes do orquestrador (`patch-apk.bat`)
+
+Para saber **em qual passo** uma automação morreu sem reler o log inteiro:
+
+| Exit | Passo que falhou |
+|---:|---|
+| 2 | hostname inválido (precheck `check_patch_length.py`) |
+| 3 | `python` ou `java` ausente no PATH |
+| 11 | preflight do servidor (`check_revival_server.py` — health/uts) |
+| 4 | `apktool d` (desmontagem) |
+| 5 | `apktool b` (rebuild) |
+| 6 | `verify_patched_apk.py` no APK **não-assinado** |
+| 7 | `uber-apk-signer` (assinar) |
+| 8 | `uber-apk-signer --onlyVerify` |
+| 9 | `verify_patched_apk.py` no APK **assinado** |
+| 10 | cópia final para `output/` |
+
+Exit 4 do **`check_patch_length.py`** (não do orquestrador) = não cabe no fast path
+→ o `.bat` segue automaticamente para o bundle-aware; não é fatal.
+
+### Exit codes do `verify_patched_apk.py`
+
+| Exit | Significado |
+|---:|---|
+| 0 | verificado (host novo > 0, host oficial = 0) |
+| 2 | erro de uso/IO/ZIP inválido |
+| 4 | host Revival **não encontrado** no APK |
+| 5 | host oficial Gear **ainda presente** — instalação recusada |
 
 ## Os três caminhos de patch
 
@@ -159,6 +194,15 @@ assinar reescreve o ZIP.
 - Laboratório/LAN com CA própria → passe `--ca caminho.pem`; o patcher copia a CA
   como recurso Android e referencia no `network_security_config`
   (`patch_apk.py: write_network_security`).
+
+## MCP opcional (não é o caminho principal)
+
+Existem servidores MCP de comunidade para análise de APK
+(`apktool-mcp-server`, `jadx-mcp-server`). Eles são **opcionais** e neste APK de
+615 MB o full-decode é lento e frágil. O caminho principal do projeto continua
+sendo `zipfile` direto + UnityPy 1.25.3 + os scripts acima — rápido, testado e
+reproduzível. Se um dia integrar MCP, trate como ferramenta de inspeção pontual,
+nunca como etapa do pipeline de patch.
 
 ## Armadilhas já pagas
 

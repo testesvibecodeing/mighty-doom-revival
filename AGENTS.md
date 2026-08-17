@@ -57,11 +57,14 @@ propósito. O detalhe operacional está nas skills (`.claude/skills/`) e em `doc
 | `scripts/inject_loading_screen.py` / `loading_screen_editor.py` | Loading screen custom (CLI + GUI Tkinter) |
 | `scripts/check_revival_server.py` | Preflight HTTPS do servidor (health + `uts`) |
 | `scripts/patch-apk.{bat,sh}` | Orquestração fim-a-fim em 8 passos |
-| `server/src/index.js` | HTTP builtin, roteamento `/game/*`, `/revival/*`, `/data` |
-| `server/src/protocol.js` | Envelope `wire()`/`ok()`/`fail()`, `gameGuard`, `requireUser` |
+| `server/src/index.js` | HTTP builtin, roteamento `/game/*`, `/revival/*`, `/data`; **envelope vivo `wire()`/`ok()`/`fail()` nas linhas 52/84/88** |
+| `server/src/protocol.js` + `baseline.js` | **Código legado/morto** — nada os importa (só `baseline.js` importa `protocol.js`). Não os use em código novo; o envelope real é o local do `index.js` |
 | `server/src/db.js` | SQLite, usuários, token de sessão |
 | `server/src/events.js` | `eventSchedule()` / `eventProgress()` / `wireEvent()` |
 | `server/src/compat.js` | Rotas de compatibilidade agrupadas |
+| `server/src/admin.js` | Sub-rotas `/account/admin/*` (users, grants, packs, events CRUD, site, notifications) |
+| `server/src/site.js` | Site estático, `/revival/apk`, upload/download do APK |
+| `melhorias.md` | Plano de melhorias e specs pendentes (documento de trabalho, não versionado) |
 | `docs/APK-PATCH.md` | Detalhe do patcher, orçamento de bytes, CRC do catálogo |
 | `docs/ENDPOINT-MATRIX.md` | Estado por módulo da API |
 | `docs/ROADMAP-100-PERCENT.md` | Plano até paridade |
@@ -135,6 +138,19 @@ de entrada mudar.
   `api_version` do config + `content-type: application/json`.
 - `java` no PATH desta máquina é **11**; apktool/uber-apk-signer precisam de **17+**:
   use `.tools/jre17/jdk-17.0.20+8-jre/bin/java.exe`.
+- Toolchain pinada: **Apktool 3.0.3** e **uber-apk-signer 1.3.0** (SHA-256 fixados em
+  `scripts/setup-patcher-tools.*`), **UnityPy 1.25.3** exata. Não "atualize para
+  resolver" — outra versão reserializa diferente e invalida os testes.
+- O servidor implementa **57 caminhos `/game/*` distintos** (medido com
+  `grep -o "game/[a-z0-9/-]*" server/src/*.js | sort -u` em 2026-08-17), contra as
+  116 rotas do cliente. A diferença é o roadmap.
+- O token de sessão do jogo é `randomBytes(32).toString('base64url')` (`db.js`
+  `createUser()`), **estático por usuário**, em texto claro em `users.token`. O
+  cliente espera JWT — ver skill `boot-diagnostics`, assinatura 2.
+- `RESEARCH_MODE` (env, default `true`): endpoint `/game/*` desconhecido é logado
+  como `[research] endpoint ainda não implementado` e responde `ok()` vazio em vez
+  de 404 (`index.js:719-722`). Útil para mapear o cliente; perigoso se esquecido
+  ligado.
 
 ## Escopo e limites
 
