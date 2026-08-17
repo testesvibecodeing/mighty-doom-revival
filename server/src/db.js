@@ -156,12 +156,24 @@ export class Repository {
         created_at INTEGER NOT NULL,
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       );
+      CREATE TABLE IF NOT EXISTS login_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        used_at INTEGER,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
     `)
     const columns = new Set(this.db.prepare('PRAGMA table_info(users)').all().map(row => row.name))
     if (!columns.has('email')) this.db.exec('ALTER TABLE users ADD COLUMN email TEXT')
     if (!columns.has('display_name')) this.db.exec('ALTER TABLE users ADD COLUMN display_name TEXT')
     if (!columns.has('recovery_hash')) this.db.exec('ALTER TABLE users ADD COLUMN recovery_hash TEXT')
     if (!columns.has('is_admin')) this.db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0')
+    // Contas criadas via código por e-mail nascem sem senha (password_set=0)
+    // até o primeiro acesso definir uma; contas existentes já tinham senha.
+    if (!columns.has('password_set')) this.db.exec('ALTER TABLE users ADD COLUMN password_set INTEGER NOT NULL DEFAULT 1')
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(lower(email)) WHERE email IS NOT NULL AND email <> \'\'')
   }
 
@@ -188,9 +200,9 @@ export class Repository {
     const uuid = randomUUID()
     const createdAt = Math.floor(Date.now() / 1000)
     const info = this.db.prepare(`
-      INSERT INTO users (uuid, password_hash, email, display_name, recovery_hash, token, is_admin, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(uuid, passwordHash(password), options.email || null, options.displayName || null, passwordHash(recoveryCode), token, options.isAdmin ? 1 : 0, createdAt)
+      INSERT INTO users (uuid, password_hash, email, display_name, recovery_hash, token, is_admin, password_set, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(uuid, passwordHash(password), options.email || null, options.displayName || null, passwordHash(recoveryCode), token, options.isAdmin ? 1 : 0, options.passwordSet === false ? 0 : 1, createdAt)
     const user = this.userById(Number(info.lastInsertRowid))
     return { user, password, recoveryCode }
   }
@@ -256,12 +268,38 @@ export class Repository {
   }
 
   updatePassword (userId, password) {
-    this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash(password), userId)
+    this.db.prepare('UPDATE users SET password_hash = ?, password_set = 1 WHERE id = ?').run(passwordHash(password), userId)
   }
 
   verifyRecoveryCode (userId, recoveryCode) {
     const user = this.userById(userId)
     return Boolean(user?.recovery_hash && verifyPassword(user.recovery_hash, recoveryCode))
+  }
+
+  // Códigos de acesso por e-mail: 6 dígitos, hash scrypt, TTL curto,
+  // mínimo de 60s entre envios para o mesmo destinatário.
+  createLoginCode (email, ttlSeconds = 600) {
+    const now = Math.floor(Date.now() / 1000)
+    const normalized = String(email || '').toLowerCase()
+    this.db.prepare('DELETE FROM login_codes WHERE expires_at < ?').run(now - 3600)
+    const latest = this.db.prepare('SELECT created_at FROM login_codes WHERE lower(email) = ? ORDER BY id DESC LIMIT 1').get(normalized)
+    if (latest && now - latest.created_at < 60) return null
+    const code = String(100000 + Math.floor(Math.random() * 900000))
+    this.db.prepare('INSERT INTO login_codes (email, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)').run(normalized, passwordHash(code), now + ttlSeconds, now)
+    return code
+  }
+
+  consumeLoginCode (email, code) {
+    const now = Math.floor(Date.now() / 1000)
+    const row = this.db.prepare(`
+      SELECT * FROM login_codes
+      WHERE lower(email) = ? AND used_at IS NULL AND expires_at > ?
+      ORDER BY id DESC LIMIT 1
+    `).get(String(email || '').toLowerCase(), now)
+    if (!row || row.attempts >= 5) return false
+    const valid = verifyPassword(row.code_hash, String(code || ''))
+    this.db.prepare('UPDATE login_codes SET attempts = attempts + 1, used_at = ? WHERE id = ?').run(valid ? now : null, row.id)
+    return valid
   }
 
   createWebSession (userId, ttlSeconds = 30 * 24 * 3600) {

@@ -23,6 +23,7 @@ import { activePacks, packToStoreItem, purchasePack } from './store.js'
 import { handleTutorialRequest, tutorialProgressionWire } from './tutorial.js'
 import { createSiteRouter } from './site.js'
 import { panelResourceInfo } from './assets.js'
+import { readSmtpConfig, sendMail, smtpConfigured } from './mail.js'
 
 const serverRoot = resolve(import.meta.dirname, '..')
 const envPath = resolve(serverRoot, '.env')
@@ -202,6 +203,43 @@ function emailIsValid (value) {
   return typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
+// Envia o código de acesso por e-mail. `create: true` cadastra a conta no
+// primeiro pedido (login sem senha); `create: false` é o fluxo "esqueci a
+// senha", que responde ok mesmo para e-mail inexistente (anti-enumerção).
+async function dispatchLoginCode (email, { create }) {
+  const smtp = readSmtpConfig()
+  if (!smtpConfigured(smtp)) {
+    return { status: 503, payload: { ok: false, error: 'smtp-not-configured', message: 'O administrador precisa configurar o SMTP no painel.' } }
+  }
+  let user = repo.userByLogin(email)
+  let created = false
+  if (!user) {
+    if (!create) return { status: 200, payload: { ok: true, code_sent: true } }
+    try {
+      user = repo.createUser({ email, passwordSet: false }).user
+      created = true
+    } catch (error) {
+      if (String(error.message).includes('UNIQUE')) return { status: 409, payload: { ok: false, error: 'email-already-used' } }
+      throw error
+    }
+  }
+  const code = repo.createLoginCode(email)
+  if (!code) {
+    return { status: 429, payload: { ok: false, error: 'code-rate-limited', message: 'Aguarde um minuto antes de pedir outro código.' } }
+  }
+  try {
+    await sendMail(smtp, {
+      to: email,
+      subject: 'Seu código de acesso',
+      text: `Olá!\n\nSeu código de acesso é: ${code}\nEle é válido por 10 minutos.\n\nSe você não pediu este código, ignore este e-mail.`
+    })
+  } catch (error) {
+    console.warn(`[mail] falha ao enviar para ${email}: ${error.message}`)
+    return { status: 502, payload: { ok: false, error: 'mail-send-failed' } }
+  }
+  return { status: 200, payload: { ok: true, code_sent: true, account_created: created } }
+}
+
 async function handleAccount (req, res, path) {
   if (!path.startsWith('/account/')) return false
   if (req.method === 'GET' && path === '/account/me') {
@@ -237,6 +275,28 @@ async function handleAccount (req, res, path) {
   let body = {}
   if (req.method !== 'POST' && req.method !== 'PATCH') return json(res, 405, { ok: false, error: 'method-not-allowed' })
   try { body = await readJsonBody(req) } catch { return json(res, 400, { ok: false, error: 'invalid-json' }) }
+
+  if (path === '/account/email-code/request') {
+    const email = String(body.email || '').trim().toLowerCase()
+    if (!emailIsValid(email)) return json(res, 400, { ok: false, error: 'email-invalid' })
+    const outcome = await dispatchLoginCode(email, { create: true })
+    return json(res, outcome.status, outcome.payload)
+  }
+
+  if (path === '/account/email-code/login') {
+    const email = String(body.email || '').trim().toLowerCase()
+    const user = repo.userByLogin(email)
+    if (!user || !repo.consumeLoginCode(email, body.code)) return json(res, 401, { ok: false, error: 'code-invalid' })
+    const session = repo.createWebSession(user.id)
+    accountCookie(res, session.token)
+    const fresh = repo.userById(user.id)
+    return json(res, 200, {
+      ok: true,
+      account: publicAccount(fresh),
+      snapshot: accountSnapshot(fresh),
+      password_set: Boolean(fresh.password_set)
+    })
+  }
 
   if (path === '/account/register') {
     const email = String(body.email || '').trim().toLowerCase()
@@ -274,10 +334,28 @@ async function handleAccount (req, res, path) {
   }
 
   if (path === '/account/forgot-password') {
-    return json(res, 200, { ok: true, recovery_required: true, message: 'Use o código de recuperação criado junto com a conta.' })
+    const email = String(body.email || '').trim().toLowerCase()
+    if (emailIsValid(email)) {
+      const outcome = await dispatchLoginCode(email, { create: false })
+      if (outcome.payload?.code_sent) {
+        return json(res, 200, { ok: true, code_sent: true, message: 'Se a conta existir, um código de acesso foi enviado ao e-mail.' })
+      }
+      if (outcome.status === 429 || outcome.status === 502) return json(res, outcome.status, outcome.payload)
+    }
+    return json(res, 200, { ok: true, recovery_required: true, message: 'Sem SMTP configurado, use o código de recuperação criado junto com a conta.' })
   }
 
   if (path === '/account/reset-password') {
+    // Via nova: e-mail + código recebido. Via antiga: código de recuperação RV-.
+    const email = String(body.email || '').trim().toLowerCase()
+    if (email && body.code) {
+      const user = repo.userByLogin(email)
+      if (!user || !passwordIsValid(body.new_password) || !repo.consumeLoginCode(email, body.code)) {
+        return json(res, 400, { ok: false, error: 'recovery-data-invalid' })
+      }
+      repo.updatePassword(user.id, body.new_password)
+      return json(res, 200, { ok: true, message: 'Senha redefinida. Faça login com e-mail e senha.' })
+    }
     const user = repo.userByLogin(body.login)
     if (!user || !passwordIsValid(body.new_password) || !repo.verifyRecoveryCode(user.id, body.recovery_code)) {
       return json(res, 400, { ok: false, error: 'recovery-data-invalid' })
@@ -300,9 +378,14 @@ async function handleAccount (req, res, path) {
   }
 
   if (path === '/account/password') {
-    if (!repo.login(user.id, body.current_password) || !passwordIsValid(body.new_password)) return json(res, 400, { ok: false, error: 'password-data-invalid' })
+    // Conta nascida por código de e-mail (password_set=0) define a primeira
+    // senha sem precisar de current_password — a sessão web já é a prova.
+    const firstPassword = user.password_set === 0
+    if ((!firstPassword && !repo.login(user.id, body.current_password)) || !passwordIsValid(body.new_password)) {
+      return json(res, 400, { ok: false, error: 'password-data-invalid' })
+    }
     repo.updatePassword(user.id, body.new_password)
-    return json(res, 200, { ok: true, message: 'Senha alterada com sucesso.' })
+    return json(res, 200, { ok: true, message: firstPassword ? 'Senha criada com sucesso.' : 'Senha alterada com sucesso.' })
   }
 
   return json(res, 404, { ok: false, error: 'not-found' })

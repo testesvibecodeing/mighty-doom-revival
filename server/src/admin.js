@@ -5,6 +5,7 @@ import { dirname } from 'node:path'
 import { classifyResource, giveGameResource } from './game-data-model.js'
 import { resolveResource } from './config.js'
 import { panelResourceByRef, panelResourceInfo } from './assets.js'
+import { readSmtpConfig, smtpPublic, writeSmtpConfig } from './mail.js'
 
 // Kinds aceitos numa concessão explícita de recurso (giveGameResource).
 const GRANT_KINDS = new Set(['currency', 'energy', 'cosmetic', 'entitlement', 'weapon', 'equipment', 'launcher', 'ultimate', 'slayer'])
@@ -422,6 +423,16 @@ export function handleAdminApi (req, res, path, body, { repo, runtime, reloadRun
         apk: site.apkInfo()
       }
     })
+  }
+
+  // --- SMTP do painel: habilita login/códigos por e-mail ---
+  if (route === 'smtp' || route === 'smtp/') {
+    if (req.method === 'GET') return json(res, 200, { ok: true, smtp: smtpPublic(readSmtpConfig()) })
+    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+      const next = writeSmtpConfig(body)
+      return json(res, 200, { ok: true, smtp: smtpPublic(next) })
+    }
+    return json(res, 405, { ok: false, error: 'method-not-allowed' })
   }
 
   // --- usuários: buscar, resetar senha, recovery, promover, conceder item ---
