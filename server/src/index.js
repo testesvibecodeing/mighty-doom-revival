@@ -1,8 +1,9 @@
 import { createServer } from 'node:http'
 import { existsSync, readFileSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { loadEnvFile } from 'node:process'
 
+import { ensureSuperAdmin, handleAdminApi, handleAdminRecover, publicPack } from './admin.js'
 import { chapterProgressionWire, handleChapterRequest } from './chapters.js'
 import { handleCompatRequest } from './compat.js'
 import { loadRuntimeConfig, researchMode } from './config.js'
