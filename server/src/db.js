@@ -160,6 +160,21 @@ export class Repository {
     return this.db.prepare('SELECT COUNT(*) AS total FROM users').get().total
   }
 
+  incrementAttemptCount (userId) {
+    this.db.prepare('UPDATE users SET attempt_count = attempt_count + 1 WHERE id = ?').run(userId)
+    return this.userById(userId)?.attempt_count ?? 0
+  }
+
+  setChapterProgression (userId, value) {
+    const next = Math.max(0, Math.floor(Number(value) || 0))
+    this.db.prepare(`
+      UPDATE users
+      SET chapter_progression = CASE WHEN chapter_progression > ? THEN chapter_progression ELSE ? END
+      WHERE id = ?
+    `).run(next, next, userId)
+    return this.userById(userId)?.chapter_progression ?? 0
+  }
+
   login (id, password) {
     const user = this.userById(id)
     if (!user || user.password_hash !== passwordHash(password)) return null
