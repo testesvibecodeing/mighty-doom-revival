@@ -111,10 +111,19 @@ export function battlePassState (repo, userId, runtime, seasonId) {
 
 export function activeBattlePassStates (repo, userId, runtime) {
   const result = []
+  const archive = archiveMode(runtime)
   for (const pass of storyBattlePasses(runtime.gameData)) {
     if (!available(runtime, pass)) continue
     const state = battlePassState(repo, userId, runtime, pass.id)
-    if (state) result.push(state)
+    if (state) {
+      result.push(state)
+      continue
+    }
+
+    // Archived seasons need to be visible in the client's event progress before
+    // the player explicitly starts one. Return a non-persisted default preview
+    // so /start-season can still create the real state when the client asks.
+    if (archive) result.push(battlePassDefaultState(runtime, pass))
   }
   return result
 }
