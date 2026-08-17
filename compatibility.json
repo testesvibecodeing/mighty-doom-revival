@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-17T15:41:56Z",
+    "updated": "2026-08-17T15:49:04Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -131,7 +131,7 @@
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
@@ -145,7 +145,7 @@
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
@@ -153,17 +153,17 @@
     },
     "game/auth/login-xbox": {
       "module": "auth",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: AuthApi login de plataforma; ResponseCode EXTRAÍDO dos fieldDefaultValues (âncoras Success=1000/2200/2300/3000): XboxUnavailable=3127 — indisponibilidade real, Revival não fala com Xbox Live"
     },
     "game/auth/register": {
       "module": "auth",
@@ -307,17 +307,17 @@
     },
     "game/bnet/claim-slayers-club": {
       "module": "bnet",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: BnetApi.ClaimSlayersClub(bnetSession) CONFIRMADO; BnetUnavailable=3101 real (extraído)"
     },
     "game/chapters/ad-ability-reroll": {
       "module": "chapters",
@@ -909,31 +909,31 @@
     },
     "game/identity/authorize-xbox": {
       "module": "identity",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: IdentityApi.AuthorizeXbox(xboxAuth) CONFIRMADO; XboxUnavailable=3127 real"
     },
     "game/identity/describe-conflict": {
       "module": "identity",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: IdentityApi.DescribeConflict(linkToken) CONFIRMADO; gates verdadeiros: 2200 link-token-required / 2340 link-not-found (sem vínculo de plataforma nenhum token existe); link_token A VERIFICAR"
     },
     "game/identity/link-game-center": {
       "module": "identity",
@@ -965,17 +965,17 @@
     },
     "game/identity/link-xbox": {
       "module": "identity",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: IdentityApi.LinkXbox(xboxAuth) CONFIRMADO; XboxUnavailable=3127 real"
     },
     "game/identity/list": {
       "module": "identity",
@@ -993,31 +993,31 @@
     },
     "game/identity/resolve-conflict": {
       "module": "identity",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: IdentityApi.ResolveConflict(linkToken, userChoice) CONFIRMADO; mesmos gates de describe-conflict; user_choice A VERIFICAR"
     },
     "game/identity/unlink": {
       "module": "identity",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: IdentityApi.Unlink(identityId) CONFIRMADO; 2200 identity-id-required / 2340 identity-not-found (gate verdadeiro); identity_id A VERIFICAR"
     },
     "game/idle-rewards/ad-boost": {
       "module": "idle-rewards",
@@ -1595,59 +1595,59 @@
     },
     "game/xbox/claim-perk": {
       "module": "xbox",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: XboxApi; XboxUnavailable=3127 real (extraído)"
     },
     "game/xbox/get-game-pass": {
       "module": "xbox",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: XboxApi; XboxUnavailable=3127 real (extraído)"
     },
     "game/xbox/get-gamertag": {
       "module": "xbox",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: XboxApi; XboxUnavailable=3127 real (extraído); sem payload falso"
     },
     "game/xbox/get-perks": {
       "module": "xbox",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: XboxApi; XboxUnavailable=3127 real (extraído)"
     }
   },
   "server_only_routes": [

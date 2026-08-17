@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T15:41:56Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T15:49:04Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -31,12 +31,12 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [armory](#armory) | 15 | 2 | 1 | 1 | 0 | 1 | 🧪 em convergência |
 | [tutorial](#tutorial) | 16 | 1 | 0 | 1 | 0 | 0 | 🧪 em convergência |
 | [session](#session) | 17 | 3 | 0 | 3 | 0 | 1 | 🧪 em convergência |
-| [auth](#auth) | 18 | 5 | 0 | 4 | 1 | 0 | 🧪 em convergência |
-| [identity](#identity) | 19 | 8 | 0 | 3 | 5 | 0 | 🧪 em convergência |
+| [auth](#auth) | 18 | 5 | 0 | 5 | 0 | 1 | 🧪 em convergência |
+| [identity](#identity) | 19 | 8 | 0 | 8 | 0 | 5 | 🧪 em convergência |
 | [devices](#devices) | 20 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
 | [codes](#codes) | 21 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
-| [xbox](#xbox) | 22 | 4 | 0 | 0 | 4 | 0 | ❌ nada implementado |
-| [bnet](#bnet) | 23 | 1 | 0 | 0 | 1 | 0 | ❌ nada implementado |
+| [xbox](#xbox) | 22 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
+| [bnet](#bnet) | 23 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
 | [ads ⛔](#ads) | 99 | 4 | 0 | 4 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
 | [iap ⛔](#iap) | 99 | 6 | 0 | 6 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
 
@@ -215,23 +215,23 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/auth/login-device` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: login-device no bootstrap do emulador, resposta aceita pelo cliente. |
-| `game/auth/login-game-center` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/auth/login-google-play-games` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/auth/login-xbox` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/auth/login-game-center` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/auth/login-google-play-games` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/auth/login-xbox` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: AuthApi login de plataforma; ResponseCode EXTRAÍDO dos fieldDefaultValues (âncoras Success=1000/2200/2300/3000): XboxUnavailable=3127 — indisponibilidade real, Revival não fala com Xbox Live |
 | `game/auth/register` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: registro da conta revivaltest feito pelo cliente no emulador, boot completo sem erros no logcat. |
 
 ### identity
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/identity/authorize-xbox` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/identity/describe-conflict` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/identity/authorize-xbox` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: IdentityApi.AuthorizeXbox(xboxAuth) CONFIRMADO; XboxUnavailable=3127 real |
+| `game/identity/describe-conflict` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: IdentityApi.DescribeConflict(linkToken) CONFIRMADO; gates verdadeiros: 2200 link-token-required / 2340 link-not-found (sem vínculo de plataforma nenhum token existe); link_token A VERIFICAR |
 | `game/identity/link-game-center` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/identity/link-google-play-games` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/identity/link-xbox` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/identity/link-xbox` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: IdentityApi.LinkXbox(xboxAuth) CONFIRMADO; XboxUnavailable=3127 real |
 | `game/identity/list` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
-| `game/identity/resolve-conflict` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/identity/unlink` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/identity/resolve-conflict` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: IdentityApi.ResolveConflict(linkToken, userChoice) CONFIRMADO; mesmos gates de describe-conflict; user_choice A VERIFICAR |
+| `game/identity/unlink` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: IdentityApi.Unlink(identityId) CONFIRMADO; 2200 identity-id-required / 2340 identity-not-found (gate verdadeiro); identity_id A VERIFICAR |
 
 ### devices
 
@@ -252,16 +252,16 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/xbox/claim-perk` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/xbox/get-game-pass` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/xbox/get-gamertag` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/xbox/get-perks` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/xbox/claim-perk` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: XboxApi; XboxUnavailable=3127 real (extraído) |
+| `game/xbox/get-game-pass` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: XboxApi; XboxUnavailable=3127 real (extraído) |
+| `game/xbox/get-gamertag` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: XboxApi; XboxUnavailable=3127 real (extraído); sem payload falso |
+| `game/xbox/get-perks` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: XboxApi; XboxUnavailable=3127 real (extraído) |
 
 ### bnet
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/bnet/claim-slayers-club` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/bnet/claim-slayers-club` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: BnetApi.ClaimSlayersClub(bnetSession) CONFIRMADO; BnetUnavailable=3101 real (extraído) |
 
 ### ads
 

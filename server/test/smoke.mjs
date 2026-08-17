@@ -315,6 +315,26 @@ try {
   const redeemedAgain = await post('/game/codes/redeem', { code: 'REVIVAL' }, token, 400)
   assert.equal(redeemedAgain.reason, 'code-already-redeemed')
 
+  // Rotas platform-gated: código REAL de indisponibilidade do ResponseCode
+  // (extraído do metadata: XboxUnavailable=3127, BnetUnavailable=3101,
+  // GooglePlayGamesUnavailable=3111, GameCenterUnavailable=3121) e gates
+  // verdadeiros nos fluxos de conflito/unlink — nunca payload falso.
+  const loginXbox = await post('/game/auth/login-xbox', { client_version: '1.13.1' }, null, 400)
+  assert.equal(loginXbox.code, 3127)
+  assert.equal(loginXbox.reason, 'xbox-unavailable')
+  const loginGpg = await post('/game/auth/login-google-play-games', {}, null, 400)
+  assert.equal(loginGpg.code, 3111)
+  const gamertag = await post('/game/xbox/get-gamertag', {}, token, 400)
+  assert.equal(gamertag.code, 3127)
+  const slayersClub = await post('/game/bnet/claim-slayers-club', {}, token, 400)
+  assert.equal(slayersClub.code, 3101)
+  const conflictMissing = await post('/game/identity/describe-conflict', {}, token, 400)
+  assert.equal(conflictMissing.code, 2200)
+  const conflictUnknown = await post('/game/identity/describe-conflict', { link_token: 'x' }, token, 400)
+  assert.equal(conflictUnknown.code, 2340)
+  const unlinkUnknown = await post('/game/identity/unlink', { identity_id: 1 }, token, 400)
+  assert.equal(unlinkUnknown.code, 2340)
+
   const schedule = await post('/game/events/get-schedule', {}, token)
   assert.equal(schedule.scheduled_events[0].id, 7001)
   // Contrato do cliente 1.13.1: o DTO do schedule (cluster do global-metadata)
@@ -391,7 +411,10 @@ try {
     '/game/store/get-items', '/game/store/get-offer-items',
     '/game/store/get-player-offers', '/game/store/activate-offer', '/game/store/ad-purchase',
     '/game/devices/register', '/game/devices/list', '/game/devices/describe',
-    '/game/devices/unregister', '/game/codes/redeem'
+    '/game/devices/unregister', '/game/codes/redeem',
+    '/game/auth/login-xbox', '/game/auth/login-google-play-games',
+    '/game/xbox/get-gamertag', '/game/bnet/claim-slayers-club',
+    '/game/identity/describe-conflict', '/game/identity/unlink'
   ])
   const leaked = researchState.fallback_endpoints.filter(row => implementedPaths.has(row.path))
   assert.deepEqual(leaked, [], 'rota implementada não pode depender de fallback de pesquisa')

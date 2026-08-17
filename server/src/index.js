@@ -15,6 +15,7 @@ import { findAdRewardToken } from './ad-tokens.js'
 import { boostIdleReward, idleRewardState } from './rewards.js'
 import { handleDevicesRequest } from './devices.js'
 import { redeemCode } from './codes.js'
+import { handlePlatformRequest, platformLoginError } from './platform.js'
 import { activatedOfferWires, activateStoreOffer, adPurchasePack, storeItemsWire } from './store.js'
 import { inventoryWire, seedStarterBundle, giveGameResource } from './game-data-model.js'
 import { playerStatsWire, incrementPlayerStats } from './stats.js'
@@ -594,6 +595,13 @@ function handleBaseline (path, body, user) {
   // CodesApi.Redeem(code): códigos de gameData.codes, resgate 1x por jogador.
   if (path === '/game/codes/redeem') return redeemCode(repo, user.id, body, runtime)
 
+  // Rotas platform-gated (xbox/bnet/identity de plataforma): indisponibilidade
+  // real ou gate verdadeiro — ver src/platform.js.
+  {
+    const handled = handlePlatformRequest(path, body)
+    if (handled) return handled
+  }
+
   if (path === '/game/inventory/get-equip-sequence-id') {
     return { data: { sequence_id: repo.getState(user.id, 'inventory', 'equip_sequence_id', 0) } }
   }
@@ -821,7 +829,12 @@ async function handle (req, res) {
     return ok(res, result.data)
   }
 
-  if (path === '/game/auth/login-google-play-games' || path === '/game/auth/login-game-center') return fail(res, 400, 2000)
+  if (path === '/game/auth/login-xbox' || path === '/game/auth/login-google-play-games' || path === '/game/auth/login-game-center') {
+    // Logins de plataforma: código REAL de indisponibilidade do ResponseCode
+    // (extraído do metadata) — o Revival não fala com Xbox/Google/Game Center.
+    const platformError = platformLoginError(path)
+    return fail(res, ...platformError.error)
+  }
 
   const token = extractToken(req)
   const user = token ? repo.userByToken(token) : null
