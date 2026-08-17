@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T12:05:46Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T12:27:19Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -21,16 +21,16 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
 | [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
 | [inbox](#inbox) | 7 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
-| [player](#player) | 8 | 7 | 0 | 6 | 1 | 1 | 🧪 em convergência |
+| [player](#player) | 8 | 7 | 0 | 7 | 0 | 2 | 🧪 em convergência |
 | [events](#events) | 9 | 11 | 0 | 11 | 0 | 9 | 🧪 em convergência |
 | [battle-pass](#battle-pass) | 10 | 9 | 0 | 9 | 0 | 9 | 🧪 em convergência |
 | [daily-rewards](#daily-rewards) | 11 | 2 | 0 | 2 | 0 | 0 | 🧪 em convergência |
-| [idle-rewards](#idle-rewards) | 12 | 4 | 0 | 2 | 2 | 0 | 🧪 em convergência |
-| [store](#store) | 13 | 10 | 0 | 5 | 5 | 0 | 🧪 em convergência |
-| [inventory](#inventory) | 14 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
-| [armory](#armory) | 15 | 2 | 0 | 1 | 1 | 0 | 🧪 em convergência |
+| [idle-rewards](#idle-rewards) | 12 | 4 | 0 | 4 | 0 | 2 | 🧪 em convergência |
+| [store](#store) | 13 | 10 | 0 | 10 | 0 | 5 | 🧪 em convergência |
+| [inventory](#inventory) | 14 | 3 | 0 | 3 | 0 | 1 | 🧪 em convergência |
+| [armory](#armory) | 15 | 2 | 1 | 1 | 0 | 1 | 🧪 em convergência |
 | [tutorial](#tutorial) | 16 | 1 | 0 | 1 | 0 | 0 | 🧪 em convergência |
-| [session](#session) | 17 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
+| [session](#session) | 17 | 3 | 0 | 3 | 0 | 1 | 🧪 em convergência |
 | [auth](#auth) | 18 | 5 | 0 | 4 | 1 | 0 | 🧪 em convergência |
 | [identity](#identity) | 19 | 8 | 0 | 3 | 5 | 0 | 🧪 em convergência |
 | [devices](#devices) | 20 | 4 | 0 | 0 | 4 | 0 | ❌ nada implementado |
@@ -115,7 +115,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/player/game-data-token` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: bootstrap completo no emulador; /data baixado com o token. |
 | `game/player/increment-stats` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
 | `game/player/level-up` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/player/set-push-token` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/player/set-push-token` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: PlayerApi.SetPushToken CONFIRMADO; envelope puro; push_token obrigatório (2200); nome de campo A VERIFICAR |
 | `game/player/stats` | ✅ | ✅ | · | · | · | — | · | ✅ | — | schema extraído |
 | `game/player/update-settings` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/player/user-data` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: user-data no bootstrap e refletindo progressão persistida após restart do servidor. |
@@ -161,8 +161,8 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/idle-rewards/ad-boost` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/idle-rewards/boost` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/idle-rewards/ad-boost` | ✅ | ✅ | · | · | · | — | · | · | — | metadata v29: IdleRewardApi.AdBoost(rewardTokenId) CONFIRMADO; consome AdRewardToken IdleRewardBoost ignorando cooldown; sem emissor game/ads/* o 2300 é honesto; reward_token_id A VERIFICAR |
+| `game/idle-rewards/boost` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: IdleRewardApi.Boost() CONFIRMADO; sem Response DTO -> envelope puro; concede períodos pendentes × gameData.idle_reward.boost.multiplier, cooldown do boost grátis |
 | `game/idle-rewards/claim` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/idle-rewards/get-state` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 
@@ -171,14 +171,14 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/store/activate-daily-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/store/activate-offer` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/store/ad-purchase` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/activate-offer` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.ActivateOffer(offerId, gearResourceId) CONFIRMADO; ActivateOfferResponse{offer}; fixture server-replay 2026-08-17; offer_id/gear_resource_id A VERIFICAR |
+| `game/store/ad-purchase` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: StoreApi.AdPurchaseItem(itemId, rewardTokenId) CONFIRMADO; AdPurchaseResponse{resources}; token StoreItemCrate/StoreItemGold via ad-tokens.js; sem emissor ads -> 2300 honesto; item_id/reward_token_id A VERIFICAR |
 | `game/store/get` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 | `game/store/get-daily-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/store/get-items` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/store/get-offer-items` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/get-items` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetItems() CONFIRMADO; GetItemsResponse{storeItems, iapItems, adItems}; iap_items vazio por design (IAP desligado); packs ad separados em ad_items |
+| `game/store/get-offer-items` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetOfferItems() CONFIRMADO; mesmo DTO de GetItems; fixture server-replay 2026-08-17 |
 | `game/store/get-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/store/get-player-offers` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/store/get-player-offers` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetPlayerOffers() CONFIRMADO; GetPlayerOffersResponse{offers} com PlayerOfferModel das offers ativadas |
 | `game/store/purchase` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 
 ### inventory
@@ -186,15 +186,15 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/inventory/equip` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/inventory/exchange-currency` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/inventory/exchange-currency` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: InventoryApi.ExchangeCurrency(inputCurrencyId, outputCurrencyId, outputCurrencyAmount) CONFIRMADO; sem Response DTO -> envelope puro; taxa em gameData.currency_exchange rate; saída via giveGameResource; nomes de wire A VERIFICAR |
 | `game/inventory/get-equip-sequence-id` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
 
 ### armory
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/armory/get` | ✅ | · | ✅ | ✅ | ✅ | — | · | ✅ | — | RELATORIO-STATUS 2026-08-16: boot completo; upgrades:[] evita o NRE do ArmoryController.Init. |
-| `game/armory/upgrade` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/armory/get` | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | metadata v29: ArmoryApi.Get() CONFIRMADO; wire {upgrades:[{id,level}]} (fallback snake); array sempre presente — boot 1.13.1 itera em ArmoryController.Init |
+| `game/armory/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: ArmoryApi.Upgrade(id, level) CONFIRMADO; sem Response DTO -> envelope puro; semântica do level (alvo 1-based sequencial) A VERIFICAR até captura |
 
 ### tutorial
 
@@ -208,7 +208,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/session/heartbeat` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 | `game/session/refresh` | ✅ | · | ✅ | ✅ | ✅ | — | · | ✅ | — | RELATORIO-STATUS 2026-08-16: session/refresh contínuo durante o combate (keepalive). |
-| `game/session/update-legal` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/session/update-legal` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SessionApi.UpdateLegal CONFIRMADO; envelope puro; persiste versões tos/pp/eula + flags em session/legal; nomes de campos A VERIFICAR |
 
 ### auth
 
@@ -289,6 +289,7 @@ Implementadas em `server/src` mas ausentes das 116 rotas do metadata —
 provável erro de transcrição histórico. Candidatas a remoção;
 nenhum cliente 1.13.1 as chama.
 
+- `game/armory`
 - `game/events`
 - `game/idle-rewards/claim-rewards`
 - `game/quests/claim`

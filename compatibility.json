@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-17T12:05:46Z",
+    "updated": "2026-08-17T12:27:19Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -84,30 +84,30 @@
     "game/armory/get": {
       "module": "armory",
       "implemented": true,
-      "schema_extracted": false,
+      "schema_extracted": true,
       "request_observed": true,
       "response_observed": true,
       "client_validated": true,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": "tests/fixtures/protocol/server-replay/armory/game__armory__get.json",
       "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": "RELATORIO-STATUS 2026-08-16: boot completo; upgrades:[] evita o NRE do ArmoryController.Init."
+      "evidence": "metadata v29: ArmoryApi.Get() CONFIRMADO; wire {upgrades:[{id,level}]} (fallback snake); array sempre presente — boot 1.13.1 itera em ArmoryController.Init"
     },
     "game/armory/upgrade": {
       "module": "armory",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/armory/game__armory__upgrade.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: ArmoryApi.Upgrade(id, level) CONFIRMADO; sem Response DTO -> envelope puro; semântica do level (alvo 1-based sequencial) A VERIFICAR até captura"
     },
     "game/auth/login-device": {
       "module": "auth",
@@ -1021,8 +1021,8 @@
     },
     "game/idle-rewards/ad-boost": {
       "module": "idle-rewards",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
@@ -1031,21 +1031,21 @@
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: IdleRewardApi.AdBoost(rewardTokenId) CONFIRMADO; consome AdRewardToken IdleRewardBoost ignorando cooldown; sem emissor game/ads/* o 2300 é honesto; reward_token_id A VERIFICAR"
     },
     "game/idle-rewards/boost": {
       "module": "idle-rewards",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/idle-rewards/game__idle-rewards__boost.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: IdleRewardApi.Boost() CONFIRMADO; sem Response DTO -> envelope puro; concede períodos pendentes × gameData.idle_reward.boost.multiplier, cooldown do boost grátis"
     },
     "game/idle-rewards/claim": {
       "module": "idle-rewards",
@@ -1147,17 +1147,17 @@
     },
     "game/inventory/exchange-currency": {
       "module": "inventory",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/inventory/game__inventory__exchange-currency.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: InventoryApi.ExchangeCurrency(inputCurrencyId, outputCurrencyId, outputCurrencyAmount) CONFIRMADO; sem Response DTO -> envelope puro; taxa em gameData.currency_exchange rate; saída via giveGameResource; nomes de wire A VERIFICAR"
     },
     "game/inventory/get-equip-sequence-id": {
       "module": "inventory",
@@ -1217,17 +1217,17 @@
     },
     "game/player/set-push-token": {
       "module": "player",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/player/game__player__set-push-token.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: PlayerApi.SetPushToken CONFIRMADO; envelope puro; push_token obrigatório (2200); nome de campo A VERIFICAR"
     },
     "game/player/stats": {
       "module": "player",
@@ -1385,17 +1385,17 @@
     },
     "game/session/update-legal": {
       "module": "session",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/session/game__session__update-legal.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: SessionApi.UpdateLegal CONFIRMADO; envelope puro; persiste versões tos/pp/eula + flags em session/legal; nomes de campos A VERIFICAR"
     },
     "game/slayers/apply-cosmetic": {
       "module": "slayers",
@@ -1441,31 +1441,31 @@
     },
     "game/store/activate-offer": {
       "module": "store",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/store/game__store__activate-offer.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: StoreApi.ActivateOffer(offerId, gearResourceId) CONFIRMADO; ActivateOfferResponse{offer}; fixture server-replay 2026-08-17; offer_id/gear_resource_id A VERIFICAR"
     },
     "game/store/ad-purchase": {
       "module": "store",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": null,
       "fixture_provenance": null,
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: StoreApi.AdPurchaseItem(itemId, rewardTokenId) CONFIRMADO; AdPurchaseResponse{resources}; token StoreItemCrate/StoreItemGold via ad-tokens.js; sem emissor ads -> 2300 honesto; item_id/reward_token_id A VERIFICAR"
     },
     "game/store/get": {
       "module": "store",
@@ -1497,31 +1497,31 @@
     },
     "game/store/get-items": {
       "module": "store",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/store/game__store__get-items.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: StoreApi.GetItems() CONFIRMADO; GetItemsResponse{storeItems, iapItems, adItems}; iap_items vazio por design (IAP desligado); packs ad separados em ad_items"
     },
     "game/store/get-offer-items": {
       "module": "store",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/store/game__store__get-offer-items.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: StoreApi.GetOfferItems() CONFIRMADO; mesmo DTO de GetItems; fixture server-replay 2026-08-17"
     },
     "game/store/get-offers": {
       "module": "store",
@@ -1539,17 +1539,17 @@
     },
     "game/store/get-player-offers": {
       "module": "store",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,
       "persistence_validated": null,
-      "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "regression_test": true,
+      "fixture": "tests/fixtures/protocol/server-replay/store/game__store__get-player-offers.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": ""
+      "evidence": "metadata v29: StoreApi.GetPlayerOffers() CONFIRMADO; GetPlayerOffersResponse{offers} com PlayerOfferModel das offers ativadas"
     },
     "game/store/purchase": {
       "module": "store",
@@ -1651,6 +1651,7 @@
     }
   },
   "server_only_routes": [
+    "game/armory",
     "game/events",
     "game/idle-rewards/claim-rewards",
     "game/quests/claim",

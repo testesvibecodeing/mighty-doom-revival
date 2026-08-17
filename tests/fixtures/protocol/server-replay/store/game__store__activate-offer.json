@@ -1,20 +1,19 @@
 {
-  "endpoint": "game/battle-pass/claim-mission",
+  "endpoint": "game/store/activate-offer",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T12:25:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/battle-pass/claim-mission",
+    "path": "/game/store/activate-offer",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
     "body": {
-      "season_id": "season-fixtures",
-      "mission_id": 900
+      "offer_id": 5
     }
   },
   "response": {
@@ -22,7 +21,14 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "resources": []
+      "offer": {
+        "id": 5,
+        "offer_definition_id": 5,
+        "item_id": 900100,
+        "allowed_purchases": 1,
+        "start_time": 1786969537,
+        "purchase_amount": 100
+      }
     }
   }
 }

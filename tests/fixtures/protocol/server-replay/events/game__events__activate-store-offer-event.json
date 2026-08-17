@@ -1,7 +1,7 @@
 {
   "endpoint": "game/events/activate-store-offer-event",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T12:04:00Z",
+  "captured_at": "2026-08-17T12:25:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -26,7 +26,7 @@
         "offer_definition_id": 502,
         "item_id": 200,
         "allowed_purchases": 1,
-        "start_time": 1786968295,
+        "start_time": 1786969536,
         "end_time": 1893456000,
         "purchase_amount": 100
       }

@@ -1,7 +1,7 @@
 {
   "endpoint": "game/daily-rewards/get-state",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T12:04:00Z",
+  "captured_at": "2026-08-17T12:25:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -23,7 +23,7 @@
         "day_start": 1786924800,
         "day_end": 1787011200,
         "day": 1,
-        "last_claim": 0,
+        "last_claim": "<epoch>",
         "pending": [],
         "claimed": []
       }

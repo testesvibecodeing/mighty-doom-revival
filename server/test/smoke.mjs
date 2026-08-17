@@ -24,7 +24,10 @@ const revival = {
 
 const gameData = {
   server_properties: { starter_bundle: 1 },
-  resources: [{ id: 100, tag: 'coins', category_id: 1 }],
+  resources: [
+    { id: 100, tag: 'coins', category_id: 1 },
+    { id: 101, tag: 'gems', category_id: 1 }
+  ],
   weapons: [{ id: 200, tag: 'heavy_cannon', category_id: 2 }],
   slayers: [{ id: 300, tag: 'mini_slayer', category_id: 7 }],
   energies: [{ id: 400, tag: 'energy', category_id: 5, max_amount: 20, regen_minutes: 1 }],
@@ -45,7 +48,24 @@ const gameData = {
   daily_rewards: {
     days: [{ resources: [{ resource: 'coins', amount: 25 }] }]
   },
-  idle_reward: { generation_period: 60, chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }] },
+  idle_reward: {
+    generation_period: 1,
+    chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }],
+    boost: { multiplier: 2, cooldown: 3600 }
+  },
+  currency_exchange: [{ input_rid: 100, output_rid: 101, rate: 10 }],
+  armory: {
+    upgrades: [{
+      id: 1,
+      levels: [
+        { cost: [{ rid: 100, amount: 25 }], chapter_progress: 0 },
+        { cost: [{ rid: 100, amount: 20 }], chapter_progress: 2 }
+      ]
+    }]
+  },
+  store: {
+    offers: [{ id: 5, item_id: 900100, allowed_purchases: 1, purchase_amount: 100 }]
+  },
   chapter_mode: {
     chapters: [{
       id: 101,
@@ -63,6 +83,13 @@ const packs = {
     cost: [{ resource: 'coins', kind: 'currency', amount: 500 }],
     contents: [{ resource: 'heavy_cannon', kind: 'weapon', level: 2, tier: 1 }],
     quota: { period: 'daily', max: 2 }
+  }, {
+    id: 900200,
+    tag: 'revival_ad_crate',
+    active: true,
+    ad: true,
+    cost: [],
+    contents: [{ resource: 'gems', kind: 'currency', amount: 5 }]
   }]
 }
 
@@ -152,7 +179,7 @@ async function post (path, body, token = null, expected = 200, extraHeaders = {}
 try {
   const health = await waitForHealth()
   assert.equal(health.game_data_loaded, true)
-  assert.equal(health.packs, 1)
+  assert.equal(health.packs, 2)
   assert.equal(health.events, 1)
 
   const registration = await post('/game/auth/register', { client_version: '1.13.1', device_id: 'smoke-device' })
@@ -210,6 +237,58 @@ try {
   const afterPurchases = await post('/game/player/user-data', {}, token)
   assert.equal(afterPurchases.user_data.inventory.currencies[0].amount, 975)
   assert.deepEqual(afterPurchases.user_data.talent_progression.talents, [500])
+
+  // IdleRewardApi.Boost(): multiplica os períodos pendentes (período de 1s no
+  // game-data do smoke) e responde envelope puro — o cliente relê get-state.
+  await post('/game/idle-rewards/get-state', {}, token)
+  await new Promise(wait => setTimeout(wait, 1200))
+  await post('/game/idle-rewards/boost', {}, token)
+  const afterBoost = await post('/game/player/user-data', {}, token)
+  assert.equal(afterBoost.user_data.inventory.currencies.find(row => row.rid === 100).amount, 977)
+
+  // InventoryApi.ExchangeCurrency(): taxa configurada input 100 -> output 101
+  // (rate 10 = 10 moedas por 1 gema). Saída via giveGameResource.
+  await post('/game/inventory/exchange-currency', {
+    input_currency_id: 100, output_currency_id: 101, output_currency_amount: 3
+  }, token)
+  const afterExchange = await post('/game/player/user-data', {}, token)
+  assert.equal(afterExchange.user_data.inventory.currencies.find(row => row.rid === 100).amount, 947)
+  assert.equal(afterExchange.user_data.inventory.currencies.find(row => row.rid === 101).amount, 3)
+  const exchangeMissing = await post('/game/inventory/exchange-currency', { input_currency_id: 100 }, token, 400)
+  assert.equal(exchangeMissing.reason, 'currency-required')
+
+  // SessionApi.UpdateLegal()/PlayerApi.SetPushToken(): envelope puro, estado
+  // persistido em namespaces próprios.
+  await post('/game/session/update-legal', { tos_version: 1, allow_personalization: true }, token)
+  const pushMissing = await post('/game/player/set-push-token', {}, token, 400)
+  assert.equal(pushMissing.reason, 'push-token-required')
+  await post('/game/player/set-push-token', { push_token: 'smoke-push' }, token)
+
+  // ArmoryApi.Get()/Upgrade(id, level): estado {id, level}, custo debitado.
+  const armoryBefore = await post('/game/armory/get', {}, token)
+  assert.deepEqual(armoryBefore.upgrades, [{ id: 1, level: 0 }])
+  await post('/game/armory/upgrade', { id: 1, level: 1 }, token)
+  const armoryAfter = await post('/game/armory/get', {}, token)
+  assert.deepEqual(armoryAfter.upgrades, [{ id: 1, level: 1 }])
+  const afterArmory = await post('/game/player/user-data', {}, token)
+  assert.equal(afterArmory.user_data.inventory.currencies.find(row => row.rid === 100).amount, 922)
+
+  // StoreApi.GetItems()/GetOfferItems()/ActivateOffer()/GetPlayerOffers()/
+  // AdPurchaseItem(): packs de anúncio separados em ad_items; ad-purchase sem
+  // token (emissor game/ads/* fora de escopo) é erro explícito.
+  const items = await post('/game/store/get-items', {}, token)
+  assert.deepEqual(items.store_items.map(item => item.id), [900100])
+  assert.deepEqual(items.ad_items.map(item => item.id), [900200])
+  assert.deepEqual(items.iap_items, [], 'IAP desligado por design no Revival')
+  const offerItems = await post('/game/store/get-offer-items', {}, token)
+  assert.deepEqual(offerItems.ad_items.map(item => item.id), [900200])
+  const activatedOffer = await post('/game/store/activate-offer', { offer_id: 5 }, token)
+  assert.equal(activatedOffer.offer.item_id, 900100)
+  assert.equal(typeof activatedOffer.offer.start_time, 'number')
+  const playerOffers = await post('/game/store/get-player-offers', {}, token)
+  assert.deepEqual(playerOffers.offers.map(offer => offer.id), [5])
+  const adNoToken = await post('/game/store/ad-purchase', { item_id: 900200 }, token, 400)
+  assert.equal(adNoToken.reason, 'reward-token-required')
 
   const schedule = await post('/game/events/get-schedule', {}, token)
   assert.equal(schedule.scheduled_events[0].id, 7001)
@@ -280,7 +359,12 @@ try {
     '/game/talents/buy', '/game/talents/get', '/game/store/get', '/game/store/purchase',
     '/game/events/get-schedule', '/game/events/get-progress', '/game/chapters/start',
     '/game/chapters/update', '/game/chapters/revive', '/game/chapters/end',
-    '/game/idle-rewards/get-state', '/game/session/heartbeat'
+    '/game/idle-rewards/get-state', '/game/session/heartbeat',
+    '/game/idle-rewards/boost', '/game/inventory/exchange-currency',
+    '/game/session/update-legal', '/game/player/set-push-token',
+    '/game/armory/get', '/game/armory/upgrade',
+    '/game/store/get-items', '/game/store/get-offer-items',
+    '/game/store/get-player-offers', '/game/store/activate-offer', '/game/store/ad-purchase'
   ])
   const leaked = researchState.fallback_endpoints.filter(row => implementedPaths.has(row.path))
   assert.deepEqual(leaked, [], 'rota implementada não pode depender de fallback de pesquisa')

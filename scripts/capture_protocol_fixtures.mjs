@@ -44,7 +44,10 @@ const revival = {
 }
 const gameData = {
   server_properties: { starter_bundle: 1 },
-  resources: [{ id: 100, tag: 'coins', category_id: 1 }],
+  resources: [
+    { id: 100, tag: 'coins', category_id: 1 },
+    { id: 101, tag: 'gems', category_id: 1 }
+  ],
   weapons: [{ id: 200, tag: 'heavy_cannon', category_id: 2, max_level: 3, upgrade_costs: [{ level: 2, cost: [{ resource: 'coins', amount: 100 }] }, { level: 3, cost: [{ resource: 'coins', amount: 100 }] }] }],
   slayers: [{ id: 300, tag: 'mini_slayer', category_id: 7, max_level: 5, upgrade_costs: [{ level: 2, cost: [{ resource: 'coins', amount: 50 }] }] }],
   cosmetics: [{ id: 800, tag: 'skin_revival', category_id: 9 }],
@@ -134,9 +137,44 @@ const gameData = {
     }
   }],
   daily_rewards: { days: [{ resources: [{ resource: 'coins', amount: 25 }] }] },
-  idle_reward: { generation_period: 60, chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }] }
+  idle_reward: {
+    generation_period: 1,
+    chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }],
+    boost: { multiplier: 2, cooldown: 3600 }
+  },
+  currency_exchange: [{ input_rid: 100, output_rid: 101, rate: 10 }],
+  armory: {
+    upgrades: [{
+      id: 1,
+      levels: [
+        { cost: [{ rid: 100, amount: 25 }], chapter_progress: 0 },
+        { cost: [{ rid: 100, amount: 20 }], chapter_progress: 2 }
+      ]
+    }]
+  },
+  store: {
+    offers: [{ id: 5, item_id: 900100, allowed_purchases: 1, purchase_amount: 100 }]
+  }
 }
-const packs = { packs: [] }
+// Packs: 900100 normal (store_items) e 900200 de anúncio (ad_items) para os
+// fixtures do GetItems/GetOfferItems; ad-purchase fica de fora (emissor de
+// AdRewardToken é game/ads/*, fora de escopo — erro honesto, não payload falso).
+const packs = {
+  packs: [{
+    id: 900100,
+    tag: 'revival_weapon_pack',
+    active: true,
+    cost: [{ resource: 'coins', kind: 'currency', amount: 500 }],
+    contents: [{ resource: 'heavy_cannon', kind: 'weapon', level: 2, tier: 1 }]
+  }, {
+    id: 900200,
+    tag: 'revival_ad_crate',
+    active: true,
+    ad: true,
+    cost: [],
+    contents: [{ resource: 'gems', kind: 'currency', amount: 5 }]
+  }]
+}
 // Módulo events — EventsApi (metadata v29): ciclo game-mode-event (501) e
 // store-offer (502) para capturar as rotas do módulo.
 const events = {
@@ -234,6 +272,10 @@ function sanitize (value) {
       else if (key === 'recovery_code') out[key] = '<recovery-code>'
       else if (key === 'url') out[key] = String(inner).replace(/^https?:\/\/[^/]+/, '<base>')
       else if (key === 'account_age' || key === 'last_login') out[key] = 0
+      // Épocs derivados do relógio no momento da captura (idle/offer/run) —
+      // mascarados para o fixture ser regenerável sem diff. start_time de
+      // eventos agendados NÃO entra aqui: vem da config, é determinístico.
+      else if (key === 'last_claim' || key === 'next_claim' || key === 'started_at_ms' || key === 'best_completion_time_milliseconds') out[key] = '<epoch>'
       else out[key] = sanitize(inner)
     }
     return out
@@ -340,6 +382,22 @@ try {
   await call('battle-pass-prestige', '/game/battle-pass/prestige', { season_id: seasonId }, token)
   await call('battle-pass-redeem-premium-entitlement', '/game/battle-pass/redeem-premium-entitlement', { season_id: seasonId }, token)
   await call('battle-pass-end-season', '/game/battle-pass/end-season', { season_id: seasonId }, token)
+
+  // Módulo extras — IdleRewardApi.Boost, InventoryApi.ExchangeCurrency,
+  // SessionApi.UpdateLegal, PlayerApi.SetPushToken, ArmoryApi.Upgrade e o
+  // cluster de offers da StoreApi. O get-state do bootstrap (acima) já
+  // inicializou last_claim; o sleep garante >=1 período no período de 1s.
+  // ad-boost/ad-purchase sem captura: emissor do AdRewardToken fora de escopo.
+  await new Promise(wait => setTimeout(wait, 1200))
+  await call('idle-rewards-boost', '/game/idle-rewards/boost', {}, token)
+  await call('inventory-exchange-currency', '/game/inventory/exchange-currency', { input_currency_id: 100, output_currency_id: 101, output_currency_amount: 3 }, token)
+  await call('session-update-legal', '/game/session/update-legal', { tos_version: 1, allow_personalization: false }, token)
+  await call('player-set-push-token', '/game/player/set-push-token', { push_token: 'fixtures-push' }, token)
+  await call('armory-upgrade', '/game/armory/upgrade', { id: 1, level: 1 }, token)
+  await call('store-get-items', '/game/store/get-items', {}, token)
+  await call('store-get-offer-items', '/game/store/get-offer-items', {}, token)
+  await call('store-activate-offer', '/game/store/activate-offer', { offer_id: 5 }, token)
+  await call('store-get-player-offers', '/game/store/get-player-offers', {}, token)
 } finally {
   child.kill('SIGTERM')
   await new Promise(exit => child.once('exit', exit))

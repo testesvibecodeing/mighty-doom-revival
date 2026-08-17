@@ -1,6 +1,7 @@
 import { activeBattlePassStates } from './battle-pass.js'
 import { archiveMode, storyBattlePasses } from './game-data-schema.js'
 import { giveGameResource } from './game-data-model.js'
+import { consumeAdRewardToken, findAdRewardToken } from './ad-tokens.js'
 
 // ---- Contrato extraído do global-metadata.dat v29 (2026-08-17) ----
 // EventsApi (11 métodos = 11 rotas game/events/* do cliente):
@@ -273,25 +274,16 @@ function grantResources (repo, userId, entries, runtime) {
 // Sem emissor o estado honesto é o erro explícito — nunca sucesso falso.
 function adRewardRoute (repo, userId, body, expectedType) {
   const tokenId = asInt(body?.reward_token_id ?? body?.rewardTokenId)
-  if (tokenId === null) return { error: [400, 2200, { reason: 'reward-token-required' }] }
   const scheduledEventId = scheduledEventIdFromBody(body)
   if (scheduledEventId === null) return { error: [400, 2200, { reason: 'scheduled-event-required' }] }
-  const tokens = asArray(repo.getState(userId, 'ads', 'reward_tokens', []))
-  const token = tokens.find(row => asInt(row?.id) === tokenId)
-  if (!token) return { error: [400, 2300, { reason: 'reward-token-not-found' }] }
-  if ((token.reward_type ?? token.type) !== expectedType) {
-    return { error: [400, 2300, { reason: 'reward-token-type-mismatch' }] }
-  }
-  const expireEpoch = asInt(token.expire_epoch)
-  if (expireEpoch !== null && expireEpoch < nowSeconds()) {
-    return { error: [400, 2300, { reason: 'reward-token-expired' }] }
-  }
+  const found = findAdRewardToken(repo, userId, tokenId, expectedType)
+  if (found.error) return { error: found.error }
   const lifecycle = gameModeLifecycle(repo, userId)
   const run = lifecycle.runs[String(scheduledEventId)]
   if (!run) return { error: [400, 2300, { reason: 'no-active-run' }] }
   let result
   repo.tx(() => {
-    repo.setState(userId, 'ads', 'reward_tokens', tokens.filter(row => asInt(row?.id) !== tokenId))
+    consumeAdRewardToken(repo, userId, found.tokens, tokenId)
     const nextRun = expectedType === 'revive'
       ? { ...run, revives: Math.max(0, Number(run.revives || 0)) + 1, updated_at: nowSeconds() }
       : { ...run, ability_rerolls: (asInt(run.ability_rerolls) ?? 0) + 1, updated_at: nowSeconds() }

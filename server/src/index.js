@@ -10,6 +10,10 @@ import { handleCompatRequest } from './compat.js'
 import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
 import { handleEventRequest } from './events.js'
+import { handleArmoryRequest } from './armory.js'
+import { findAdRewardToken } from './ad-tokens.js'
+import { boostIdleReward, idleRewardState } from './rewards.js'
+import { activatedOfferWires, activateStoreOffer, adPurchasePack, storeItemsWire } from './store.js'
 import { inventoryWire, seedStarterBundle, giveGameResource } from './game-data-model.js'
 import { playerStatsWire, incrementPlayerStats } from './stats.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
@@ -360,21 +364,6 @@ function startOfUtcDayEpoch () {
   return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000)
 }
 
-function chooseIdleGeneration (gameData, chapterProgression) {
-  const idle = gameData?.idle_reward
-  const table = Array.isArray(idle?.chapter_idle_generation) ? idle.chapter_idle_generation : []
-  let chosen = null
-  for (const row of table) {
-    if (typeof row?.chapter_progress !== 'number') continue
-    if (row.chapter_progress > chapterProgression) continue
-    if (chosen === null || row.chapter_progress >= chosen.chapter_progress) chosen = row
-  }
-  return {
-    idle_generation: chosen?.idle_generation ?? [],
-    generation_period: idle?.generation_period ?? 0
-  }
-}
-
 function playerUserData (user) {
   const settings = repo.settings(user.id)
   return {
@@ -514,17 +503,84 @@ function handleBaseline (path, body, user) {
   }
 
   if (path === '/game/idle-rewards/get-state') {
-    const current = repo.userById(user.id)
-    return {
-      data: {
-        state: {
-          last_claim: repo.getState(user.id, 'idle-rewards', 'last_claim', 0),
-          boost_available: 0,
-          next_claim: 0,
-          ...chooseIdleGeneration(runtime.gameData, current.chapter_progression)
-        }
-      }
+    // Mesma projeção de estado do claim/boost: inicializa last_claim na
+    // primeira leitura e deriva next_claim do período configurado (o cliente
+    // usa next_claim para habilitar o resgate; 0 fixo mentia sobre o estado).
+    return { data: { state: idleRewardState(repo, user.id, runtime) } }
+  }
+
+  // IdleRewardApi.Boost()/AdBoost(rewardTokenId): sem DTO -> envelope puro;
+  // os períodos pendentes são concedidos multiplicados e o cliente relê o
+  // get-state. Sem config de boost o erro é explícito (2300).
+  if (path === '/game/idle-rewards/boost') {
+    const result = boostIdleReward(repo, user.id, runtime)
+    if (!result.ok) return { error: [400, 2300, { reason: result.reason }] }
+    return { data: {} }
+  }
+
+  if (path === '/game/idle-rewards/ad-boost') {
+    const tokenId = Number.isInteger(body?.reward_token_id) ? body.reward_token_id : null
+    const found = findAdRewardToken(repo, user.id, tokenId, 'idle_reward_boost')
+    if (found.error) return { error: found.error }
+    const result = boostIdleReward(repo, user.id, runtime, undefined, { tokenId, tokens: found.tokens })
+    if (!result.ok) return { error: [400, 2300, { reason: result.reason }] }
+    return { data: {} }
+  }
+
+  // InventoryApi.ExchangeCurrency(inputCurrencyId, outputCurrencyId,
+  // outputCurrencyAmount) -> ExchangeCurrencyResponse sem campos (envelope).
+  // Taxa em gameData.currency_exchange [{input_rid, output_rid, rate}] onde
+  // rate = unidades de input por 1 de output.
+  if (path === '/game/inventory/exchange-currency') {
+    const inputRid = body?.input_currency_id
+    const outputRid = body?.output_currency_id
+    const outputAmount = body?.output_currency_amount
+    if (!Number.isInteger(inputRid) || !Number.isInteger(outputRid)) {
+      return { error: [400, 2200, { reason: 'currency-required' }] }
     }
+    if (!Number.isInteger(outputAmount) || outputAmount <= 0) {
+      return { error: [400, 2200, { reason: 'amount-required' }] }
+    }
+    const rows = Array.isArray(runtime.gameData?.currency_exchange) ? runtime.gameData.currency_exchange : []
+    const row = rows.find(entry => entry?.input_rid === inputRid && entry?.output_rid === outputRid)
+    if (!row || !Number.isFinite(Number(row.rate)) || Number(row.rate) <= 0) {
+      return { error: [400, 2300, { reason: 'exchange-not-configured' }] }
+    }
+    const inputCost = Math.ceil(outputAmount * Number(row.rate))
+    if (repo.balance(user.id, inputRid) < inputCost) {
+      return { error: [400, 2300, { reason: 'insufficient-currency' }] }
+    }
+    repo.tx(() => {
+      repo.addCurrency(user.id, inputRid, -inputCost)
+      // Saída via giveGameResource: respeita a categoria do recurso
+      // (energia tem regeneração/teto próprios, não é currency simples).
+      giveGameResource(repo, user.id, { rid: outputRid, amount: outputAmount }, runtime)
+    })
+    return { data: {} }
+  }
+
+  // SessionApi.UpdateLegal(tosVersion, ppVersion, eulaVersion,
+  // allowPersonalization, allowThirdPartySharing) -> envelope puro.
+  if (path === '/game/session/update-legal') {
+    const legal = {
+      tos_version: body?.tos_version ?? null,
+      pp_version: body?.pp_version ?? null,
+      eula_version: body?.eula_version ?? null,
+      allow_personalization: body?.allow_personalization === true,
+      allow_third_party_sharing: body?.allow_third_party_sharing === true,
+      updated_at: Math.floor(Date.now() / 1000)
+    }
+    repo.setState(user.id, 'session', 'legal', legal)
+    return { data: {} }
+  }
+
+  // PlayerApi.SetPushToken(pushToken) -> SetPushTokenResponse sem campos.
+  if (path === '/game/player/set-push-token') {
+    if (typeof body?.push_token !== 'string' || body.push_token.length === 0) {
+      return { error: [400, 2200, { reason: 'push-token-required' }] }
+    }
+    repo.setState(user.id, 'player', 'push_token', body.push_token)
+    return { data: {} }
   }
 
   if (path === '/game/inventory/get-equip-sequence-id') {
@@ -591,9 +647,12 @@ function handleAuthed (path, body, user, req) {
   if (path === '/game/player/user-data') return { data: playerUserData(repo.userById(user.id)) }
 
   // O cliente 1.13.1 faz foreach em ArmoryController.Init(upgrades); sem o
-  // array no wire a desserializacao deixa null e a iteracao NRE-derruba o boot
-  // da sessao logo apos o registro/login.
-  if (path === '/game/armory/get') return { data: { upgrades: [] } }
+  // array no wire a desserialização deixa null e a iteração NRE-derruba o
+  // boot da sessão — o handler devolve array (vazio sem config, nunca null).
+  if (path.startsWith('/game/armory/')) {
+    const handled = handleArmoryRequest(path, body, user.id, repo, runtime)
+    if (handled) return handled
+  }
 
   if (path === '/game/store/get') return { data: storePayload() }
   if (path === '/game/store/get-offers') return { data: { store_items: [], iap_items: [], ad_items: [], offers: [] } }
@@ -605,6 +664,19 @@ function handleAuthed (path, body, user, req) {
     if (!result.ok) return { error: [400, 2000, { reason: result.reason }] }
     return { data: { resources: result.resources } }
   }
+
+  // StoreApi (metadata v29): GetItems/GetOfferItems -> {storeItems, iapItems,
+  // adItems}; GetPlayerOffers -> {offers}; ActivateOffer(offerId,
+  // gearResourceId) -> {offer}; AdPurchaseItem(itemId, rewardTokenId) ->
+  // AdPurchaseResponse{resources} consumindo token StoreItemCrate/Gold.
+  if (path === '/game/store/get-items' || path === '/game/store/get-offer-items') {
+    return { data: storeItemsWire(runtime) }
+  }
+  if (path === '/game/store/get-player-offers') {
+    return { data: { offers: activatedOfferWires(repo, user.id, runtime) } }
+  }
+  if (path === '/game/store/activate-offer') return activateStoreOffer(repo, user.id, body, runtime)
+  if (path === '/game/store/ad-purchase') return adPurchasePack(repo, user.id, body, runtime)
 
   if (path.startsWith('/game/events/')) {
     const handled = handleEventRequest(path, body, user.id, repo, runtime)

@@ -1,28 +1,28 @@
 {
-  "endpoint": "game/battle-pass/claim-mission",
+  "endpoint": "game/inventory/exchange-currency",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T12:25:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/battle-pass/claim-mission",
+    "path": "/game/inventory/exchange-currency",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
     "body": {
-      "season_id": "season-fixtures",
-      "mission_id": 900
+      "input_currency_id": 100,
+      "output_currency_id": 101,
+      "output_currency_amount": 3
     }
   },
   "response": {
     "status": 200,
     "body": {
       "uts": "<uts>",
-      "code": 1000,
-      "resources": []
+      "code": 1000
     }
   }
 }

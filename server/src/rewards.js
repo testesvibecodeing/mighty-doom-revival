@@ -1,4 +1,5 @@
 import { giveGameResource } from './game-data-model.js'
+import { consumeAdRewardToken } from './ad-tokens.js'
 
 const DAILY_NS = 'daily-rewards'
 const IDLE_NS = 'idle-rewards'
@@ -149,4 +150,49 @@ export function claimIdleReward (repo, userId, runtime, epoch = nowEpoch()) {
   })
 
   return { ok: true, resources: grants, periods: state.claimable_periods }
+}
+
+// ---- IdleRewardApi.Boost()/AdBoost(rewardTokenId) (metadata v29) ----
+// Ambos sem Response DTO -> envelope puro: concedem os períodos pendentes
+// multiplicados e o cliente relê o estado via get-state. Config em
+// gameData.idle_reward.boost {multiplier, cooldown}; o AdBoost usa um
+// AdRewardToken do tipo IdleRewardBoost e ignora o cooldown do boost grátis.
+function boostConfig (runtime) {
+  const idle = runtime?.gameData?.idle_reward || runtime?.gameData?.idle_rewards || {}
+  const boost = idle?.boost || {}
+  const multiplier = Number(boost.multiplier)
+  const cooldown = Number(boost.cooldown)
+  return {
+    multiplier: Number.isFinite(multiplier) && multiplier > 1 ? multiplier : null,
+    cooldown: Number.isFinite(cooldown) && cooldown > 0 ? cooldown : 0
+  }
+}
+
+export function boostIdleReward (repo, userId, runtime, epoch = nowEpoch(), ad = null) {
+  const config = boostConfig(runtime)
+  if (config.multiplier === null) return { ok: false, reason: 'boost-config-missing' }
+  const state = idleRewardState(repo, userId, runtime, epoch)
+  if (state.claimable_periods <= 0) return { ok: false, reason: 'not-ready' }
+  if (ad === null && config.cooldown > 0) {
+    const lastBoost = Number(repo.getState(userId, IDLE_NS, 'last_boost', 0) || 0)
+    if (epoch - lastBoost < config.cooldown) return { ok: false, reason: 'boost-not-ready' }
+  }
+
+  const grants = []
+  repo.tx(() => {
+    if (ad !== null) consumeAdRewardToken(repo, userId, ad.tokens, ad.tokenId)
+    for (const reward of state.idle_generation) {
+      const amount = Number(reward?.amount ?? 0)
+      if (!Number.isFinite(amount) || amount <= 0) continue
+      const grant = giveGameResource(repo, userId, {
+        ...reward,
+        amount: Math.floor(amount * state.claimable_periods * config.multiplier)
+      }, runtime)
+      grants.push(grant.wire)
+    }
+    repo.setState(userId, IDLE_NS, 'last_claim', state.last_claim + state.claimable_periods * state.generation_period)
+    if (ad === null && config.cooldown > 0) repo.setState(userId, IDLE_NS, 'last_boost', epoch)
+  })
+
+  return { ok: true, resources: grants, periods: state.claimable_periods, multiplier: config.multiplier }
 }

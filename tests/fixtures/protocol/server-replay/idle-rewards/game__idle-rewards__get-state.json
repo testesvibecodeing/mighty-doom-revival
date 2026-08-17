@@ -1,7 +1,7 @@
 {
   "endpoint": "game/idle-rewards/get-state",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T12:04:00Z",
+  "captured_at": "2026-08-17T12:25:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -20,16 +20,17 @@
       "uts": "<uts>",
       "code": 1000,
       "state": {
-        "last_claim": 0,
+        "last_claim": "<epoch>",
         "boost_available": 0,
-        "next_claim": 0,
+        "next_claim": "<epoch>",
         "idle_generation": [
           {
             "rid": 100,
             "amount": 1
           }
         ],
-        "generation_period": 60
+        "generation_period": 1,
+        "claimable_periods": 0
       }
     }
   }

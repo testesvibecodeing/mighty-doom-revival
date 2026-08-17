@@ -1,5 +1,6 @@
 import { chaptersList } from './game-data-schema.js'
 import { giveGameResource } from './game-data-model.js'
+import { consumeAdRewardToken, findAdRewardToken } from './ad-tokens.js'
 
 const NS = 'chapters'
 
@@ -376,23 +377,14 @@ function redeemVoucherRoute (repo, userId, body) {
 // emissor, o estado honesto é o erro explícito — nunca sucesso falso.
 function adRewardRoute (repo, userId, body, expectedType) {
   const tokenId = asInt(body?.reward_token_id ?? body?.rewardTokenId)
-  if (tokenId === null) return { error: [400, 2200, { reason: 'reward-token-required' }] }
-  const tokens = asArray(repo.getState(userId, 'ads', 'reward_tokens', []))
-  const token = tokens.find(row => asInt(row?.id) === tokenId)
-  if (!token) return { error: [400, 2300, { reason: 'reward-token-not-found' }] }
-  if ((token.reward_type ?? token.type) !== expectedType) {
-    return { error: [400, 2300, { reason: 'reward-token-type-mismatch' }] }
-  }
-  const expireEpoch = asInt(token.expire_epoch)
-  if (expireEpoch !== null && expireEpoch < nowSeconds()) {
-    return { error: [400, 2300, { reason: 'reward-token-expired' }] }
-  }
+  const found = findAdRewardToken(repo, userId, tokenId, expectedType)
+  if (found.error) return { error: found.error }
   const state = progression(repo, userId)
   if (!state.current_run) return { error: [400, 2300, { reason: 'no-active-run' }] }
   let result
   try {
     repo.tx(() => {
-      repo.setState(userId, 'ads', 'reward_tokens', tokens.filter(row => asInt(row?.id) !== tokenId))
+      consumeAdRewardToken(repo, userId, found.tokens, tokenId)
       const current = state.current_run
       const run = expectedType === 'revive'
         ? { ...current, revives: Math.max(0, Number(current.revives || 0)) + 1, updated_at: nowSeconds() }
