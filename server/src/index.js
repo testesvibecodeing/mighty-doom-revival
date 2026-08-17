@@ -89,6 +89,167 @@ function extractToken (req) {
   return auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : auth
 }
 
+function cookieValue (req, name) {
+  const cookies = String(req.headers.cookie || '').split(';')
+  for (const part of cookies) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) return decodeURIComponent(rest.join('='))
+  }
+  return null
+}
+
+function accountToken (req) {
+  const cookie = cookieValue(req, 'revival_session')
+  if (cookie) return cookie
+  const auth = req.headers.authorization
+  return typeof auth === 'string' && auth.toLowerCase().startsWith('bearer ')
+    ? auth.slice(7).trim()
+    : null
+}
+
+function accountCookie (res, token, maxAge = 30 * 24 * 3600) {
+  res.setHeader('set-cookie', `revival_session=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAge}`)
+}
+
+function publicAccount (user) {
+  return {
+    id: user.id,
+    uuid: user.uuid,
+    email: user.email || '',
+    display_name: user.display_name || '',
+    level: user.level,
+    chapter_progression: user.chapter_progression,
+    attempt_count: user.attempt_count,
+    created_at: user.created_at
+  }
+}
+
+function resourceName (rid) {
+  const definition = runtime.index.byId.get(Number(rid))
+  return definition?.display_name || definition?.name || definition?.tag || definition?.key || `Recurso ${rid}`
+}
+
+function accountSnapshot (user) {
+  const items = repo.items(user.id).map(item => {
+    let metadata = {}
+    try { metadata = JSON.parse(item.metadata_json || '{}') } catch {}
+    return {
+      id: item.id,
+      rid: item.rid,
+      name: resourceName(item.rid),
+      kind: item.kind,
+      level: item.level,
+      tier: item.tier,
+      amount: item.amount,
+      metadata
+    }
+  })
+  return {
+    currencies: repo.currencies(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
+    energies: repo.energies(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
+    items,
+    equipped: repo.slots(user.id),
+    cosmetics: repo.cosmetics(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
+    entitlements: repo.entitlements(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
+    progression: {
+      level: user.level,
+      chapters: user.chapter_progression,
+      attempts: user.attempt_count,
+      stats: playerStatsWire(repo, user.id)
+    }
+  }
+}
+
+function passwordIsValid (value) {
+  return typeof value === 'string' && value.length >= 8 && value.length <= 128
+}
+
+function emailIsValid (value) {
+  return typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+
+async function handleAccount (req, res, path) {
+  if (!path.startsWith('/account/')) return false
+  if (req.method === 'GET' && path === '/account/me') {
+    const user = repo.userByWebSession(accountToken(req))
+    if (!user) return json(res, 401, { ok: false, error: 'session-expired' })
+    return json(res, 200, { ok: true, account: publicAccount(user), snapshot: accountSnapshot(user) })
+  }
+
+  let body = {}
+  if (req.method !== 'POST' && req.method !== 'PATCH') return json(res, 405, { ok: false, error: 'method-not-allowed' })
+  try { body = await readJsonBody(req) } catch { return json(res, 400, { ok: false, error: 'invalid-json' }) }
+
+  if (path === '/account/register') {
+    const email = String(body.email || '').trim().toLowerCase()
+    const displayName = String(body.display_name || '').trim().slice(0, 48)
+    if (!emailIsValid(email) || !passwordIsValid(body.password)) return json(res, 400, { ok: false, error: 'email-and-password-invalid' })
+    if (repo.userByLogin(email)) return json(res, 409, { ok: false, error: 'email-already-used' })
+    try {
+      const created = bootstrapUser({}, { password: body.password, email, displayName })
+      const session = repo.createWebSession(created.user_id)
+      accountCookie(res, session.token)
+      return json(res, 201, {
+        ok: true,
+        account: publicAccount(repo.userById(created.user_id)),
+        recovery_code: created.recovery_code,
+        message: 'Guarde o código de recuperação em local seguro.'
+      })
+    } catch (error) {
+      if (String(error.message).includes('UNIQUE')) return json(res, 409, { ok: false, error: 'email-already-used' })
+      throw error
+    }
+  }
+
+  if (path === '/account/login') {
+    const user = repo.loginAccount(body.login, body.password)
+    if (!user) return json(res, 401, { ok: false, error: 'invalid-login' })
+    const session = repo.createWebSession(user.id)
+    accountCookie(res, session.token)
+    return json(res, 200, { ok: true, account: publicAccount(repo.userById(user.id)), snapshot: accountSnapshot(repo.userById(user.id)) })
+  }
+
+  if (path === '/account/logout') {
+    repo.revokeWebSession(accountToken(req))
+    accountCookie(res, '', 0)
+    return json(res, 200, { ok: true })
+  }
+
+  if (path === '/account/forgot-password') {
+    return json(res, 200, { ok: true, recovery_required: true, message: 'Use o código de recuperação criado junto com a conta.' })
+  }
+
+  if (path === '/account/reset-password') {
+    const user = repo.userByLogin(body.login)
+    if (!user || !passwordIsValid(body.new_password) || !repo.verifyRecoveryCode(user.id, body.recovery_code)) {
+      return json(res, 400, { ok: false, error: 'recovery-data-invalid' })
+    }
+    repo.updatePassword(user.id, body.new_password)
+    return json(res, 200, { ok: true, message: 'Senha redefinida. Faça login novamente.' })
+  }
+
+  const user = repo.userByWebSession(accountToken(req))
+  if (!user) return json(res, 401, { ok: false, error: 'session-expired' })
+
+  if (path === '/account/profile') {
+    const email = String(body.email || '').trim().toLowerCase()
+    const displayName = String(body.display_name || '').trim().slice(0, 48)
+    if (email && !emailIsValid(email)) return json(res, 400, { ok: false, error: 'email-invalid' })
+    const owner = email ? repo.userByLogin(email) : null
+    if (owner && owner.id !== user.id) return json(res, 409, { ok: false, error: 'email-already-used' })
+    repo.updateProfile(user.id, { email, displayName })
+    return json(res, 200, { ok: true, account: publicAccount(repo.userById(user.id)) })
+  }
+
+  if (path === '/account/password') {
+    if (!repo.login(user.id, body.current_password) || !passwordIsValid(body.new_password)) return json(res, 400, { ok: false, error: 'password-data-invalid' })
+    repo.updatePassword(user.id, body.new_password)
+    return json(res, 200, { ok: true, message: 'Senha alterada com sucesso.' })
+  }
+
+  return json(res, 404, { ok: false, error: 'not-found' })
+}
+
 function requestProtocol (req) {
   if (String(process.env.TRUST_PROXY || 'true').toLowerCase() !== 'false') {
     const forwarded = req.headers['x-forwarded-proto']
@@ -209,8 +370,8 @@ function storePayload () {
   }
 }
 
-function bootstrapUser (body) {
-  const { user, password } = repo.createUser()
+function bootstrapUser (body, accountOptions = {}) {
+  const { user, password, recoveryCode } = repo.createUser(accountOptions)
 
   if (runtime.gameData && runtime.revival.auto_starter_bundle !== false) {
     try {
@@ -233,6 +394,7 @@ function bootstrapUser (body) {
     user_id: user.id,
     device_id: typeof body.device_id === 'string' && body.device_id ? body.device_id : user.uuid,
     password,
+    recovery_code: recoveryCode,
     token: user.token,
     session_id: 1,
     puuid: user.uuid,
@@ -438,6 +600,8 @@ async function handle (req, res) {
       game_data_loaded: Boolean(r.gameData)
     })
   }
+
+  if (await handleAccount(req, res, path)) return
 
   if (req.method === 'GET' && path === '/revival/requests') {
     if (!adminAuthorized(req)) return json(res, 401, { ok: false })

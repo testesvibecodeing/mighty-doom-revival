@@ -1,10 +1,29 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, scryptSync } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-function passwordHash (password) {
+function legacyPasswordHash (password) {
   return createHash('sha256').update(password, 'utf8').digest('hex')
+}
+
+function passwordHash (password) {
+  const salt = randomBytes(16).toString('hex')
+  const digest = scryptSync(password, salt, 32).toString('hex')
+  return `scrypt$${salt}$${digest}`
+}
+
+function verifyPassword (stored, password) {
+  if (stored?.startsWith('scrypt$')) {
+    const [, salt, digest] = stored.split('$')
+    if (!salt || !digest) return false
+    return scryptSync(password, salt, 32).toString('hex') === digest
+  }
+  return stored === legacyPasswordHash(password)
+}
+
+function tokenHash (token) {
+  return createHash('sha256').update(token, 'utf8').digest('hex')
 }
 
 export class Repository {
@@ -22,6 +41,9 @@ export class Repository {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         uuid TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
+        email TEXT,
+        display_name TEXT,
+        recovery_hash TEXT,
         token TEXT NOT NULL UNIQUE,
         level INTEGER NOT NULL DEFAULT 1,
         chapter_progression INTEGER NOT NULL DEFAULT 0,
@@ -116,7 +138,19 @@ export class Repository {
         body_json TEXT,
         created_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS web_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
     `)
+    const columns = new Set(this.db.prepare('PRAGMA table_info(users)').all().map(row => row.name))
+    if (!columns.has('email')) this.db.exec('ALTER TABLE users ADD COLUMN email TEXT')
+    if (!columns.has('display_name')) this.db.exec('ALTER TABLE users ADD COLUMN display_name TEXT')
+    if (!columns.has('recovery_hash')) this.db.exec('ALTER TABLE users ADD COLUMN recovery_hash TEXT')
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(lower(email)) WHERE email IS NOT NULL AND email <> \'\'')
   }
 
   tx (fn) {
@@ -135,17 +169,18 @@ export class Repository {
     this.db.close()
   }
 
-  createUser () {
-    const password = randomBytes(24).toString('base64url')
+  createUser (options = {}) {
+    const password = options.password || randomBytes(24).toString('base64url')
+    const recoveryCode = options.recoveryCode || `RV-${randomBytes(6).toString('hex').toUpperCase()}`
     const token = randomBytes(32).toString('base64url')
     const uuid = randomUUID()
     const createdAt = Math.floor(Date.now() / 1000)
     const info = this.db.prepare(`
-      INSERT INTO users (uuid, password_hash, token, created_at)
-      VALUES (?, ?, ?, ?)
-    `).run(uuid, passwordHash(password), token, createdAt)
+      INSERT INTO users (uuid, password_hash, email, display_name, recovery_hash, token, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(uuid, passwordHash(password), options.email || null, options.displayName || null, passwordHash(recoveryCode), token, createdAt)
     const user = this.userById(Number(info.lastInsertRowid))
-    return { user, password }
+    return { user, password, recoveryCode }
   }
 
   userById (id) {
@@ -154,6 +189,16 @@ export class Repository {
 
   userByToken (token) {
     return this.db.prepare('SELECT * FROM users WHERE token = ?').get(token) || null
+  }
+
+  userByLogin (login) {
+    const value = String(login || '').trim()
+    if (!value) return null
+    return this.db.prepare(`
+      SELECT * FROM users
+      WHERE CAST(id AS TEXT) = ? OR lower(email) = lower(?)
+      LIMIT 1
+    `).get(value, value) || null
   }
 
   countUsers () {
@@ -177,8 +222,54 @@ export class Repository {
 
   login (id, password) {
     const user = this.userById(id)
-    if (!user || user.password_hash !== passwordHash(password)) return null
+    if (!user || !verifyPassword(user.password_hash, password)) return null
+    if (!user.password_hash.startsWith('scrypt$')) {
+      this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash(password), id)
+    }
     return user
+  }
+
+  loginAccount (login, password) {
+    const user = this.userByLogin(login)
+    if (!user || !verifyPassword(user.password_hash, password)) return null
+    if (!user.password_hash.startsWith('scrypt$')) {
+      this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash(password), user.id)
+    }
+    return this.userById(user.id)
+  }
+
+  updateProfile (userId, { email, displayName }) {
+    this.db.prepare('UPDATE users SET email = ?, display_name = ? WHERE id = ?').run(email || null, displayName || null, userId)
+    return this.userById(userId)
+  }
+
+  updatePassword (userId, password) {
+    this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash(password), userId)
+  }
+
+  verifyRecoveryCode (userId, recoveryCode) {
+    const user = this.userById(userId)
+    return Boolean(user?.recovery_hash && verifyPassword(user.recovery_hash, recoveryCode))
+  }
+
+  createWebSession (userId, ttlSeconds = 30 * 24 * 3600) {
+    const token = randomBytes(32).toString('base64url')
+    const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds
+    this.db.prepare('INSERT INTO web_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(tokenHash(token), userId, expiresAt)
+    return { token, expiresAt }
+  }
+
+  userByWebSession (token) {
+    if (!token) return null
+    const row = this.db.prepare(`
+      SELECT u.* FROM web_sessions s JOIN users u ON u.id = s.user_id
+      WHERE s.token_hash = ? AND s.expires_at > ?
+    `).get(tokenHash(token), Math.floor(Date.now() / 1000))
+    return row || null
+  }
+
+  revokeWebSession (token) {
+    if (token) this.db.prepare('DELETE FROM web_sessions WHERE token_hash = ?').run(tokenHash(token))
   }
 
   currencies (userId) {

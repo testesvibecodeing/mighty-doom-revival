@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080403">
+  <meta name="description" content="Painel da conta Revival">
+  <title>Minha conta — Revival</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <link rel="stylesheet" href="assets/css/account.css">
+</head>
+<body>
+  <div class="account-glow"></div>
+  <header class="account-topbar">
+    <a class="account-brand" href="/"><span>REVIVAL</span><strong>CONTROL CENTER</strong></a>
+    <a class="back-link" href="/"><i class="fa-solid fa-arrow-left"></i> Site principal</a>
+  </header>
+
+  <main class="account-main">
+    <section class="auth-layout" id="authView">
+      <div class="auth-intro">
+        <span class="eyebrow">// COMMUNITY ACCOUNT</span>
+        <h1>Seu progresso.<br><span>Seu controle.</span></h1>
+        <p>Consulte seu nível, itens, equipamentos, moedas e evolução em um só painel — sincronizado com o seu servidor Revival.</p>
+        <div class="intro-points">
+          <span><i class="fa-solid fa-shield-halved"></i> Seus dados ficam no servidor da instância</span>
+          <span><i class="fa-solid fa-chart-line"></i> Progresso e estatísticas em tempo real</span>
+          <span><i class="fa-solid fa-mobile-screen-button"></i> Experiência otimizada para celular</span>
+        </div>
+      </div>
+      <div class="auth-card">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-auth="login">Entrar</button>
+          <button class="auth-tab" data-auth="register">Criar conta</button>
+          <button class="auth-tab" data-auth="reset">Recuperar</button>
+        </div>
+
+        <form class="auth-form active" id="loginForm">
+          <div class="form-heading"><span>ACESSO DA CONTA</span><h2>Bem-vindo de volta</h2><p>Use o ID da conta ou e-mail cadastrado.</p></div>
+          <label>ID da conta ou e-mail<input name="login" autocomplete="username" required placeholder="ex.: 42 ou voce@email.com"></label>
+          <label>Senha<div class="password-field"><input name="password" type="password" autocomplete="current-password" required placeholder="Sua senha"><button type="button" data-toggle-password><i class="fa-solid fa-eye"></i></button></div></label>
+          <button class="primary-action" type="submit">Entrar no painel <i class="fa-solid fa-arrow-right"></i></button>
+          <p class="form-status" id="loginStatus"></p>
+        </form>
+
+        <form class="auth-form" id="registerForm">
+          <div class="form-heading"><span>NOVA CONTA</span><h2>Comece sua jornada</h2><p>A conta é criada na instância atual do servidor.</p></div>
+          <label>Nome de exibição<input name="display_name" maxlength="48" required placeholder="Como devemos chamar você?"></label>
+          <label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="voce@email.com"></label>
+          <label>Senha<input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="Mínimo de 8 caracteres"></label>
+          <label class="checkline"><input type="checkbox" required> <span>Concordo que esta é uma conta da instância comunitária atual.</span></label>
+          <button class="primary-action" type="submit">Criar conta <i class="fa-solid fa-user-plus"></i></button>
+          <p class="form-status" id="registerStatus"></p>
+        </form>
+
+        <form class="auth-form" id="resetForm">
+          <div class="form-heading"><span>RECUPERAÇÃO SEGURA</span><h2>Redefinir senha</h2><p>Use o código de recuperação exibido quando a conta foi criada.</p></div>
+          <label>ID da conta ou e-mail<input name="login" required placeholder="ID ou e-mail"></label>
+          <label>Código de recuperação<input name="recovery_code" required placeholder="RV-XXXXXXXXXXXX" autocapitalize="characters"></label>
+          <label>Nova senha<input name="new_password" type="password" minlength="8" required placeholder="Mínimo de 8 caracteres"></label>
+          <button class="primary-action" type="submit">Redefinir senha <i class="fa-solid fa-key"></i></button>
+          <p class="form-status" id="resetStatus"></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="dashboard" id="dashboardView" hidden>
+      <div class="dashboard-head">
+        <div><span class="eyebrow">// PLAYER DASHBOARD</span><h1>Olá, <span id="dashName">Slayer</span>.</h1><p>ID da conta <strong id="dashId">--</strong> · membro desde <strong id="dashCreated">--</strong></p></div>
+        <button class="logout-button" id="logoutButton"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
+      </div>
+      <nav class="dashboard-nav" aria-label="Painel da conta">
+        <button class="dashboard-tab active" data-panel="overview"><i class="fa-solid fa-grid-2"></i> Visão geral</button>
+        <button class="dashboard-tab" data-panel="inventory"><i class="fa-solid fa-box-open"></i> Inventário</button>
+        <button class="dashboard-tab" data-panel="profile"><i class="fa-solid fa-user-gear"></i> Minha conta</button>
+      </nav>
+
+      <div class="dashboard-panel active" id="panel-overview">
+        <div class="metric-grid">
+          <article class="metric-card accent"><small>NÍVEL DO SLAYER</small><strong id="metricLevel">--</strong><span id="metricChapters">-- capítulos concluídos</span></article>
+          <article class="metric-card"><small>MOEDAS</small><strong id="metricCoins">--</strong><span>saldo disponível</span></article>
+          <article class="metric-card"><small>ITENS</small><strong id="metricItems">--</strong><span>itens coletados</span></article>
+          <article class="metric-card"><small>TENTATIVAS</small><strong id="metricAttempts">--</strong><span>runs registrados</span></article>
+        </div>
+        <div class="overview-grid">
+          <article class="data-card"><div class="card-title"><span>Moedas e recursos</span><i class="fa-solid fa-coins"></i></div><div class="resource-list" id="resourceList"></div></article>
+          <article class="data-card"><div class="card-title"><span>Estatísticas</span><i class="fa-solid fa-chart-simple"></i></div><div class="stats-list" id="statsList"></div></article>
+        </div>
+      </div>
+
+      <div class="dashboard-panel" id="panel-inventory">
+        <div class="panel-heading"><div><span class="eyebrow">// COLLECTION</span><h2>Seu inventário</h2></div><span class="panel-count" id="inventoryCount">-- itens</span></div>
+        <div class="inventory-grid" id="inventoryGrid"></div>
+      </div>
+
+      <div class="dashboard-panel" id="panel-profile">
+        <div class="profile-grid">
+          <article class="data-card"><div class="card-title"><span>Dados pessoais</span><i class="fa-solid fa-id-card"></i></div><form id="profileForm" class="profile-form"><label>Nome de exibição<input name="display_name" id="profileName" maxlength="48"></label><label>E-mail<input name="email" id="profileEmail" type="email"></label><button class="primary-action" type="submit">Salvar alterações</button><p class="form-status" id="profileStatus"></p></form></article>
+          <article class="data-card"><div class="card-title"><span>Segurança</span><i class="fa-solid fa-lock"></i></div><form id="passwordForm" class="profile-form"><label>Senha atual<input name="current_password" type="password" required></label><label>Nova senha<input name="new_password" type="password" minlength="8" required></label><button class="secondary-action" type="submit">Trocar senha</button><p class="form-status" id="passwordStatus"></p></form><div class="security-note"><i class="fa-solid fa-circle-info"></i> Guarde seu código de recuperação fora do navegador.</div></article>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast"></div>
+  <script src="assets/js/account.js"></script>
+</body>
+</html>

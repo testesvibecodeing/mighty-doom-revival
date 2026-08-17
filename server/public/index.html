@@ -64,23 +64,23 @@ img{display:block;max-width:100%}
 .hero-media img{width:100%;height:100%;object-fit:cover;object-position:center 38%;filter:contrast(1.18) saturate(1.28) brightness(.62);opacity:.4;transform:scale(1.06);animation:drift 14s ease-in-out infinite alternate}
 @keyframes drift{to{transform:scale(1.09) translate3d(1.2%,-.5%,0)}}
 .hero-media:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(3,1,1,.96) 0%,rgba(5,2,1,.9) 16%,rgba(5,2,1,.6) 38%,rgba(5,2,1,.12) 62%,rgba(4,2,1,.3) 100%),linear-gradient(180deg,rgba(0,0,0,.14),transparent 55%,rgba(7,3,2,.9) 100%)}
-.hero-inner{position:relative;z-index:4;width:min(var(--max),calc(100% - 2*var(--shell-pad)));max-width:100%;margin-inline:auto;padding:clamp(28px,6vh,70px) 0 clamp(28px,6vh,50px);display:flex;align-items:center;flex:1 1 auto;min-width:0}
-.hero-copy{width:min(560px,100%);max-width:100%;min-width:0}
-.logo-block{width:fit-content;max-width:100%;display:flex;flex-direction:column;margin-bottom:clamp(12px,2.5vh,20px);transform:skew(-4deg);filter:drop-shadow(0 9px 0 rgba(55,5,0,.4)) drop-shadow(0 0 26px rgba(255,72,0,.28));overflow-wrap:anywhere}
+.hero-inner{position:relative;z-index:4;width:min(var(--max),calc(100% - 2*var(--shell-pad)));max-width:100%;margin-inline:auto;padding:clamp(28px,6vh,70px) var(--shell-pad) clamp(28px,6vh,50px);display:flex;align-items:center;justify-content:center;flex:0 1 var(--max);min-width:0}
+.hero-copy{width:min(760px,100%);max-width:100%;min-width:0;margin-inline:auto;text-align:center}
+.logo-block{width:fit-content;max-width:100%;display:flex;flex-direction:column;align-items:center;margin:0 auto clamp(12px,2.5vh,20px);transform:skew(-4deg);filter:drop-shadow(0 9px 0 rgba(55,5,0,.4)) drop-shadow(0 0 26px rgba(255,72,0,.28));overflow-wrap:anywhere}
 .logo-block .small{margin-left:clamp(30px,7vw,67px);margin-bottom:-9px;color:#f13d2b;font:400 clamp(20px,4.5vw,36px)/.9 'Black Ops One'}
 .logo-block .big{font:400 clamp(52px,11vw,104px)/.78 'Black Ops One';letter-spacing:-.06em;background:linear-gradient(#ff3e20 5%,#ff9707 42%,#ffd231 66%,#ff7b00 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .logo-block .sub{margin-top:10px;margin-left:clamp(34px,8vw,72px);color:#ff3d2b;font-size:clamp(12px,2.2vw,19px);font-weight:700;letter-spacing:.17em}
 .hero h1{margin:0 0 10px;font-size:clamp(20px,3.4vw,27px);line-height:1.15;text-transform:uppercase;letter-spacing:.035em}
-.hero p{max-width:520px;margin:0;color:#c0b6ac;font-size:clamp(15px,2vw,17px);line-height:1.6}
-.actions{display:flex;flex-wrap:wrap;gap:14px;margin:clamp(16px,3vh,24px) 0 clamp(14px,2.5vh,20px)}
+.hero p{max-width:620px;margin:0 auto;color:#c0b6ac;font-size:clamp(15px,2vw,17px);line-height:1.6}
+.actions{display:flex;justify-content:center;flex-wrap:wrap;gap:14px;margin:clamp(16px,3vh,24px) 0 clamp(14px,2.5vh,20px)}
 .btn{min-height:58px;padding:12px 24px;display:inline-flex;align-items:center;justify-content:center;gap:14px;border:1px solid rgba(255,255,255,.12);text-transform:uppercase;font-weight:700;transition:.22s;clip-path:polygon(3% 0,97% 0,100% 20%,100% 80%,97% 100%,3% 100%,0 80%,0 20%);cursor:pointer}
 .btn-primary{background:linear-gradient(180deg,rgba(180,29,8,.94),rgba(91,8,4,.96));border-color:#ff4b1a;box-shadow:inset 0 0 24px rgba(255,108,0,.12),0 0 24px rgba(255,46,0,.15)}
 .btn-secondary{background:linear-gradient(180deg,rgba(18,18,17,.94),rgba(7,7,7,.96))}
 @media(hover:hover){.btn:not(.disabled):hover{transform:translateY(-2px);border-color:#ff9d27;color:#ffcb78}}
 .btn.disabled{opacity:.6;filter:saturate(.55);cursor:not-allowed}
-.badges{display:flex;flex-wrap:wrap;gap:10px 18px;margin:5px 0 clamp(14px,2.5vh,20px);color:#ff4f2e;font-size:12px;font-weight:600}
+.badges{display:flex;justify-content:center;flex-wrap:wrap;gap:10px 18px;margin:5px 0 clamp(14px,2.5vh,20px);color:#ff4f2e;font-size:12px;font-weight:600}
 .badges span{display:inline-flex;gap:7px;align-items:center}
-.connect{max-width:520px;min-height:68px;display:grid;grid-template-columns:1fr auto 48px;align-items:center;gap:14px;padding:12px 12px 12px 20px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(14,14,13,.95),rgba(6,7,7,.96));clip-path:polygon(2% 0,98% 0,100% 20%,100% 80%,98% 100%,2% 100%,0 80%,0 20%)}
+.connect{width:100%;max-width:620px;min-height:68px;margin-inline:auto;display:grid;grid-template-columns:1fr auto 48px;align-items:center;gap:14px;padding:12px 12px 12px 20px;text-align:left;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,rgba(14,14,13,.95),rgba(6,7,7,.96));clip-path:polygon(2% 0,98% 0,100% 20%,100% 80%,98% 100%,2% 100%,0 80%,0 20%)}
 .connect small{display:block;margin-bottom:4px;color:#918a82;text-transform:uppercase;font-size:11px}
 .connect strong{display:block;font-size:clamp(12px,1.8vw,14px);color:#d9d2c7;word-break:break-all}
 .connect-state{display:flex;align-items:center;gap:6px;color:#89918a;font-size:11px;font-weight:700;white-space:nowrap}
@@ -88,7 +88,7 @@ img{display:block;max-width:100%}
 .connect-state.offline{color:#ef493c}
 .terminal-btn{width:44px;height:44px;border:1px solid rgba(255,255,255,.16);background:#151515;color:#ddd;cursor:pointer;display:grid;place-items:center}
 @media(hover:hover){.terminal-btn:hover{border-color:#ff9d27;color:#ffb12a}}
-.specs{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:12px;color:#8e8983;font-size:13px}
+.specs{display:flex;justify-content:center;flex-wrap:wrap;gap:10px 28px;margin-top:12px;color:#8e8983;font-size:13px}
 .specs span{display:inline-flex;align-items:center;gap:8px}
 .hero-fade{position:absolute;left:0;right:0;bottom:0;height:180px;z-index:3;background:linear-gradient(transparent,rgba(7,3,2,.85) 95%);pointer-events:none}
 
@@ -175,7 +175,7 @@ footer{position:relative;z-index:3;background:rgba(5,2,1,.92);border-top:1px sol
 /* ---------- responsivo ---------- */
 @media(max-width:1180px){
   .topbar-inner{grid-template-columns:minmax(140px,190px) 1fr minmax(180px,210px)}
-  .hero-copy{width:min(560px,60vw)}
+  .hero-copy{width:min(720px,100%)}
   .live-grid{grid-template-columns:1fr}
 }
 @media(max-width:920px){
@@ -189,19 +189,20 @@ footer{position:relative;z-index:3;background:rgba(5,2,1,.92);border-top:1px sol
   .hero-copy{width:100%}
   .hero-media img{object-position:64% 40%}
   .hero-media:after{background:linear-gradient(180deg,rgba(3,1,1,.1) 0%,rgba(5,2,1,.45) 34%,rgba(5,2,1,.94) 70%,rgba(7,3,2,.97) 100%)}
-  .hero-inner{padding-top:clamp(48vh,58vh,62vh);align-items:flex-end}
+  .hero-inner{width:100%;padding-top:clamp(280px,52vh,560px);align-items:flex-end}
   .two-col{grid-template-columns:1fr;gap:30px}
   .terminal pre{min-height:240px}
 }
 @media(max-width:640px){
   :root{--shell-pad:14px}
-  .hero-inner{width:100%;padding-inline:var(--shell-pad);padding-top:clamp(260px,52vh,520px)}
+  .hero-inner{width:100%;padding-inline:var(--shell-pad);padding-top:clamp(250px,48vh,470px)}
   .hero-copy{width:100%}
   .logo-block .big{font-size:clamp(48px,18vw,86px)}
   .logo-block .small{font-size:clamp(18px,7vw,30px)}
   .logo-block .sub{font-size:clamp(11px,3.2vw,16px);letter-spacing:.12em}
   .hero h1{font-size:clamp(19px,6vw,26px)}
   .hero p{font-size:15px}
+  .connect{grid-template-columns:1fr 44px;padding-left:14px;padding-right:8px}
   .actions{flex-direction:column}
   .btn{width:100%}
   .connect{grid-template-columns:1fr 44px}
@@ -238,6 +239,7 @@ footer{position:relative;z-index:3;background:rgba(5,2,1,.92);border-top:1px sol
       <a href="#download">Download</a>
       <a href="#faq">FAQ</a>
       <a href="#contato">Contato</a>
+      <a href="/account"><i class="fa-solid fa-user"></i> Minha conta</a>
     </nav>
     <div class="server-chip">
       <small>Status do servidor</small>

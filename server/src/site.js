@@ -535,6 +535,11 @@ export function createSiteRouter ({ publicDir, uploadDir }) {
     }
 
     // --- site estático ---
+    if ((req.method === 'GET' || req.method === 'HEAD') && path === '/account') {
+      if (serveFile(req, res, join(root, 'account.html'), 'no-cache')) return true
+      return json(res, 404, { ok: false, error: 'account-page-not-found' })
+    }
+
     if ((req.method === 'GET' || req.method === 'HEAD') && (path === '/' || path === '/index.html')) {
       if (serveFile(req, res, join(root, 'index.html'), 'no-cache')) return true
       return json(res, 500, { ok: false, error: 'index.html ausente em server/public' })
