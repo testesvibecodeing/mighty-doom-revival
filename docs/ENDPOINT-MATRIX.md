@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T10:57:03Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:16:29Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -17,7 +17,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [gear](#gear) | 1 | 5 | 0 | 5 | 0 | 5 | 🧪 em convergência |
 | [slayers](#slayers) | 2 | 2 | 0 | 2 | 0 | 2 | 🧪 em convergência |
 | [talents](#talents) | 3 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
-| [chapters](#chapters) | 4 | 13 | 0 | 5 | 8 | 0 | 🧪 em convergência |
+| [chapters](#chapters) | 4 | 13 | 3 | 10 | 0 | 10 | 🧪 em convergência |
 | [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 0 | 🧪 em convergência |
 | [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
 | [inbox](#inbox) | 7 | 4 | 0 | 1 | 3 | 0 | 🧪 em convergência |
@@ -69,19 +69,19 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/chapters/ad-ability-reroll` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/ad-revive` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/claim-challenge-reward` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/claim-rewards` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/claim-stage-reward` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/chapters/claim-vip-reward` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/claim-vip-rewards-all` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/claim-vip-rewards-chapter` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/end` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: vitória do 1-1, recompensas, 1-2 desbloqueado; current_run persistido. |
-| `game/chapters/redeem-voucher` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/chapters/revive` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
-| `game/chapters/start` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: partida completa do estágio 1-1 no emulador. |
-| `game/chapters/update` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: avanço nas 5 salas do 1-1. |
+| `game/chapters/ad-ability-reroll` | ✅ | ✅ | · | · | · | — | ✅ | · | — | schema extraído |
+| `game/chapters/ad-revive` | ✅ | ✅ | · | · | · | — | ✅ | · | — | schema extraído |
+| `game/chapters/claim-challenge-reward` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/claim-rewards` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/claim-stage-reward` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/claim-vip-reward` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/claim-vip-rewards-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/claim-vip-rewards-chapter` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/end` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: vitória do 1-1, recompensas, 1-2 desbloqueado; current_run persistido. |
+| `game/chapters/redeem-voucher` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/revive` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/chapters/start` | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: partida completa do estágio 1-1 no emulador. |
+| `game/chapters/update` | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: avanço nas 5 salas do 1-1. |
 
 ### quests
 
@@ -289,8 +289,6 @@ Implementadas em `server/src` mas ausentes das 116 rotas do metadata —
 provável erro de transcrição histórico. Candidatas a remoção;
 nenhum cliente 1.13.1 as chama.
 
-- `game/chapters/claim-stage-rewards`
-- `game/chapters/stage-rewards`
 - `game/idle-rewards/claim-rewards`
 - `game/quests/claim`
 - `game/quests/claim-daily-milestone`

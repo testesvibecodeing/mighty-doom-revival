@@ -1,7 +1,7 @@
 {
   "endpoint": "game/player/user-data",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T10:55:00Z",
+  "captured_at": "2026-08-17T11:15:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -50,13 +50,20 @@
               "tier": 1
             }
           ],
-          "equipment": [],
+          "equipment": [
+            {
+              "uid": 5,
+              "level": 1,
+              "cosmetic": null,
+              "rid": 900
+            }
+          ],
           "launchers": [],
           "energies": [
             {
               "rid": 400,
               "amount": 10,
-              "regen_epoch": 1786964182
+              "regen_epoch": 1786965390
             }
           ],
           "ultimates": [],
@@ -69,7 +76,11 @@
               "tier": 1
             }
           ],
-          "entitlements": [],
+          "entitlements": [
+            {
+              "rid": 700
+            }
+          ],
           "slots": [
             {
               "id": 10,

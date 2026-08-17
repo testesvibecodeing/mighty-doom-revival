@@ -45,7 +45,14 @@ const gameData = {
   daily_rewards: {
     days: [{ resources: [{ resource: 'coins', amount: 25 }] }]
   },
-  idle_reward: { generation_period: 60, chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }] }
+  idle_reward: { generation_period: 60, chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }] },
+  chapter_mode: {
+    chapters: [{
+      id: 101,
+      stage_rewards: [{ stage: 1, resources: [{ rid: 100, amount: 5 }] }],
+      challenges: [{ id: 1, completion_reward: [{ rid: 100, amount: 7 }] }]
+    }]
+  }
 }
 
 const packs = {
@@ -222,12 +229,25 @@ try {
   const eventState = await post('/game/events/get-progress', {}, token)
   assert.equal(eventState.game_mode_events_progress[0].event_id, 7001)
 
-  await post('/game/chapters/start', { chapter: 101, stage: 0 }, token)
-  await post('/game/chapters/update', { stage: 3, checkpoint: 'c3' }, token)
+  // Contrato do ChapterModeApi (metadata v29): StartChapterResponse{attempt},
+  // UpdateChapterResponse{min_update_time}, Revive/RedeemVoucher sem DTO
+  // (envelope puro), EndChapterResponse{loot}, ClaimStageReward{stage,
+  // resources}, ClaimChallengeReward{resources}.
+  const attempt = await post('/game/chapters/start', { chapter_id: 101, challenge_id: 1 }, token)
+  assert.equal(attempt.attempt.chapter_id, 101)
+  assert.equal(attempt.current_run, undefined, 'StartChapterResponse só tem attempt')
+  const updated = await post('/game/chapters/update', { progress: { stage: 3, state: 0 } }, token)
+  assert.ok('min_update_time' in updated, 'UpdateChapterResponse tem min_update_time')
   const revived = await post('/game/chapters/revive', {}, token)
-  assert.equal(revived.current_run.revives, 1)
-  const ended = await post('/game/chapters/end', { stage: 5, success: true }, token)
-  assert.equal(ended.chapter_progression.chapters[0].best_stage, 5)
+  assert.equal(revived.current_run, undefined, 'Revive responde envelope puro')
+  const ended = await post('/game/chapters/end', { progress: { stage: 5, state: 1 } }, token)
+  assert.deepEqual(ended.loot, [])
+  assert.equal(ended.chapter_progression, undefined, 'EndChapterResponse só tem loot')
+  const stageReward = await post('/game/chapters/claim-stage-reward', { chapter_id: 101 }, token)
+  assert.equal(stageReward.stage, 1)
+  assert.equal(stageReward.resources[0].rid, 100)
+  const challengeReward = await post('/game/chapters/claim-challenge-reward', { chapter_id: 101, challenge_id: 1 }, token)
+  assert.equal(challengeReward.resources.length, 1)
 
   const persisted = await post('/game/player/user-data', {}, token)
   assert.equal(persisted.user_data.chapter_progression.chapters[0].chapter, 101)

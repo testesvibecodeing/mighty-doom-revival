@@ -49,6 +49,27 @@ const gameData = {
   talents: { talents: [{ id: 500, cost: [{ resource: 'coins', amount: 50 }] }] },
   gear_fusion: { input_count: 2, tier_gain: 1 },
   dismantle: { tiers: { 1: [{ resource: 'coins', amount: 25 }] } },
+  chapter_mode: {
+    chapters: [{
+      id: 101,
+      vip_entitlement_id: 700,
+      stage_rewards: [
+        { stage: 1, resources: [{ rid: 100, amount: 10 }], vip_resources: [{ rid: 100, amount: 20 }] },
+        { stage: 2, resources: [{ rid: 100, amount: 15 }], vip_resources: [{ rid: 100, amount: 25 }] },
+        { stage: 3, resources: [{ rid: 100, amount: 20 }], vip_resources: [{ rid: 100, amount: 30 }] },
+        { stage: 4, vip_resources: [{ rid: 100, amount: 35 }] }
+      ],
+      challenges: [{ id: 1, completion_reward: [{ rid: 100, amount: 100 }] }]
+    }, {
+      id: 102,
+      vip_entitlement_id: 700,
+      stage_rewards: [
+        { stage: 1, vip_resources: [{ rid: 100, amount: 12 }] },
+        { stage: 2, vip_resources: [{ rid: 100, amount: 14 }] },
+        { stage: 3, vip_resources: [{ rid: 100, amount: 16 }] }
+      ]
+    }]
+  },
   bundles: [{
     id: 1,
     tag: 'starter',
@@ -58,7 +79,9 @@ const gameData = {
       { resource: { id: 200 }, kind: 'weapon', level: 1, tier: 1 },
       { resource: { id: 200 }, kind: 'weapon', level: 1, tier: 1 },
       { resource: { id: 300 }, kind: 'slayer', level: 1, tier: 1 },
+      { resource: { id: 700 }, kind: 'entitlement' },
       { resource: { id: 800 }, kind: 'cosmetic' },
+      { resource: { id: 900 }, kind: 'equipment' },
       { resource: { id: 400 }, kind: 'energy', amount: 10 }
     ]
   }],
@@ -188,9 +211,25 @@ try {
   await call('gear-fuse', '/game/gear/fuse', { input_uids: [fuseA, fuseB] }, token)
   await call('gear-dismantle', '/game/gear/dismantle', { gear_uid: keep }, token)
 
-  await call('chapters-start', '/game/chapters/start', { chapter: 101, stage: 0 }, token)
-  await call('chapters-update', '/game/chapters/update', { stage: 3, checkpoint: 'c3' }, token)
-  await call('chapters-end', '/game/chapters/end', { stage: 5, success: true }, token)
+  // Módulo chapters — ChapterModeApi (metadata v29): 13 métodos = 13 rotas.
+  // VIP em estágios distintos para capturar as três rotas VIP sem esgotar:
+  // claim-vip-reward(1) → claim-vip-rewards-chapter(2,3) → all(4).
+  await call('chapters-start', '/game/chapters/start', { chapter_id: 101, challenge_id: 1, gear: [], weapons: [] }, token)
+  await call('chapters-update', '/game/chapters/update', { progress: { stage: 3, state: 0 } }, token)
+  await call('chapters-revive', '/game/chapters/revive', {}, token)
+  await call('chapters-redeem-voucher', '/game/chapters/redeem-voucher', { voucher_id: 900 }, token)
+  await call('chapters-end', '/game/chapters/end', { progress: { stage: 5, state: 1 } }, token)
+  await call('chapters-claim-stage-reward', '/game/chapters/claim-stage-reward', { chapter_id: 101 }, token)
+  await call('chapters-claim-rewards', '/game/chapters/claim-rewards', { chapter_id: 101 }, token)
+  await call('chapters-claim-vip-reward', '/game/chapters/claim-vip-reward', { chapter_id: 101 }, token)
+  await call('chapters-claim-vip-rewards-chapter', '/game/chapters/claim-vip-rewards-chapter', { chapter_id: 101 }, token)
+  // Segunda run (capítulo 102) deixa pendentes VIP para a rota "all", que
+  // varre todos os capítulos — sem isso ela responderia 2300 vazia.
+  await call('chapters-start-102', '/game/chapters/start', { chapter_id: 102, gear: [], weapons: [] }, token)
+  await call('chapters-end-102', '/game/chapters/end', { progress: { stage: 3, state: 1 } }, token)
+  await call('chapters-claim-vip-reward-102', '/game/chapters/claim-vip-reward', { chapter_id: 102 }, token)
+  await call('chapters-claim-vip-rewards-all', '/game/chapters/claim-vip-rewards-all', {}, token)
+  await call('chapters-claim-challenge-reward', '/game/chapters/claim-challenge-reward', { chapter_id: 101, challenge_id: 1 }, token)
   await call('store-get', '/game/store/get', {}, token)
   await call('player-stats', '/game/player/stats', {}, token)
 } finally {
@@ -200,8 +239,11 @@ try {
 }
 
 mkdirSync(outDir, { recursive: true })
+const seenRoutes = new Set()
 for (const capture of captured) {
   const route = capture.path.replace(/^\//, '')
+  if (seenRoutes.has(route)) continue // primeira chamada por rota é a canônica
+  seenRoutes.add(route)
   const module = route.split('/')[1] || 'raiz'
   const file = resolve(outDir, module, `${route.replaceAll('/', '__')}.json`)
   mkdirSync(dirname(file), { recursive: true })
@@ -222,4 +264,4 @@ for (const capture of captured) {
   writeFileSync(file, JSON.stringify(fixture, null, 2) + '\n')
   console.log(`[fixture] ${route}`)
 }
-console.log(`\n${captured.length} fixtures server-replay em ${outDir}`)
+console.log(`\n${seenRoutes.size} fixtures server-replay em ${outDir}`)

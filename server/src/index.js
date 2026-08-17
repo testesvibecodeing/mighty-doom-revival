@@ -560,7 +560,7 @@ function handleAuthed (path, body, user, req) {
   const compat = handleCompatRequest(path, body, user.id, repo, runtime)
   if (compat) return compat
 
-  const chapter = handleChapterRequest(path, body, user.id, repo)
+  const chapter = handleChapterRequest(path, body, user.id, repo, runtime)
   if (chapter) return chapter
 
   const tutorial = handleTutorialRequest(path, body, user.id, repo, runtime)

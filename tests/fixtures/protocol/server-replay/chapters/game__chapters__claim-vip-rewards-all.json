@@ -1,34 +1,44 @@
 {
-  "endpoint": "game/gear/apply-cosmetic",
+  "endpoint": "game/chapters/claim-vip-rewards-all",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T11:15:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/gear/apply-cosmetic",
+    "path": "/game/chapters/claim-vip-rewards-all",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
-    "body": {
-      "gear_uid": 1,
-      "cosmetic_id": 800
-    }
+    "body": {}
   },
   "response": {
     "status": 200,
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "gear": {
-        "uid": 1,
-        "rid": 200,
-        "level": 3,
-        "tier": 1,
-        "cosmetic_id": 800
-      }
+      "stages": [
+        {
+          "chapter_id": 102,
+          "stage": 2
+        },
+        {
+          "chapter_id": 102,
+          "stage": 3
+        }
+      ],
+      "resources": [
+        {
+          "rid": 100,
+          "amount": 1911
+        },
+        {
+          "rid": 100,
+          "amount": 1927
+        }
+      ]
     }
   }
 }

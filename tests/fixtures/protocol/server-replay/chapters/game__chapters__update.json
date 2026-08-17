@@ -1,7 +1,7 @@
 {
   "endpoint": "game/chapters/update",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T10:55:00Z",
+  "captured_at": "2026-08-17T11:15:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -13,8 +13,10 @@
       "x-ubu-token": "<token>"
     },
     "body": {
-      "stage": 3,
-      "checkpoint": "c3"
+      "progress": {
+        "stage": 3,
+        "state": 0
+      }
     }
   },
   "response": {
@@ -22,23 +24,7 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "min_update_time": null,
-      "current_run": {
-        "chapter": 101,
-        "challenge": 0,
-        "stage": 3,
-        "started_at": 1786964122,
-        "updated_at": 1786964122,
-        "revives": 0,
-        "weapons": [],
-        "gear": [],
-        "stats": [],
-        "payload": {
-          "stage": 3,
-          "checkpoint": "c3"
-        },
-        "checkpoint": "c3"
-      }
+      "min_update_time": null
     }
   }
 }
