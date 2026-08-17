@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T12:27:19Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T15:41:56Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -33,8 +33,8 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [session](#session) | 17 | 3 | 0 | 3 | 0 | 1 | 🧪 em convergência |
 | [auth](#auth) | 18 | 5 | 0 | 4 | 1 | 0 | 🧪 em convergência |
 | [identity](#identity) | 19 | 8 | 0 | 3 | 5 | 0 | 🧪 em convergência |
-| [devices](#devices) | 20 | 4 | 0 | 0 | 4 | 0 | ❌ nada implementado |
-| [codes](#codes) | 21 | 1 | 0 | 0 | 1 | 0 | ❌ nada implementado |
+| [devices](#devices) | 20 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
+| [codes](#codes) | 21 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
 | [xbox](#xbox) | 22 | 4 | 0 | 0 | 4 | 0 | ❌ nada implementado |
 | [bnet](#bnet) | 23 | 1 | 0 | 0 | 1 | 0 | ❌ nada implementado |
 | [ads ⛔](#ads) | 99 | 4 | 0 | 4 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
@@ -237,16 +237,16 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/devices/describe` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/devices/list` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/devices/register` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/devices/unregister` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/devices/describe` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: DevicesApi.Describe(deviceId) CONFIRMADO; device_id A VERIFICAR (fallback snake); wrapper device; refresca last_access_time |
+| `game/devices/list` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: DevicesApi.List() CONFIRMADO; wrapper devices (literal) com AuthorizedDevice[]; fixture server-replay 2026-08-17 |
+| `game/devices/register` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: DevicesApi.Register(platform, region) CONFIRMADO; DeviceInfo{region, platform}; literais de wire device/platform/region; AuthorizedDevice{id, platform, region, authorizationTime, lastAccessTime} no wrapper device; fixture server-replay 2026-08-17 |
+| `game/devices/unregister` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: DevicesApi.Unregister(deviceId) CONFIRMADO; sem Response DTO -> envelope puro; device_id A VERIFICAR |
 
 ### codes
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/codes/redeem` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/codes/redeem` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: CodesApi.Redeem(code) CONFIRMADO; literal code; sem *Response DTO confirmado -> wrapper resources A VERIFICAR (padrão PurchaseItemResponse); códigos em gameData.codes, 1x por jogador |
 
 ### xbox
 
@@ -290,6 +290,7 @@ provável erro de transcrição histórico. Candidatas a remoção;
 nenhum cliente 1.13.1 as chama.
 
 - `game/armory`
+- `game/devices`
 - `game/events`
 - `game/idle-rewards/claim-rewards`
 - `game/quests/claim`

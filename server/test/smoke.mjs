@@ -66,6 +66,7 @@ const gameData = {
   store: {
     offers: [{ id: 5, item_id: 900100, allowed_purchases: 1, purchase_amount: 100 }]
   },
+  codes: [{ code: 'REVIVAL', resources: [{ resource: 'coins', amount: 150 }] }],
   chapter_mode: {
     chapters: [{
       id: 101,
@@ -240,11 +241,16 @@ try {
 
   // IdleRewardApi.Boost(): multiplica os períodos pendentes (período de 1s no
   // game-data do smoke) e responde envelope puro — o cliente relê get-state.
+  // O número exato de períodos acumulados varia com o timing da máquina; o
+  // que é determinístico: >=1 período concedido ×2 e estado zerado após.
   await post('/game/idle-rewards/get-state', {}, token)
   await new Promise(wait => setTimeout(wait, 1200))
   await post('/game/idle-rewards/boost', {}, token)
   const afterBoost = await post('/game/player/user-data', {}, token)
-  assert.equal(afterBoost.user_data.inventory.currencies.find(row => row.rid === 100).amount, 977)
+  const boostBalance = afterBoost.user_data.inventory.currencies.find(row => row.rid === 100).amount
+  assert.ok(boostBalance >= 977 && boostBalance <= 981, `boost concede períodos ×2 (saldo ${boostBalance})`)
+  const idleAfterBoost = await post('/game/idle-rewards/get-state', {}, token)
+  assert.equal(idleAfterBoost.state.claimable_periods, 0, 'boost consome os períodos pendentes')
 
   // InventoryApi.ExchangeCurrency(): taxa configurada input 100 -> output 101
   // (rate 10 = 10 moedas por 1 gema). Saída via giveGameResource.
@@ -252,7 +258,7 @@ try {
     input_currency_id: 100, output_currency_id: 101, output_currency_amount: 3
   }, token)
   const afterExchange = await post('/game/player/user-data', {}, token)
-  assert.equal(afterExchange.user_data.inventory.currencies.find(row => row.rid === 100).amount, 947)
+  assert.equal(afterExchange.user_data.inventory.currencies.find(row => row.rid === 100).amount, boostBalance - 30, 'exchange debita ceil(3 × rate 10)')
   assert.equal(afterExchange.user_data.inventory.currencies.find(row => row.rid === 101).amount, 3)
   const exchangeMissing = await post('/game/inventory/exchange-currency', { input_currency_id: 100 }, token, 400)
   assert.equal(exchangeMissing.reason, 'currency-required')
@@ -271,7 +277,7 @@ try {
   const armoryAfter = await post('/game/armory/get', {}, token)
   assert.deepEqual(armoryAfter.upgrades, [{ id: 1, level: 1 }])
   const afterArmory = await post('/game/player/user-data', {}, token)
-  assert.equal(afterArmory.user_data.inventory.currencies.find(row => row.rid === 100).amount, 922)
+  assert.equal(afterArmory.user_data.inventory.currencies.find(row => row.rid === 100).amount, boostBalance - 55, 'armory debita o custo do nível 1')
 
   // StoreApi.GetItems()/GetOfferItems()/ActivateOffer()/GetPlayerOffers()/
   // AdPurchaseItem(): packs de anúncio separados em ad_items; ad-purchase sem
@@ -289,6 +295,25 @@ try {
   assert.deepEqual(playerOffers.offers.map(offer => offer.id), [5])
   const adNoToken = await post('/game/store/ad-purchase', { item_id: 900200 }, token, 400)
   assert.equal(adNoToken.reason, 'reward-token-required')
+
+  // DevicesApi: AuthorizedDevice{id, platform, region, authorization_time,
+  // last_access_time} no wire; unregister responde envelope puro.
+  const device = await post('/game/devices/register', { platform: 'android', region: 'US' }, token)
+  assert.equal(device.device.id, 1)
+  assert.equal(device.device.platform, 'android')
+  const deviceList = await post('/game/devices/list', {}, token)
+  assert.equal(deviceList.devices.length, 1)
+  await post('/game/devices/describe', { device_id: 1 }, token)
+  await post('/game/devices/unregister', { device_id: 1 }, token)
+  const deviceGone = await post('/game/devices/list', {}, token)
+  assert.deepEqual(deviceGone.devices, [])
+
+  // CodesApi.Redeem(code): concessão única por jogador. O wire de resources
+  // reporta o saldo pós-concessão (semântica do giveGameResource), não o delta.
+  const redeemed = await post('/game/codes/redeem', { code: 'REVIVAL' }, token)
+  assert.deepEqual(redeemed.resources, [{ rid: 100, amount: boostBalance - 55 + 150 }])
+  const redeemedAgain = await post('/game/codes/redeem', { code: 'REVIVAL' }, token, 400)
+  assert.equal(redeemedAgain.reason, 'code-already-redeemed')
 
   const schedule = await post('/game/events/get-schedule', {}, token)
   assert.equal(schedule.scheduled_events[0].id, 7001)
@@ -364,7 +389,9 @@ try {
     '/game/session/update-legal', '/game/player/set-push-token',
     '/game/armory/get', '/game/armory/upgrade',
     '/game/store/get-items', '/game/store/get-offer-items',
-    '/game/store/get-player-offers', '/game/store/activate-offer', '/game/store/ad-purchase'
+    '/game/store/get-player-offers', '/game/store/activate-offer', '/game/store/ad-purchase',
+    '/game/devices/register', '/game/devices/list', '/game/devices/describe',
+    '/game/devices/unregister', '/game/codes/redeem'
   ])
   const leaked = researchState.fallback_endpoints.filter(row => implementedPaths.has(row.path))
   assert.deepEqual(leaked, [], 'rota implementada não pode depender de fallback de pesquisa')

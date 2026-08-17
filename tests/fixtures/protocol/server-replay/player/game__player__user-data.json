@@ -1,7 +1,7 @@
 {
   "endpoint": "game/player/user-data",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T12:25:00Z",
+  "captured_at": "2026-08-17T12:33:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -63,7 +63,7 @@
             {
               "rid": 400,
               "amount": 10,
-              "regen_epoch": 1786969596
+              "regen_epoch": 1786970061
             }
           ],
           "ultimates": [],

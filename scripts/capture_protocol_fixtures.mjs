@@ -154,7 +154,8 @@ const gameData = {
   },
   store: {
     offers: [{ id: 5, item_id: 900100, allowed_purchases: 1, purchase_amount: 100 }]
-  }
+  },
+  codes: [{ code: 'REVIVAL', resources: [{ resource: 'coins', amount: 150 }] }]
 }
 // Packs: 900100 normal (store_items) e 900200 de anúncio (ad_items) para os
 // fixtures do GetItems/GetOfferItems; ad-purchase fica de fora (emissor de
@@ -275,7 +276,7 @@ function sanitize (value) {
       // Épocs derivados do relógio no momento da captura (idle/offer/run) —
       // mascarados para o fixture ser regenerável sem diff. start_time de
       // eventos agendados NÃO entra aqui: vem da config, é determinístico.
-      else if (key === 'last_claim' || key === 'next_claim' || key === 'started_at_ms' || key === 'best_completion_time_milliseconds') out[key] = '<epoch>'
+      else if (key === 'last_claim' || key === 'next_claim' || key === 'started_at_ms' || key === 'best_completion_time_milliseconds' || key === 'authorization_time' || key === 'last_access_time') out[key] = '<epoch>'
       else out[key] = sanitize(inner)
     }
     return out
@@ -398,6 +399,13 @@ try {
   await call('store-get-offer-items', '/game/store/get-offer-items', {}, token)
   await call('store-activate-offer', '/game/store/activate-offer', { offer_id: 5 }, token)
   await call('store-get-player-offers', '/game/store/get-player-offers', {}, token)
+
+  // Módulo devices/codes — DevicesApi (AuthorizedDevice) e CodesApi.Redeem.
+  await call('devices-register', '/game/devices/register', { platform: 'android', region: 'US' }, token)
+  await call('devices-list', '/game/devices/list', {}, token)
+  await call('devices-describe', '/game/devices/describe', { device_id: 1 }, token)
+  await call('codes-redeem', '/game/codes/redeem', { code: 'REVIVAL' }, token)
+  await call('devices-unregister', '/game/devices/unregister', { device_id: 1 }, token)
 } finally {
   child.kill('SIGTERM')
   await new Promise(exit => child.once('exit', exit))

@@ -1,12 +1,12 @@
 {
-  "endpoint": "game/store/get-player-offers",
+  "endpoint": "game/devices/list",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T12:33:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/store/get-player-offers",
+    "path": "/game/devices/list",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
@@ -19,14 +19,13 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "offers": [
+      "devices": [
         {
-          "id": 5,
-          "offer_definition_id": 5,
-          "item_id": 900100,
-          "allowed_purchases": 1,
-          "start_time": 1786970003,
-          "purchase_amount": 100
+          "id": 1,
+          "platform": "android",
+          "region": "US",
+          "authorization_time": "<epoch>",
+          "last_access_time": "<epoch>"
         }
       ]
     }

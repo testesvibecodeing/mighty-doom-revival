@@ -13,6 +13,8 @@ import { handleEventRequest } from './events.js'
 import { handleArmoryRequest } from './armory.js'
 import { findAdRewardToken } from './ad-tokens.js'
 import { boostIdleReward, idleRewardState } from './rewards.js'
+import { handleDevicesRequest } from './devices.js'
+import { redeemCode } from './codes.js'
 import { activatedOfferWires, activateStoreOffer, adPurchasePack, storeItemsWire } from './store.js'
 import { inventoryWire, seedStarterBundle, giveGameResource } from './game-data-model.js'
 import { playerStatsWire, incrementPlayerStats } from './stats.js'
@@ -582,6 +584,15 @@ function handleBaseline (path, body, user) {
     repo.setState(user.id, 'player', 'push_token', body.push_token)
     return { data: {} }
   }
+
+  // DevicesApi: Register/Unregister/List/Describe — AuthorizedDevice no wire.
+  if (path.startsWith('/game/devices/')) {
+    const handled = handleDevicesRequest(path, body, user.id, repo)
+    if (handled) return handled
+  }
+
+  // CodesApi.Redeem(code): códigos de gameData.codes, resgate 1x por jogador.
+  if (path === '/game/codes/redeem') return redeemCode(repo, user.id, body, runtime)
 
   if (path === '/game/inventory/get-equip-sequence-id') {
     return { data: { sequence_id: repo.getState(user.id, 'inventory', 'equip_sequence_id', 0) } }
