@@ -1,6 +1,6 @@
 # Aviso Legal, Política de Preservação e Base Jurídica
 
-> **Versão:** 16 de agosto de 2026  
+> **Versão:** 17 de agosto de 2026  
 > **Projeto:** Mighty DOOM Revival  
 > **Natureza:** preservação, interoperabilidade, pesquisa técnica e uso não comercial
 
@@ -29,6 +29,18 @@ O projeto busca:
 - manter código de servidor e ferramentas próprias separados do conteúdo protegido do jogo;
 - impedir monetização com dinheiro real dentro do Revival;
 - manter reconhecimento expresso de todos os titulares originais.
+
+### 2.1. Contexto factual — encerramento de um jogo-como-serviço
+
+Mighty DOOM era um **jogo-como-serviço** (*games-as-a-service*): exigia conexão permanente com servidores oficiais para funcionar e não oferecia modo offline. Os fatos relevantes à finalidade de preservação são:
+
+- o estúdio desenvolvedor, Alpha Dog Games, foi encerrado em 2024;
+- os servidores oficiais foram desligados em **7 de agosto de 2024**, conforme reconhecido pelo suporte oficial da Bethesda;
+- o jogo foi removido das lojas de aplicativos;
+- não foi disponibilizado qualquer modo offline, ferramenta de migração ou restore oficial;
+- em consequência, cópias legitimamente adquiridas — incluindo conteúdo pago nelas obtido — tornaram-se integralmente inutilizáveis.
+
+Esse cenário é o objeto central do debate internacional sobre preservação de jogos-como-serviço (movimento [Stop Killing Games](https://www.stopkillinggames.com/) e iniciativas de defesa do consumidor correlatas). O registro desses fatos não contesta decisões empresariais dos titulares: serve apenas para documentar a finalidade real da pesquisa — restaurar a jogabilidade de cópias legítimas em ambiente controlado pelo próprio usuário, e não criar um substituto comercial do serviço original.
 
 ---
 
@@ -180,6 +192,12 @@ A regra vigente decorrente do processo trienal de 2024 contém uma isenção esp
 
 A classe atual inclui, em condições específicas, modificação de programa para restaurar acesso a jogo para **gameplay pessoal/local**, além de hipóteses próprias para preservação por bibliotecas, arquivos e museus.
 
+### DMCA § 1201(f) — engenharia reversa para interoperabilidade
+
+Além da regra trienal, o próprio texto do DMCA (17 U.S.C. § 1201(f)) contém exceção permanente de engenharia reversa: quem legitimamente obteve o direito de usar um programa pode contornar medidas tecnológicas e desenvolver meios necessários para lograr a interoperabilidade de um programa desenvolvido de forma independente com outros programas, desde que as informações necessárias à interoperabilidade não estejam prontamente disponíveis e os atos não excedam essa finalidade.
+
+**Aplicação adotada pelo projeto:** a pesquisa de protocolo é conduzida sobre cópia legitimamente obtida, para tornar o servidor independente (código próprio) interoperável com o cliente; as informações obtidas são usadas exclusivamente para compatibilidade, nunca para criar programa substancialmente similar ao cliente nem para redistribuir código decompilado.
+
 ### Limites que este projeto reconhece
 
 Essa isenção **não deve ser tratada como autorização universal para qualquer servidor privado público, qualquer plataforma, qualquer redistribuição do cliente ou qualquer uso comercial**.
@@ -190,7 +208,41 @@ Por isso, a referência à regra norte-americana serve como fundamento de que a 
 
 ---
 
-## 11. Termos/EULA da ZeniMax/Bethesda — risco contratual que não deve ser escondido
+## 11. União Europeia — Diretiva 2009/24/CE (interoperabilidade)
+
+Fonte oficial:  
+https://eur-lex.europa.eu/legal-content/PT/TXT/?uri=celex:32009L0024
+
+A Diretiva 2009/24/CE, relativa à proteção jurídica de programas de computador, harmoniza regras diretamente relevantes à engenharia reversa para interoperabilidade na União Europeia e inspira legislações de outras jurisdições.
+
+### 11.1. Atos de uso e observação do funcionamento (art. 5º)
+
+O art. 5º estabelece que, na ausência de estipulações contratuais específicas, não exigem autorização do titular:
+
+- os atos necessários ao uso do programa pelo adquirente legítimo conforme sua finalidade, incluindo correção de erros (art. 5º, 1);
+- a cópia de segurança (art. 5º, 2);
+- a observação, estudo ou teste do funcionamento do programa para determinar as ideias e princípios que sustentam seus elementos, quando realizados durante atos de uso aos quais o adquirente já tem direito (art. 5º, 3) — hipótese que ampara a observação de comportamento externo (protocolo) durante o uso legítimo.
+
+### 11.2. Descompilação para interoperabilidade (art. 6º)
+
+O art. 6º permite que o adquirente legítimo (ou pessoa por ele autorizada) reproduza o código na forma decompilada quando as informações necessárias à interoperabilidade não estejam prontamente disponíveis e a descompilação seja indispensável para obtê-las, observados limites expressos:
+
+- os atos ficam restritos às partes do programa necessárias à interoperabilidade;
+- as informações obtidas não podem ser usadas para desenvolver programa substancialmente similar, para qualquer ato que viole direitos de autor ou para transferência a terceiros, salvo quando necessária à interoperabilidade.
+
+### 11.3. Cláusulas contratuais (art. 15º)
+
+A Diretiva prevê que quaisquer cláusulas contratuais contrárias aos arts. 5º e 6º sejam nulas ou ineficazes, na forma transposta pelos Estados-Membros.
+
+### 11.4. Aplicação e limites adotados pelo projeto
+
+O projeto invoca o fundamento de interoperabilidade da Diretiva como referência normativa comparada para a pesquisa de protocolo necessária ao servidor independente — pesquisa realizada sobre cópia legitimamente obtida, limitada ao necessário à compatibilidade e sem redistribuição de código decompilado ou assets.
+
+**Ressalvas:** o projeto não está sob jurisdição da União Europeia e a invocação é argumentativa/comparativa; a transposição e a interpretação variam entre Estados-Membros; e a Diretiva não autoriza redistribuição do programa, de assets protegidos nem a operação comercial de serviço de substituição.
+
+---
+
+## 12. Termos/EULA da ZeniMax/Bethesda — risco contratual que não deve ser escondido
 
 Fonte oficial do Mobile EULA disponível atualmente:  
 https://bethesda.net/data/mobile_eula/pt-br.html
@@ -208,7 +260,7 @@ Esta transparência faz parte da política de boa-fé do projeto.
 
 ---
 
-## 12. Por que o repositório não deve hospedar o APK
+## 13. Por que o repositório não deve hospedar o APK
 
 Hospedar o APK oficial ou um APK patchado cria um risco jurídico muito maior do que distribuir somente:
 
@@ -244,7 +296,7 @@ Por política, este projeto adota o primeiro modelo.
 
 ---
 
-## 13. Política de monetização
+## 14. Política de monetização
 
 O projeto deve permanecer não comercial quanto ao conteúdo de terceiros.
 
@@ -264,7 +316,7 @@ Doações, se algum dia existirem, devem ser juridicamente avaliadas antes de se
 
 ---
 
-## 14. Política de servidor
+## 15. Política de servidor
 
 Para a posição jurídica mais conservadora, o uso recomendado é:
 
@@ -282,7 +334,7 @@ A operação de um serviço público para terceiros pode mudar substancialmente 
 
 ---
 
-## 15. Política de dados e segurança
+## 16. Política de dados e segurança
 
 O Revival não deve:
 
@@ -297,7 +349,7 @@ A identidade do Revival deve ser local e independente.
 
 ---
 
-## 16. GitHub — DMCA e propriedade intelectual
+## 17. GitHub — DMCA e propriedade intelectual
 
 Fontes oficiais:
 
@@ -325,7 +377,7 @@ O mantenedor deve:
 
 ---
 
-## 17. Política de contato de titulares de direitos
+## 18. Política de contato de titulares de direitos
 
 Se você representa de forma verificável um titular de direitos relacionado a Mighty DOOM/DOOM e acredita que algum conteúdo deste repositório excede a finalidade de preservação/interoperabilidade, entre em contato com o mantenedor pelo próprio GitHub ou utilize os canais oficiais de remoção do GitHub.
 
@@ -339,7 +391,7 @@ O mantenedor se compromete a:
 
 ---
 
-## 18. Se o serviço oficial voltar a funcionar
+## 19. Se o serviço oficial voltar a funcionar
 
 O objetivo deste projeto é preservação de um software cujo suporte oficial deixou de funcionar.
 
@@ -357,7 +409,7 @@ Se um representante verificável do titular entrar em contato solicitando a susp
 
 ---
 
-## 19. O que um fork/contribuidor deve respeitar
+## 20. O que um fork/contribuidor deve respeitar
 
 Ao contribuir, a pessoa declara que não incluirá:
 
@@ -373,7 +425,7 @@ Pull requests contendo esse tipo de material devem ser rejeitados e removidos do
 
 ---
 
-## 20. Checklist de conformidade antes de tornar o repositório público
+## 21. Checklist de conformidade antes de tornar o repositório público
 
 - [ ] Nenhum APK oficial no Git ou Releases.
 - [ ] Nenhum APK patchado no Git, Releases ou site.
@@ -396,7 +448,7 @@ Pull requests contendo esse tipo de material devem ser rejeitados e removidos do
 
 ---
 
-## 21. Documentação de boa-fé recomendada
+## 22. Documentação de boa-fé recomendada
 
 Manter no Git histórico claro de:
 
@@ -405,7 +457,7 @@ Manter no Git histórico claro de:
 - ausência de binários proprietários;
 - decisões de clean-room;
 - testes sintéticos usados em vez de conteúdo proprietário;
-- data em que o suporte oficial deixou de existir;
+- data em que o suporte oficial deixou de existir (7 de agosto de 2024);
 - data e fonte de eventual retorno do serviço;
 - solicitações recebidas de titulares e medidas adotadas.
 
@@ -413,7 +465,7 @@ A documentação não transforma automaticamente uma atividade em lícita, mas a
 
 ---
 
-## 22. Pontos que NÃO devem ser afirmados publicamente
+## 23. Pontos que NÃO devem ser afirmados publicamente
 
 Para evitar declarações juridicamente frágeis, o projeto não deve dizer:
 
@@ -431,7 +483,7 @@ A formulação correta é: **o projeto busca operar dentro de fundamentos de pre
 
 ---
 
-## 23. Resumo da posição jurídica do projeto
+## 24. Resumo da posição jurídica do projeto
 
 A posição de conformidade do Mighty DOOM Revival é construída sobre quatro pilares:
 
@@ -440,13 +492,13 @@ A posição de conformidade do Mighty DOOM Revival é construída sobre quatro p
 3. **servidor independente/clean-room**, sem código ou segredos do servidor original;
 4. **ausência de exploração comercial e de falsa afiliação**.
 
-Há fundamentos legais relevantes no Brasil para cópia de salvaguarda e integração tecnicamente necessária de programa legitimamente adquirido para uso exclusivo do usuário, e nos Estados Unidos existem limitações relativas a cópia/adaptação de programas e uma isenção temporária específica de anticircunvenção para determinadas situações envolvendo jogos cujo suporte de servidor foi encerrado.
+Há fundamentos legais relevantes no Brasil para cópia de salvaguarda e integração tecnicamente necessária de programa legitimamente adquirido para uso exclusivo do usuário, e nos Estados Unidos existem limitações relativas a cópia/adaptação de programas e uma isenção temporária específica de anticircunvenção para determinadas situações envolvendo jogos cujo suporte de servidor foi encerrado. A essa base somam-se a exceção permanente de engenharia reversa para interoperabilidade do DMCA (17 U.S.C. § 1201(f)) e, no plano comparado, a Diretiva 2009/24/CE da União Europeia (arts. 5º e 6º), que autorizam — em condições estritas — a observação do funcionamento e a descompilação indispensáveis à interoperabilidade de programas legitimamente obtidos.
 
 Esses fundamentos fortalecem a justificativa de preservação/interoperabilidade, mas **não eliminam automaticamente riscos decorrentes de contratos/EULA, marcas, direitos sobre assets ou usos públicos que excedam as condições das exceções aplicáveis**.
 
 ---
 
-## 24. Recomendação profissional
+## 25. Recomendação profissional
 
 Antes de disponibilizar publicamente servidor para terceiros, hospedar qualquer arquivo derivado do cliente, aceitar dinheiro, usar logos oficiais em destaque ou responder a notificação de titular, recomenda-se obter parecer de advogado especializado em propriedade intelectual/software com análise das jurisdições relevantes.
 
@@ -454,7 +506,7 @@ Isso é especialmente importante porque o Mobile EULA publicado pela ZeniMax con
 
 ---
 
-## 25. Referências oficiais
+## 26. Referências oficiais
 
 ### Brasil
 
@@ -475,6 +527,13 @@ Isso é especialmente importante porque o Mobile EULA publicado pela ZeniMax con
   https://www.copyright.gov/1201/2024/
 - 37 C.F.R. § 201.40:  
   https://www.copyright.gov/title37/201/37cfr201-40.html
+- 17 U.S.C. § 1201 (inclui o § 1201(f) — engenharia reversa para interoperabilidade):  
+  https://uscode.house.gov/view.xhtml?req=%28title%3A17+section%3A1201+edition%3Aprelim%29
+
+### União Europeia
+
+- Diretiva 2009/24/CE — proteção jurídica de programas de computador:  
+  https://eur-lex.europa.eu/legal-content/PT/TXT/?uri=celex:32009L0024
 
 ### GitHub
 
@@ -494,15 +553,15 @@ Isso é especialmente importante porque o Mobile EULA publicado pela ZeniMax con
 
 ---
 
-## 26. Short English notice for rights holders
+## 27. Short English notice for rights holders
 
-**Mighty DOOM Revival is an independent, non-commercial preservation and interoperability project. It is not affiliated with, sponsored by, or endorsed by Bethesda, ZeniMax, Microsoft, id Software, or Alpha Dog Games. The public repository is intended to contain only independently written server/tooling code and documentation; it must not distribute the original or patched game APK, proprietary game assets, decompiled proprietary source code, credentials, or confidential service data. Users are expected to supply their own lawfully obtained copy locally.**
+**Mighty DOOM Revival is an independent, non-commercial preservation and interoperability project. Mighty DOOM was an online-only game whose official servers were shut down on August 7, 2024, with no offline mode provided, rendering lawfully acquired copies unplayable. It is not affiliated with, sponsored by, or endorsed by Bethesda, ZeniMax, Microsoft, id Software, or Alpha Dog Games. The public repository is intended to contain only independently written server/tooling code and documentation; it must not distribute the original or patched game APK, proprietary game assets, decompiled proprietary source code, credentials, or confidential service data. Users are expected to supply their own lawfully obtained copy locally.**
 
 **If you are a verified rights holder and believe material in this repository exceeds those boundaries, please contact the maintainer or use GitHub's rights-reporting channels. The maintainer will promptly review the request and suspend disputed public material where appropriate. If official server support required for gameplay is effectively restored, the maintainer will review the continued necessity of the replacement service and may archive or make the repository private.**
 
 ---
 
-## 27. Última observação
+## 28. Última observação
 
 A melhor proteção jurídica deste projeto não é uma frase dizendo `uso educacional` ou `sem fins lucrativos`. É o desenho técnico e operacional consistente com essa finalidade:
 

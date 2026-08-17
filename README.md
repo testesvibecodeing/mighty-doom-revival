@@ -10,7 +10,7 @@
 >
 > O projeto adota como pilares: **preservação, interoperabilidade, clean-room, ausência de redistribuição do cliente, ausência de exploração comercial e ausência de falsa afiliação.**
 >
-> A legislação brasileira possui regras relevantes sobre cópia de salvaguarda e integração tecnicamente necessária de programas legitimamente adquiridos para uso exclusivo do usuário (Lei nº 9.609/1998, art. 6º, I e IV). Nos Estados Unidos, 17 U.S.C. § 117 e a atual 37 C.F.R. § 201.40 contêm limitações/exceções relevantes a programas e, em condições específicas, a jogos cujo suporte externo de servidor foi descontinuado. **Essas normas não são uma autorização irrestrita para redistribuição, operação comercial ou qualquer forma de servidor público.**
+> A legislação brasileira possui regras relevantes sobre cópia de salvaguarda e integração tecnicamente necessária de programas legitimamente adquiridos para uso exclusivo do usuário (Lei nº 9.609/1998, art. 6º, I e IV). Nos Estados Unidos, 17 U.S.C. § 117 e a atual 37 C.F.R. § 201.40 contêm limitações/exceções relevantes a programas e, em condições específicas, a jogos cujo suporte externo de servidor foi descontinuado; a exceção de engenharia reversa do DMCA (17 U.S.C. § 1201(f)) ampara, em condições estritas, o desenvolvimento de meios para interoperabilizar programas independentes. Na União Europeia, a Diretiva 2009/24/CE (art. 6º) autoriza atos de descompilação indispensáveis para obter as informações necessárias à interoperabilidade de um programa legitimamente obtido. **Essas normas não são uma autorização irrestrita para redistribuição, operação comercial ou qualquer forma de servidor público.**
 >
 > **Os termos/EULA publicados pela ZeniMax/Bethesda também contêm restrições contratuais a engenharia reversa, modificação e emulação de serviço. Por isso, não afirmamos que exista imunidade jurídica automática ou que qualquer uso seja válido em toda jurisdição.** O projeto busca a postura técnica e operacional mais conservadora possível.
 >
@@ -25,6 +25,12 @@
 Mighty DOOM Revival é um projeto pessoal de **preservação e interoperabilidade** do cliente Android de Mighty DOOM com um servidor independente/self-hosted.
 
 O objetivo técnico é permitir que uma cópia fornecida localmente pelo próprio usuário possa conversar com uma implementação independente dos serviços que deixaram de existir, preservando os fluxos ainda presentes no cliente 1.13.1.
+
+### Preservação de jogo-como-serviço
+
+Mighty DOOM era um **jogo-como-serviço**: exigia conexão permanente com os servidores oficiais e não possuía modo offline. Esses servidores foram encerrados definitivamente em **7 de agosto de 2024**, após o fechamento do estúdio desenvolvedor Alpha Dog Games, e o jogo foi removido das lojas — o que tornou inutilizáveis, de um dia para o outro, cópias legitimamente adquiridas, inclusive conteúdo pago nelas contido.
+
+Este projeto adere ao princípio de preservação defendido por iniciativas internacionais como o movimento [Stop Killing Games](https://www.stopkillinggames.com/): quem adquiriu legitimamente uma cópia de um jogo não deve perder o acesso ao que pagou apenas porque o suporte externo de servidor foi desligado. A resposta técnica adotada aqui é deliberadamente conservadora: **interoperabilidade** — o cliente existente, fornecido pelo próprio usuário, conversando com um servidor alternativo independente — e **não** redistribuição de software protegido.
 
 O projeto busca restaurar progressivamente:
 
@@ -405,8 +411,7 @@ Antes de tornar um fork público, consulte o checklist jurídico completo em [`d
 
 ## Referências técnicas
 
-- `dannyhpy/mightydoom-gameserver` — referência comunitária de protocolo;
-- `CTRQuko/mightydoom-preservation` — pesquisa comunitária de preservação.
+- `dannyhpy/mightydoom-gameserver` — referência comunitária de protocolo.
 
 ## Referências legais oficiais
 
@@ -420,7 +425,9 @@ Entre as fontes oficiais documentadas estão:
 - Lei nº 9.610/1998 — Direitos Autorais;
 - Lei nº 9.279/1996 — Marcas/Propriedade Industrial;
 - 17 U.S.C. § 117;
+- 17 U.S.C. § 1201(f) — engenharia reversa para interoperabilidade;
 - U.S. Copyright Office — Section 1201 / 37 C.F.R. § 201.40;
+- Diretiva 2009/24/CE (União Europeia) — proteção de programas de computador e interoperabilidade;
 - GitHub DMCA/Trademark/Acceptable Use Policies;
 - Mobile EULA e Terms of Service publicados pela ZeniMax/Bethesda.
 
