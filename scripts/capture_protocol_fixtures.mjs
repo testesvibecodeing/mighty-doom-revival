@@ -244,6 +244,9 @@ try {
   await call('reward-tracks-get-track', '/game/reward-tracks/get-track', { track_id: 600 }, token)
   await call('reward-tracks-claim', '/game/reward-tracks/claim', { track_id: 600, tier_id: 601 }, token)
   await call('store-get', '/game/store/get', {}, token)
+  // PlayerApi.IncrementStats(stats) antes do GetStats para o fixture ter os
+  // totais reais (StatModel{id, value}) em vez de lista vazia.
+  await call('player-increment-stats', '/game/player/increment-stats', { stats: [{ id: 9001, increment: 3 }] }, token)
   await call('player-stats', '/game/player/stats', {}, token)
 } finally {
   child.kill('SIGTERM')

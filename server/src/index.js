@@ -549,6 +549,11 @@ function handleBaseline (path, body, user) {
     incrementPlayerStats(repo, user.id, body, runtime)
     return { data: {} }
   }
+
+  // PlayerApi.GetStats() -> StatsResponse{stats} de StatModel{id, value}
+  if (path === '/game/player/stats') {
+    return { data: { stats: playerStatsWire(repo, user.id) } }
+  }
   return null
 }
 

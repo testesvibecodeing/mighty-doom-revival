@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-17T11:28:36Z",
+    "updated": "2026-08-17T11:32:06Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -1196,8 +1196,8 @@
       "client_validated": false,
       "persistence_validated": null,
       "regression_test": false,
-      "fixture": null,
-      "fixture_provenance": null,
+      "fixture": "tests/fixtures/protocol/server-replay/player/game__player__increment-stats.json",
+      "fixture_provenance": "server-replay",
       "uses_fallback": false,
       "evidence": ""
     },
@@ -1231,8 +1231,8 @@
     },
     "game/player/stats": {
       "module": "player",
-      "implemented": false,
-      "schema_extracted": false,
+      "implemented": true,
+      "schema_extracted": true,
       "request_observed": false,
       "response_observed": false,
       "client_validated": false,

@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:28:36Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:32:06Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -21,7 +21,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
 | [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
 | [inbox](#inbox) | 7 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
-| [player](#player) | 8 | 7 | 0 | 5 | 2 | 0 | 🧪 em convergência |
+| [player](#player) | 8 | 7 | 0 | 6 | 1 | 1 | 🧪 em convergência |
 | [events](#events) | 9 | 11 | 0 | 2 | 9 | 0 | 🧪 em convergência |
 | [battle-pass](#battle-pass) | 10 | 9 | 0 | 3 | 6 | 0 | 🧪 em convergência |
 | [daily-rewards](#daily-rewards) | 11 | 2 | 0 | 2 | 0 | 0 | 🧪 em convergência |
@@ -113,10 +113,10 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/player/game-data-token` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: bootstrap completo no emulador; /data baixado com o token. |
-| `game/player/increment-stats` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/player/increment-stats` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
 | `game/player/level-up` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/player/set-push-token` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/player/stats` | · | · | · | · | · | — | · | ✅ | — | não implementado |
+| `game/player/stats` | ✅ | ✅ | · | · | · | — | · | ✅ | — | schema extraído |
 | `game/player/update-settings` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/player/user-data` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: user-data no bootstrap e refletindo progressão persistida após restart do servidor. |
 
