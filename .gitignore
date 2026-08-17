@@ -78,3 +78,8 @@ Thumbs.db
 # Estado de deploy da VPS (gerado por scripts/install.sh e scripts/uninstall.sh)
 deploy/logs/
 deploy/.install-state
+
+# Ícones do jogo extraídos localmente do APK (scripts/extract-game-icons.py).
+# Nunca commitados: são assets do jogo obtidos da cópia local do usuário.
+# Os SVGs originais em server/public/assets/img/kinds/ são do Revival e ficam versionados.
+server/public/assets/img/game/
