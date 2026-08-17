@@ -1,40 +1,46 @@
 {
-  "endpoint": "game/events/get-schedule",
+  "endpoint": "game/events/end-game-mode-event",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T11:44:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/events/get-schedule",
+    "path": "/game/events/end-game-mode-event",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
-    "body": {}
+    "body": {
+      "scheduled_event_id": 501,
+      "progress": {
+        "stage": 2,
+        "state": 1
+      }
+    }
   },
   "response": {
     "status": 200,
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "scheduled_events": [
+      "resources": [
         {
-          "id": 501,
-          "event_definition_id": 501,
-          "start_time": 1767225600,
-          "end_time": 1893456000,
-          "availability": 1,
-          "args": "e30="
-        },
+          "rid": 100,
+          "amount": 2117
+        }
+      ],
+      "stage_rewards": [
         {
-          "id": 502,
-          "event_definition_id": 502,
-          "start_time": 1767225600,
-          "end_time": 1893456000,
-          "availability": 1,
-          "args": "e30="
+          "stage": 2,
+          "resources": [
+            {
+              "rid": 100,
+              "amount": 10
+            }
+          ],
+          "loot_rolls": 2
         }
       ]
     }

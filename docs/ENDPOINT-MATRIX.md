@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:32:06Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:45:30Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -22,7 +22,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
 | [inbox](#inbox) | 7 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
 | [player](#player) | 8 | 7 | 0 | 6 | 1 | 1 | 🧪 em convergência |
-| [events](#events) | 9 | 11 | 0 | 2 | 9 | 0 | 🧪 em convergência |
+| [events](#events) | 9 | 11 | 0 | 11 | 0 | 9 | 🧪 em convergência |
 | [battle-pass](#battle-pass) | 10 | 9 | 0 | 3 | 6 | 0 | 🧪 em convergência |
 | [daily-rewards](#daily-rewards) | 11 | 2 | 0 | 2 | 0 | 0 | 🧪 em convergência |
 | [idle-rewards](#idle-rewards) | 12 | 4 | 0 | 2 | 2 | 0 | 🧪 em convergência |
@@ -124,17 +124,17 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/events/activate-store-offer-event` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/events/end-game-mode-event` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/events/game-mode-event-ad-ability-reroll` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/events/game-mode-event-ad-revive` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/events/game-mode-event-redeem-voucher` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/events/game-mode-event-revive` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/events/get-instance` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/activate-store-offer-event` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.ActivateStoreOfferEvent(scheduledEventId) -> ActivateStoreOfferEventResponse{offer}; offer = PlayerOfferModel{id,offerDefinitionId,itemId,allowedPurchases,purchaseAmount,startTime,endTime,altResources,targetedOfferType,offerGroup,apiVersion} extraido; estado = StoreOfferEventState{scheduledEventId}. |
+| `game/events/end-game-mode-event` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.EndGameModeEvent(scheduledEventId,progress) -> EndGameModeEventResponse{resources,stageRewards}; stage_rewards = EventStageReward{stage,resources,lootRolls,display} extraido; resources com semantica de saldo (giveGameResource). |
+| `game/events/game-mode-event-ad-ability-reroll` | ✅ | ✅ | · | · | · | — | ✅ | · | — | EventsApi.AdAbilityReroll(rewardTokenId,scheduledEventId); mesmo padrao do ad-revive com tipo ability_reroll. |
+| `game/events/game-mode-event-ad-revive` | ✅ | ✅ | · | · | · | — | ✅ | · | — | EventsApi.AdRevive(rewardTokenId,scheduledEventId); valida/consome AdRewardToken do namespace ads; sem emissor (modulo ads fora de escopo) -> 2300 explicito, sem fixture. |
+| `game/events/game-mode-event-redeem-voucher` | ✅ | ✅ | · | · | · | — | ✅ | · | — | EventsApi.GameModeEventRedeemVoucher(voucherId); voucher_id literal CONFIRMADO; consome item do inventario, aplica ao run ativo (sem scheduledEventId no contrato). |
+| `game/events/game-mode-event-revive` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.Revive(scheduledEventId) sem DTO -> envelope puro; +1 revive no run do evento. |
+| `game/events/get-instance` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.GetInstance(instanceId) -> GetInstanceResponse{eventInstance}; sem DTO EventInstance no metadata — respondido com o wire do schedule (mesmo DTO que o cliente parseia em get-schedule). A VERIFICAR ate captura do cliente. |
 | `game/events/get-progress` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: eventos do menu com progresso/timers vindos do servidor. |
 | `game/events/get-schedule` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: menu com eventos do servidor (Slayers Energy / Speedrun Challenge) no emulador. |
-| `game/events/start-game-mode-event` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/events/update-game-mode-event-progress` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/events/start-game-mode-event` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.StartGameModeEvent(scheduledEventId) -> StartGameModeEventResponse{attempt}; attempt = GameModeEventRun{scheduledEventId,seed,startTime,slots,maxLoot,battlePassPointsLoot,gameModeEventProgress,lootPools} extraido do metadata; teste events.mjs + fixture server-replay. |
+| `game/events/update-game-mode-event-progress` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.UpdateGameModeEventProgress(scheduledEventId,progress) -> {minUpdateTime}; progress literal CONFIRMADO; espelha chapters/update (min_update_time nullable validado com cliente real). |
 
 ### battle-pass
 
@@ -289,6 +289,7 @@ Implementadas em `server/src` mas ausentes das 116 rotas do metadata —
 provável erro de transcrição histórico. Candidatas a remoção;
 nenhum cliente 1.13.1 as chama.
 
+- `game/events`
 - `game/idle-rewards/claim-rewards`
 - `game/quests/claim`
 - `game/quests/claim-daily-milestone`

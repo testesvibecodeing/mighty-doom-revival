@@ -1,7 +1,7 @@
 {
   "endpoint": "game/events/get-progress",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:31:00Z",
+  "captured_at": "2026-08-17T11:44:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -19,8 +19,16 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "game_mode_events_progress": [],
-      "store_offer_events_states": [],
+      "game_mode_events_progress": [
+        {
+          "event_id": 501
+        }
+      ],
+      "store_offer_events_states": [
+        {
+          "scheduled_event_id": 502
+        }
+      ],
       "battle_pass_events_states": []
     }
   }

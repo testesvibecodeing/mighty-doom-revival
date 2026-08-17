@@ -1,19 +1,19 @@
 {
-  "endpoint": "game/talents/buy",
+  "endpoint": "game/events/activate-store-offer-event",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T11:44:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/talents/buy",
+    "path": "/game/events/activate-store-offer-event",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
     "body": {
-      "talent_id": 500
+      "scheduled_event_id": 502
     }
   },
   "response": {
@@ -21,17 +21,15 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "ok": true,
-      "talent": 500,
-      "talents": [
-        500
-      ],
-      "spent": [
-        {
-          "rid": 100,
-          "amount": 50
-        }
-      ]
+      "offer": {
+        "id": 502,
+        "offer_definition_id": 502,
+        "item_id": 200,
+        "allowed_purchases": 1,
+        "start_time": 1786967046,
+        "end_time": 1893456000,
+        "purchase_amount": 100
+      }
     }
   }
 }

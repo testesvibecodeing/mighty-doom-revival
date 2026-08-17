@@ -1,19 +1,19 @@
 {
-  "endpoint": "game/talents/buy",
+  "endpoint": "game/events/get-instance",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T11:44:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/talents/buy",
+    "path": "/game/events/get-instance",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
     "body": {
-      "talent_id": 500
+      "instance_id": 501
     }
   },
   "response": {
@@ -21,17 +21,14 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "ok": true,
-      "talent": 500,
-      "talents": [
-        500
-      ],
-      "spent": [
-        {
-          "rid": 100,
-          "amount": 50
-        }
-      ]
+      "event_instance": {
+        "id": 501,
+        "event_definition_id": 501,
+        "start_time": 1767225600,
+        "end_time": 1893456000,
+        "availability": 1,
+        "args": "e30="
+      }
     }
   }
 }

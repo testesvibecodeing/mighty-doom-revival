@@ -97,7 +97,30 @@ const gameData = {
   idle_reward: { generation_period: 60, chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }] }
 }
 const packs = { packs: [] }
-const events = { events: [] }
+// Módulo events — EventsApi (metadata v29): ciclo game-mode-event (501) e
+// store-offer (502) para capturar as rotas do módulo.
+const events = {
+  events: [
+    {
+      id: 501,
+      start_time: '2026-01-01T00:00:00Z',
+      end_time: '2030-01-01T00:00:00Z',
+      stage_rewards: [
+        { stage: 1, resources: [{ rid: 100, amount: 5 }] },
+        { stage: 2, resources: [{ rid: 100, amount: 10 }], loot_rolls: 2 }
+      ]
+    },
+    {
+      id: 502,
+      channel: 'store_offer',
+      item_id: 200,
+      allowed_purchases: 1,
+      purchase_amount: 100,
+      start_time: '2026-01-01T00:00:00Z',
+      end_time: '2030-01-01T00:00:00Z'
+    }
+  ]
+}
 
 const writeJson = (path, value) => writeFileSync(path, JSON.stringify(value, null, 2))
 writeJson(resolve(work, 'config/revival.json'), revival)
@@ -248,6 +271,16 @@ try {
   // totais reais (StatModel{id, value}) em vez de lista vazia.
   await call('player-increment-stats', '/game/player/increment-stats', { stats: [{ id: 9001, increment: 3 }] }, token)
   await call('player-stats', '/game/player/stats', {}, token)
+
+  // Módulo events — ciclo completo do game-mode-event + ativação de offer.
+  // ad-revive/ad-ability-reroll sem captura: o emissor do AdRewardToken é o
+  // módulo de ads (fora de escopo) — erro honesto, não payload falso.
+  await call('events-get-instance', '/game/events/get-instance', { instance_id: 501 }, token)
+  await call('events-start-game-mode-event', '/game/events/start-game-mode-event', { scheduled_event_id: 501 }, token)
+  await call('events-update-game-mode-event-progress', '/game/events/update-game-mode-event-progress', { scheduled_event_id: 501, progress: { stage: 2, state: 0 } }, token)
+  await call('events-game-mode-event-revive', '/game/events/game-mode-event-revive', { scheduled_event_id: 501 }, token)
+  await call('events-end-game-mode-event', '/game/events/end-game-mode-event', { scheduled_event_id: 501, progress: { stage: 2, state: 1 } }, token)
+  await call('events-activate-store-offer-event', '/game/events/activate-store-offer-event', { scheduled_event_id: 502 }, token)
 } finally {
   child.kill('SIGTERM')
   await new Promise(exit => child.once('exit', exit))

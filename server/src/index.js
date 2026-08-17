@@ -9,7 +9,7 @@ import { handleInboxRequest } from './inbox.js'
 import { handleCompatRequest } from './compat.js'
 import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
-import { eventProgress, eventSchedule } from './events.js'
+import { handleEventRequest } from './events.js'
 import { inventoryWire, seedStarterBundle, giveGameResource } from './game-data-model.js'
 import { playerStatsWire, incrementPlayerStats } from './stats.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
@@ -606,8 +606,10 @@ function handleAuthed (path, body, user, req) {
     return { data: { resources: result.resources } }
   }
 
-  if (path === '/game/events/get-schedule') return { data: { scheduled_events: eventSchedule(runtime) } }
-  if (path === '/game/events/get-progress') return { data: eventProgress(repo, user.id, runtime) }
+  if (path.startsWith('/game/events/')) {
+    const handled = handleEventRequest(path, body, user.id, repo, runtime)
+    if (handled) return handled
+  }
 
   if (path.startsWith('/game/iap/')) return { error: [400, 2000, { iap_disabled: true }] }
   if (path.startsWith('/game/ads/')) return { data: { ads_disabled: true } }
