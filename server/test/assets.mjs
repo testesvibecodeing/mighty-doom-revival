@@ -23,6 +23,9 @@ writeFileSync(resolve(work, 'manifest.json'), JSON.stringify({
     skin_icon_plasmarifleastro_01: { w: 160, h: 160 }
   }
 }))
+// PNG no diretório fora do manifest (artwork versionada pelo CI convivendo
+// com a extração local) também precisa resolver.
+writeFileSync(resolve(work, 'ult_icon_bfg_01.png'), 'png')
 
 // Runtime sem game-data: o caso de instância que ainda não tem snapshot.
 const runtime = { gameData: null, index: { byId: new Map(), byTag: new Map() } }
@@ -39,6 +42,10 @@ try {
   const cannon = panelResourceByRef('heavy_cannon', runtime, 'weapon')
   assert.equal(cannon.name, 'Heavy Cannon')
   assert.equal(cannon.icon, '/assets/img/game/wpn_icon_heavycannon_01.png')
+
+  // PNG presente no diretório mas fora do manifest resolve pelo scan
+  const bfg = panelResourceByRef('bfg', runtime, 'ultimate')
+  assert.equal(bfg.icon, '/assets/img/game/ult_icon_bfg_01.png')
 
   // --- tags reais do game-data 1.13.1 (<nome>_slayer, launcher_, key_) ---
   const gold = panelResourceByRef('gold_slayer', runtime, null)

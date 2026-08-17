@@ -107,9 +107,17 @@
     return cache.get(type)
   }
 
+  // Ícone: PNG resolvido pelo servidor (extração do APK ou artwork versionada)
+  // tem prioridade; a arte SVG do Revival entra só quando não há PNG para o
+  // recurso (ícone de categoria do kinds/).
   if (typeof iconImg === 'function') {
+    const hasPng = r => {
+      const s = String(r?.icon || '')
+      return s && !s.startsWith('/assets/img/kinds/')
+    }
     iconImg = function (resource = {}, cls = '') {
-      return `<img class="game-icon revival-art ${cls}" src="${escapeHtml(artUrl(resource))}" alt="${escapeHtml(resource.name || resource.tag || resource.kind || 'Item Revival')}" loading="lazy">`
+      const src = hasPng(resource) ? resource.icon : artUrl(resource)
+      return `<img class="game-icon revival-art ${cls}" src="${escapeHtml(src)}" alt="${escapeHtml(resource.name || resource.tag || resource.kind || 'Item Revival')}" loading="lazy">`
     }
   }
 

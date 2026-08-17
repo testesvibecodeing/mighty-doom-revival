@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { classifyResource } from './game-data-model.js'
@@ -53,7 +53,17 @@ export function loadGameIcons (dir = null) {
     const manifest = JSON.parse(readFileSync(join(target, 'manifest.json'), 'utf8'))
     for (const name of Object.keys(manifest.files || {})) files.add(name)
   } catch {
-    // sem extração ainda — o painel cai no fallback por categoria
+    // sem manifest — o scan do diretório abaixo resolve o que houver
+  }
+  // O manifest nem sempre cobre o diretório: os PNGs originais versionados
+  // (aliases técnicos gerados pelo CI) e a extração local do APK convivem
+  // aqui. Quem estiver no disco resolve.
+  try {
+    for (const entry of readdirSync(target)) {
+      if (entry.endsWith('.png')) files.add(entry.slice(0, -'.png'.length))
+    }
+  } catch {
+    // diretório ausente — o painel cai no fallback por categoria
   }
   gameIconsCache = { dir: target, files }
   return gameIconsCache
@@ -162,19 +172,25 @@ const SLAYERS = {
   slayer_santa: ['Santa Slayer', 'slayersanta'],
   slayer_jack_o_slayer: ['Jack-O-Slayer', 'slayerjackoslayer']
 }
-const SLAYER_TAGS = Object.keys(SLAYERS)
+// Qualquer grafia de slayer -> sufixo do sprite (para skins de slayer).
+const SLAYER_SPRITES = {}
 for (const [tag, [display, icon]] of Object.entries(SLAYERS)) {
-  alias([tag, display], display, `slay_icon_events_${icon}_01`, 'slayer')
-  // shards de skin de slayer (tags reais shard_<slayer>_slayer): mesmo nome,
-  // sem arte própria na extração — cai no ícone da categoria.
-  alias([`shard_${tag.replace(/_?slayer$/, '')}`], `Shards ${display}`, null, 'currency')
+  const keys = [tag, display]
+  if (tag === 'mini_slayer_default') keys.push('slayer_default', 'default_slayer')
+  if (tag === 'classic_doom_marine') keys.push('slayer_classic_marine', 'classic_marine')
+  for (const key of keys) SLAYER_SPRITES[slugKey(key)] = icon
+  alias(keys, display, `slay_icon_events_${icon}_01`, 'slayer')
+  // shards de skin de slayer (tags reais shard_<slayer>): mesmo nome, sem
+  // arte própria na extração — cai no ícone da categoria.
+  alias([`shard_${tag}`, `shard_${tag.replace(/_?slayer$/, '')}`], `Shards ${display}`, null, 'currency')
 }
 
 // Tokens por arma (tags reais token_<arma>): store_tokensingle_<arma>_01.
 const WEAPON_TOKENS = {
-  heavy_cannon: 'heavycannon', combat_shotgun: 'combatshotgun', super_shotgun: 'supershotgun',
-  plasma_rifle: 'plasmarifle', chaingun: 'chaingun', rocket_launcher: 'rocketlauncher',
-  ballista: 'ballista', gauss_cannon: 'gausscannon', burst_rifle: null, sentinel_hammer: null
+  heavy_cannon: 'heavycannon', combat_shotgun: 'combatshotgun', shotgun: 'combatshotgun',
+  super_shotgun: 'supershotgun', plasma_rifle: 'plasmarifle', chaingun: 'chaingun',
+  rocket_launcher: 'rocketlauncher', ballista: 'ballista', gauss_cannon: 'gausscannon',
+  burst_rifle: null, sentinel_hammer: null
 }
 for (const [tag, tight] of Object.entries(WEAPON_TOKENS)) {
   alias([`token_${tag}`], `Tokens ${tag.replace(/_/g, ' ')}`, tight ? `store_tokensingle_${tight}_01` : 'store_token_allrandom_tier_01', 'currency')
@@ -255,22 +271,33 @@ function findGameIcon (keys, kind) {
     }
     // skin de arma/cosmético: "cosmetic_<arma>_<skin>" (ou "S02_<arma>_<skin>")
     // casa skin_icon_<arma-junto>_<skin>_01 (ex.: plasma_rifle_astro ->
-    // skin_icon_plasmarifle_astro_01); skin de slayer reusa a arte do slayer.
+    // skin_icon_plasmarifle_astro_01; bfg_white_rabbit -> skin_icon_bfg_whiterabbit_01,
+    // com a skin grudada). Skin de slayer tem arte própria
+    // (skin_icon_slayer<slayer>_<skin>_01) e cai na arte do slayer como último
+    // recurso.
     if (kind === 'cosmetic' || kind === 'weapon') {
       const stripped = key.replace(/^cosmetic_/, '').replace(/^s\d+_/, '')
       const candidates = [`skin_icon_${stripped}`, `skin_icon_${stripped.replace(/_/g, '')}`]
       const parts = stripped.split('_')
       for (let cut = 1; cut < parts.length; cut++) {
-        candidates.push(`skin_icon_${parts.slice(0, cut).join('')}_${parts.slice(cut).join('_')}`)
+        const w = parts.slice(0, cut).join('')
+        const skin = parts.slice(cut).join('_')
+        const skinTight = skin.replace(/_/g, '')
+        candidates.push(`skin_icon_${w}_${skin}`, `skin_icon_${w}_${skinTight}`)
+        const suffix = SLAYER_SPRITES[parts.slice(0, cut).join('_')]
+        if (suffix) {
+          candidates.push(`skin_icon_${suffix}_${skin}`, `skin_icon_${suffix}_${skinTight}`)
+        }
       }
       for (const base of candidates) {
         if (files.has(base)) return gameIconUrl(base)
         if (files.has(`${base}_01`)) return gameIconUrl(`${base}_01`)
       }
-      for (const slayerTag of SLAYER_TAGS) {
-        if (stripped.includes(slayerTag)) {
-          const hit = ALIASES[slayerTag]
-          if (hit?.icon && files.has(hit.icon)) return gameIconUrl(hit.icon)
+      for (let cut = 1; cut < parts.length; cut++) {
+        const suffix = SLAYER_SPRITES[parts.slice(0, cut).join('_')]
+        if (suffix) {
+          const own = `slay_icon_events_${suffix}_01`
+          if (files.has(own)) return gameIconUrl(own)
         }
       }
     }
@@ -295,7 +322,7 @@ function prettyCosmeticName (value) {
       return `${base} — skin ${titleCase(stripped.slice(weaponTag.length + 1))}`
     }
   }
-  for (const slayerTag of SLAYER_TAGS) {
+  for (const slayerTag of Object.keys(SLAYER_SPRITES)) {
     if (stripped.startsWith(`${slayerTag}_`)) {
       const base = ALIASES[slayerTag]?.display || titleCase(slayerTag)
       return `${base} — skin ${titleCase(stripped.slice(slayerTag.length + 1))}`
