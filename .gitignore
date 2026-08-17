@@ -62,9 +62,13 @@ reports/
 Thumbs.db
 
 
-# Claude Code local/personal settings (per-machine, not team-shared)
-.claude/
+# Claude Code local/personal settings (per-machine, not team-shared).
+# Usamos ".claude/*" (e nao ".claude/") para conseguir liberar as skills:
+# o git nao reinclui arquivo cujo diretorio pai esta excluido.
+.claude/*
 .claude/settings.local.json
+# Skills do projeto sao versionadas (contrato de trabalho, nao config pessoal).
+!.claude/skills/
 
 # Logs / temporary files
 *.log
