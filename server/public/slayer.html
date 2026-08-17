@@ -99,6 +99,7 @@
         <button class="chip" data-sub="events"><i class="fa-solid fa-calendar-days"></i> Eventos</button>
         <button class="chip" data-sub="notices"><i class="fa-solid fa-bullhorn"></i> Avisos</button>
         <button class="chip" data-sub="site"><i class="fa-solid fa-palette"></i> Site</button>
+        <button class="chip" data-sub="smtp"><i class="fa-solid fa-envelope"></i> E-mail</button>
       </nav>
 
       <div class="admin-sub active" id="admin-overview">
@@ -168,6 +169,25 @@
           <a class="mini-action" style="display:inline-flex;align-items:center;gap:8px;margin-top:14px" href="/" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver o site</a>
         </div>
       </div>
+
+      <div class="admin-sub" id="admin-smtp" hidden>
+        <p class="hint">Configure o SMTP para habilitar o login por código de e-mail: o jogador digita só o e-mail, recebe um código de 6 dígitos e entra — sem senha. Serve também para o "esqueci minha senha".</p>
+        <div class="card" style="margin-top:0">
+          <div class="card-title"><span>Servidor de e-mail (SMTP)</span><i class="fa-solid fa-envelope"></i></div>
+          <form class="stack-form" id="smtpForm">
+            <label>Servidor<input name="host" placeholder="smtp.gmail.com" required></label>
+            <label>Porta<input name="port" type="number" min="1" max="65535" value="587"></label>
+            <label>Usuário<input name="user" autocomplete="off" placeholder="usuario@dominio.com"></label>
+            <label>Senha do SMTP<input name="pass" type="password" autocomplete="new-password" placeholder="deixe vazio para manter a salva"></label>
+            <label>E-mail remetente<input name="from" type="email" placeholder="nao-responda@dominio.com" required></label>
+            <label>Nome do remetente<input name="from_name" maxlength="64" placeholder="Mighty DOOM Revival"></label>
+            <div class="switch-row"><span>Conexão direta TLS (porta 465)</span><input type="checkbox" class="switch" name="secure"></div>
+            <button class="primary-action" type="submit"><i class="fa-solid fa-floppy-disk"></i> Salvar configuração</button>
+            <p class="form-status" id="smtpStatus"></p>
+          </form>
+          <div class="security-note"><i class="fa-solid fa-circle-info"></i> Gmail e provedores comuns: porta 587 com a senha de aplicativo (não a senha normal da conta).</div>
+        </div>
+      </div>
     </section>
 
     <!-- ===================== CONTA ===================== -->
@@ -187,12 +207,12 @@
       <div class="card">
         <div class="card-title"><span>Segurança</span><i class="fa-solid fa-lock"></i></div>
         <form class="stack-form" id="passwordForm">
-          <label>Senha atual<input name="current_password" type="password" autocomplete="current-password" required></label>
+          <label>Senha atual (deixe vazia na primeira definição)<input name="current_password" type="password" autocomplete="current-password"></label>
           <label>Nova senha<input name="new_password" type="password" minlength="8" autocomplete="new-password" required></label>
           <button class="secondary-action" type="submit">Trocar senha</button>
           <p class="form-status" id="passwordStatus"></p>
         </form>
-        <div class="security-note"><i class="fa-solid fa-circle-info"></i> Esqueceu a senha? Use o código de recuperação exibido na criação da conta em "Esqueci minha senha" na tela de login.</div>
+        <div class="security-note"><i class="fa-solid fa-circle-info"></i> Contas criadas por código de e-mail definem a senha aqui na primeira visita. Esqueceu a senha? Peça um código por e-mail em "Esqueci minha senha" na tela de login.</div>
       </div>
       <button class="danger-action wide" id="logoutButton"><i class="fa-solid fa-right-from-bracket"></i> Sair da conta</button>
     </section>

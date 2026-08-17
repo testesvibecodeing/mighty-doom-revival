@@ -36,6 +36,7 @@
         <div class="auth-tabs" id="authTabs">
           <button class="auth-tab active" data-auth="login">Entrar</button>
           <button class="auth-tab" data-auth="register">Criar conta</button>
+          <button class="auth-tab" data-auth="email">Com e-mail</button>
         </div>
 
         <form class="auth-form active" id="loginForm">
@@ -57,14 +58,25 @@
           <p class="form-status" id="registerStatus"></p>
         </form>
 
+        <form class="auth-form" id="emailForm">
+          <div class="form-heading"><span>ENTRAR SEM SENHA</span><h2>Código por e-mail</h2><p>Digite seu e-mail e receba um código de acesso. Primeira vez? A conta é criada sozinha.</p></div>
+          <label>E-mail<input name="email" type="email" autocomplete="email" required placeholder="voce@email.com"></label>
+          <button class="primary-action" type="button" id="requestCode">Receber código <i class="fa-solid fa-envelope-open-text"></i></button>
+          <label>Código recebido<input name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••" disabled></label>
+          <button class="primary-action" type="submit" id="emailLogin" disabled>Entrar com o código <i class="fa-solid fa-arrow-right"></i></button>
+          <p class="form-status" id="emailStatus"></p>
+        </form>
+
         <form class="auth-form" id="resetForm">
           <div class="form-heading">
             <span>RECUPERAÇÃO SEGURA</span><h2>Redefinir senha</h2>
-            <p>Use o código de recuperação exibido quando a conta foi criada.</p>
+            <p>Envie um código para o e-mail da conta ou use o código de recuperação RV- exibido na criação.</p>
             <button type="button" class="link-action" id="backToLogin"><i class="fa-solid fa-arrow-left"></i> Voltar para o login</button>
           </div>
-          <label>ID da conta ou e-mail<input name="login" required placeholder="ID ou e-mail"></label>
-          <label>Código de recuperação<input name="recovery_code" required placeholder="RV-XXXXXXXXXXXX" autocapitalize="characters"></label>
+          <label>E-mail da conta<input name="email" type="email" required placeholder="voce@email.com"></label>
+          <button class="primary-action" type="button" id="sendResetCode">Enviar código por e-mail <i class="fa-solid fa-envelope"></i></button>
+          <label>Código do e-mail<input name="code" inputmode="numeric" maxlength="6" placeholder="••••••"></label>
+          <label>Código de recuperação (alternativa sem e-mail)<input name="recovery_code" placeholder="RV-XXXXXXXXXXXX" autocapitalize="characters"></label>
           <label>Nova senha<div class="password-field"><input name="new_password" type="password" minlength="8" required placeholder="Mínimo de 8 caracteres"><button type="button" data-toggle-password aria-label="Mostrar senha"><i class="fa-solid fa-eye"></i></button></div></label>
           <button class="primary-action" type="submit">Redefinir senha <i class="fa-solid fa-key"></i></button>
           <p class="form-status" id="resetStatus"></p>

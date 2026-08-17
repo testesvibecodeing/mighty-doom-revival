@@ -154,6 +154,7 @@ function publicAccount (user) {
     email: user.email || '',
     display_name: user.display_name || '',
     is_admin: Boolean(user.is_admin),
+    password_set: user.password_set !== 0,
     level: user.level,
     chapter_progression: user.chapter_progression,
     attempt_count: user.attempt_count,

@@ -47,6 +47,7 @@ async function boot () {
     $('#adminBadge').hidden = false
   }
   showRecoveryBanner()
+  showPasswordHint()
 }
 
 /* ============ ícones do jogo ============ */
@@ -161,6 +162,15 @@ function showRecoveryBanner () {
   sessionStorage.removeItem('revival_recovery_code')
   $('#recoveryCode').textContent = code
   $('#recoveryBanner').hidden = false
+}
+
+// Quem entrou por código de e-mail ainda não tem senha: convida a criar uma.
+function showPasswordHint () {
+  let hint = false
+  try { hint = sessionStorage.getItem('revival_password_hint') === '1' } catch {}
+  if (!hint) return
+  sessionStorage.removeItem('revival_password_hint')
+  toast('Sua conta não tem senha ainda. Defina uma em Minha conta → Segurança.')
 }
 
 /* ============ avisos ============ */
@@ -303,6 +313,7 @@ function loadAdminSection (name) {
   if (name === 'events') loadAdminEvents().catch(error => toast(error.message))
   if (name === 'notices') loadAdminNotices().catch(error => toast(error.message))
   if (name === 'site') loadAdminSite().catch(error => toast(error.message))
+  if (name === 'smtp') loadAdminSmtp().catch(error => toast(error.message))
 }
 
 async function loadAdminOverview () {
@@ -624,6 +635,42 @@ $('#notifyApk').addEventListener('click', () => {
   $('#noticeForm').querySelector('[name="kind"]').value = 'update'
   $('#noticeForm').querySelector('[name="body"]').focus()
   loadAdminNotices().catch(() => {})
+})
+
+/* --- SMTP: login/esqueci-senha por código de e-mail --- */
+async function loadAdminSmtp () {
+  const { smtp } = await api('/account/admin/smtp')
+  const form = $('#smtpForm')
+  form.querySelector('[name="host"]').value = smtp.host || ''
+  form.querySelector('[name="port"]').value = smtp.port || 587
+  form.querySelector('[name="user"]').value = smtp.user || ''
+  form.querySelector('[name="pass"]').value = ''
+  form.querySelector('[name="from"]').value = smtp.from || ''
+  form.querySelector('[name="from_name"]').value = smtp.from_name || ''
+  form.querySelector('[name="secure"]').checked = Boolean(smtp.secure)
+  status('smtpStatus', smtp.configured ? 'Configurado. O login por e-mail está ativo.' : 'Sem configuração: o login por e-mail fica desativado (503).', smtp.configured)
+}
+
+$('#smtpForm').addEventListener('submit', async event => {
+  event.preventDefault()
+  const form = event.target
+  const payload = {
+    host: form.querySelector('[name="host"]').value.trim(),
+    port: Number(form.querySelector('[name="port"]').value) || 587,
+    user: form.querySelector('[name="user"]').value.trim(),
+    from: form.querySelector('[name="from"]').value.trim(),
+    from_name: form.querySelector('[name="from_name"]').value.trim(),
+    secure: form.querySelector('[name="secure"]').checked
+  }
+  const pass = form.querySelector('[name="pass"]').value
+  if (pass) payload.pass = pass
+  status('smtpStatus', 'Salvando…')
+  try {
+    const { smtp } = await api('/account/admin/smtp', { method: 'PATCH', body: JSON.stringify(payload) })
+    form.querySelector('[name="pass"]').value = ''
+    status('smtpStatus', smtp.configured ? 'Salvo. Login por e-mail ativo.' : 'Salvo, mas incompleto: falta servidor ou remetente.', smtp.configured)
+    toast('Configuração de e-mail salva.')
+  } catch (error) { status('smtpStatus', error.message) }
 })
 
 /* --- personalização do site público --- */
