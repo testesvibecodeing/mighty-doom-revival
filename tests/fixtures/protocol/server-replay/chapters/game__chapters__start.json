@@ -1,7 +1,7 @@
 {
   "endpoint": "game/chapters/start",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:15:00Z",
+  "captured_at": "2026-08-17T11:27:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -25,11 +25,11 @@
       "uts": "<uts>",
       "code": 1000,
       "attempt": {
-        "id": 1786965330,
-        "attempt_id": 1786965330,
+        "id": 1786966049,
+        "attempt_id": 1786966049,
         "chapter_id": 101,
         "challenge_id": 1,
-        "seed": 1786965330,
+        "seed": 1786966049,
         "weapons": [],
         "gear": [],
         "stage": 0

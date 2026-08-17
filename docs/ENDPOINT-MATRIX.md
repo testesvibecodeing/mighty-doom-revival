@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:16:29Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:28:36Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -18,9 +18,9 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [slayers](#slayers) | 2 | 2 | 0 | 2 | 0 | 2 | 🧪 em convergência |
 | [talents](#talents) | 3 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
 | [chapters](#chapters) | 4 | 13 | 3 | 10 | 0 | 10 | 🧪 em convergência |
-| [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 0 | 🧪 em convergência |
-| [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
-| [inbox](#inbox) | 7 | 4 | 0 | 1 | 3 | 0 | 🧪 em convergência |
+| [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
+| [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
+| [inbox](#inbox) | 7 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
 | [player](#player) | 8 | 7 | 0 | 5 | 2 | 0 | 🧪 em convergência |
 | [events](#events) | 9 | 11 | 0 | 2 | 9 | 0 | 🧪 em convergência |
 | [battle-pass](#battle-pass) | 10 | 9 | 0 | 3 | 6 | 0 | 🧪 em convergência |
@@ -87,26 +87,26 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/quests/claim-daily-quest` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/quests/claim-milestone` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/quests/get-daily-quests` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
+| `game/quests/claim-daily-quest` | ✅ | ✅ | · | · | · | — | · | · | — | schema extraído |
+| `game/quests/claim-milestone` | ✅ | ✅ | · | · | · | — | · | · | — | schema extraído |
+| `game/quests/get-daily-quests` | ✅ | ✅ | · | · | · | — | · | ✅ | — | schema extraído |
 
 ### reward-tracks
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/reward-tracks/claim` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/reward-tracks/get-all` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
-| `game/reward-tracks/get-track` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/reward-tracks/claim` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/reward-tracks/get-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/reward-tracks/get-track` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
 
 ### inbox
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/inbox/claim` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/inbox/delete` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/inbox/get-messages` | ✅ | · | · | · | · | — | · | ✅ | — | implementado, aguardando validação |
-| `game/inbox/read` | · | · | · | · | · | — | · | · | — | não implementado |
+| `game/inbox/claim` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/inbox/delete` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/inbox/get-messages` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/inbox/read` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
 
 ### player
 

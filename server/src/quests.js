@@ -115,13 +115,17 @@ export function dailyQuestState (repo, userId, runtime, epoch = Math.floor(Date.
     const id = questId(row, index)
     const target = targetAmount(row)
     const progress = Math.min(target, questProgress(row, state, totals))
+    // DailyQuestModel: {id, quest_id, progress, claimed, points, go_to};
+    // target/completed são extras que o cliente ignora.
     return {
       ...row,
       id,
+      quest_id: id,
       progress,
+      claimed: state.claimed_quests.includes(id),
+      go_to: row?.go_to ?? row?.go_to_hint,
       target,
-      completed: progress >= target,
-      claimed: state.claimed_quests.includes(id)
+      completed: progress >= target
     }
   })
 
@@ -129,13 +133,16 @@ export function dailyQuestState (repo, userId, runtime, epoch = Math.floor(Date.
   const milestoneWire = milestones.map((row, index) => {
     const id = questId(row, index)
     const target = milestoneTarget(row)
+    // DailyQuestMilestoneModel: {id, milestone_id, points_required, claimed, rewards}
     return {
       ...row,
       id,
+      milestone_id: id,
+      points_required: target,
+      claimed: state.claimed_milestones.includes(id),
       progress: Math.min(target, completed),
       target,
-      completed: completed >= target,
-      claimed: state.claimed_milestones.includes(id)
+      completed: completed >= target
     }
   })
 
@@ -203,7 +210,9 @@ export function handleQuestRequest (path, body, userId, repo, runtime) {
     if (id === undefined || id === null) return { error: [400, 2200] }
     const result = claimDailyQuest(repo, userId, runtime, id)
     if (!result.ok) return { error: [400, 2000, { reason: result.reason }] }
-    return { data: { resources: result.resources, quest_id: result.quest_id } }
+    // Response de claim declara apenas {resources} (ClaimMilestoneResponse);
+    // quest_id/milestone_id não estão no DTO do cliente.
+    return { data: { resources: result.resources } }
   }
 
   if (path === '/game/quests/claim-daily-milestone' || path === '/game/quests/claim-milestone') {
@@ -211,7 +220,7 @@ export function handleQuestRequest (path, body, userId, repo, runtime) {
     if (id === undefined || id === null) return { error: [400, 2200] }
     const result = claimDailyQuestMilestone(repo, userId, runtime, id)
     if (!result.ok) return { error: [400, 2000, { reason: result.reason }] }
-    return { data: { resources: result.resources, milestone_id: result.milestone_id } }
+    return { data: { resources: result.resources } }
   }
 
   return null

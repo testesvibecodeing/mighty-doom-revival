@@ -5,6 +5,7 @@ import { loadEnvFile } from 'node:process'
 
 import { ensureSuperAdmin, handleAdminApi, handleAdminRecover, publicPack } from './admin.js'
 import { chapterProgressionWire, handleChapterRequest } from './chapters.js'
+import { handleInboxRequest } from './inbox.js'
 import { handleCompatRequest } from './compat.js'
 import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
@@ -489,8 +490,6 @@ function handleBaseline (path, body, user) {
   if (path === '/game/session/refresh') return { data: { token: user.token } }
   if (path === '/game/identity/list') return { data: { identities: [] } }
   if (path === '/game/identity/link-game-center' || path === '/game/identity/link-google-play-games') return { error: [400, 2000] }
-  if (path === '/game/inbox/get-messages') return { data: { messages: [] } }
-  if (path === '/game/reward-tracks/get-all') return { data: { tracks: [] } }
 
   if (path === '/game/daily-rewards/get-state') {
     const dayStart = startOfUtcDayEpoch()
@@ -562,6 +561,9 @@ function handleAuthed (path, body, user, req) {
 
   const chapter = handleChapterRequest(path, body, user.id, repo, runtime)
   if (chapter) return chapter
+
+  const inbox = handleInboxRequest(path, body, user.id, repo, runtime)
+  if (inbox) return inbox
 
   const tutorial = handleTutorialRequest(path, body, user.id, repo, runtime)
   if (tutorial) return tutorial

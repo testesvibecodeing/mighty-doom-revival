@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { Repository } from '../src/db.js'
-import { claimRewardTrackTier, rewardTrackState } from '../src/reward-tracks.js'
+import { claimRewardTrackTier, handleRewardTrackRequest, rewardTrackState, rewardTrackWire } from '../src/reward-tracks.js'
 import { incrementPlayerStats } from '../src/stats.js'
 
 const dir = mkdtempSync(resolve(tmpdir(), 'mighty-doom-reward-tracks-'))
@@ -59,6 +59,30 @@ try {
   const second = claimRewardTrackTier(repo, user.id, runtime, 700, 702)
   assert.equal(second.ok, true)
   assert.equal(repo.balance(user.id, 1), 35)
+
+  // Wire RewardTrackModel (metadata v29): {id, track_id, entries_claimed,
+  // entries:[{id, resources}]}; claim responde ClaimRewardTrackResponse{resources}.
+  tracks = rewardTrackState(repo, user.id, runtime)
+  const wire = rewardTrackWire(tracks[0])
+  assert.equal(wire.id, 700)
+  assert.equal(wire.track_id, 700)
+  assert.deepEqual(wire.entries_claimed, [701, 702])
+  assert.equal(wire.entries.length, 2)
+  assert.deepEqual(wire.entries[0].resources, [{ rid: 1, amount: 10 }])
+  assert.equal('next_claim_epoch' in wire, false, 'sem cooldown o campo é omitido')
+
+  let handled = handleRewardTrackRequest('/game/reward-tracks/get-all', {}, user.id, repo, runtime)
+  assert.equal(handled.data.tracks.length, 1)
+  assert.deepEqual(handled.data.tracks[0].entries_claimed, [701, 702])
+
+  handled = handleRewardTrackRequest('/game/reward-tracks/get-track', { track_id: 700 }, user.id, repo, runtime)
+  assert.equal(handled.data.track.id, 700)
+  assert.equal(Object.keys(handled.data).length, 1, 'GetTrackResponse só tem track')
+  handled = handleRewardTrackRequest('/game/reward-tracks/get-track', { track_id: 999 }, user.id, repo, runtime)
+  assert.equal(handled.error[2].reason, 'track-not-found')
+
+  handled = handleRewardTrackRequest('/game/reward-tracks/claim', { track_id: 999, tier_id: 1 }, user.id, repo, runtime)
+  assert.equal(handled.error[2].reason, 'track-not-found')
 
   repo.close()
   const reopened = new Repository(dbPath)

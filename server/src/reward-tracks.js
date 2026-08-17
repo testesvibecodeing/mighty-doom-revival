@@ -1,6 +1,15 @@
 import { giveGameResource } from './game-data-model.js'
 import { playerStatTotals } from './stats.js'
 
+// ---- Contrato extraído do global-metadata.dat v29 (2026-08-17) ----
+// RewardTracksApi: GetAll() -> game/reward-tracks/get-all   GetAllResponse{tracks}
+//   get-track -> GetTrackResponse{track}   claim -> ClaimRewardTrackResponse{resources}
+// Wire por RewardTrackModel/RewardTrackEntryModel (snake_case do nome C#):
+//   {id, track_id, entries_claimed, next_claim_epoch, entries: [{resources}]}
+// A VERIFICAR até captura do cliente: entries_claimed como array de ids
+// (pode ser contagem) e a presença de id nos entries (EntryModel só declara
+// resources; id é extra tolerado como unknown field).
+
 const NS = 'reward-tracks'
 
 function arrayOrEmpty (value) {
@@ -138,8 +147,41 @@ function requestTierId (body) {
   return body?.tier_id ?? body?.tier ?? body?.reward_id ?? body?.id ?? body?.rid
 }
 
+// rewardTrackState mantém o formato interno rico (tiers com progress/
+// completed/claimed); este é o mapeamento para o wire do RewardTrackModel.
+export function rewardTrackWire (track) {
+  const wire = {
+    id: track.id,
+    track_id: track.id,
+    entries_claimed: track.tiers.filter(tier => tier.claimed).map(tier => tier.id),
+    entries: track.tiers.map(tier => ({
+      id: tier.id,
+      resources: rewardRows(tier)
+    }))
+  }
+  if (Number.isFinite(Number(track.next_claim_epoch)) && Number(track.next_claim_epoch) > 0) {
+    wire.next_claim_epoch = Math.floor(Number(track.next_claim_epoch))
+  }
+  return wire
+}
+
 export function handleRewardTrackRequest (path, body, userId, repo, runtime) {
-  if (path === '/game/reward-tracks/get-progress' || path === '/game/reward-tracks/get-state') {
+  if (path === '/game/reward-tracks/get-all') {
+    return { data: { tracks: rewardTrackState(repo, userId, runtime).map(rewardTrackWire) } }
+  }
+
+  if (path === '/game/reward-tracks/get-track') {
+    const trackId = requestTrackId(body)
+    if (trackId === undefined || trackId === null) return { error: [400, 2200, { reason: 'track-required' }] }
+    const track = rewardTrackState(repo, userId, runtime).find(row => String(row.id) === String(trackId))
+    if (!track) return { error: [400, 2200, { reason: 'track-not-found' }] }
+    return { data: { track: rewardTrackWire(track) } }
+  }
+
+  if (
+    path === '/game/reward-tracks/get-progress' ||
+    path === '/game/reward-tracks/get-state'
+  ) {
     return { data: { tracks: rewardTrackState(repo, userId, runtime) } }
   }
 
@@ -155,13 +197,8 @@ export function handleRewardTrackRequest (path, body, userId, repo, runtime) {
     }
     const result = claimRewardTrackTier(repo, userId, runtime, trackId, tierId)
     if (!result.ok) return { error: [400, 2000, { reason: result.reason }] }
-    return {
-      data: {
-        track_id: result.track_id,
-        tier_id: result.tier_id,
-        resources: result.resources
-      }
-    }
+    // ClaimRewardTrackResponse declara apenas {resources}
+    return { data: { resources: result.resources } }
   }
 
   return null

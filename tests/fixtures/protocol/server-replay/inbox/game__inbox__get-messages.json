@@ -1,7 +1,7 @@
 {
   "endpoint": "game/inbox/get-messages",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:15:00Z",
+  "captured_at": "2026-08-17T11:27:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -19,7 +19,28 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "messages": []
+      "messages": [
+        {
+          "id": 1,
+          "display_type": "inbox",
+          "interaction_state": 0,
+          "title": "Welcome to the Revival",
+          "body": "Good hunting, slayer.",
+          "resources": [
+            {
+              "rid": 100,
+              "amount": 50
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "display_type": "inbox",
+          "interaction_state": 0,
+          "title": "Server notice",
+          "body": "Research mode counts unknown endpoints."
+        }
+      ]
     }
   }
 }

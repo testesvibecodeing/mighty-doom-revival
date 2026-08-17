@@ -1,19 +1,19 @@
 {
-  "endpoint": "game/gear/dismantle",
+  "endpoint": "game/reward-tracks/get-track",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T11:27:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/gear/dismantle",
+    "path": "/game/reward-tracks/get-track",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
     "body": {
-      "gear_uid": 1
+      "track_id": 600
     }
   },
   "response": {
@@ -21,19 +21,22 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "gear": {
-        "uid": 1,
-        "rid": 200,
-        "level": 3,
-        "tier": 1,
-        "cosmetic_id": 800
-      },
-      "resources": [
-        {
-          "rid": 100,
-          "amount": 25
-        }
-      ]
+      "track": {
+        "id": 600,
+        "track_id": 600,
+        "entries_claimed": [],
+        "entries": [
+          {
+            "id": 601,
+            "resources": [
+              {
+                "rid": 100,
+                "amount": 30
+              }
+            ]
+          }
+        ]
+      }
     }
   }
 }

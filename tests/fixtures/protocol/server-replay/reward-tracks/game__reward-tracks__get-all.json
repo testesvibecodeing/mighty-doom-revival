@@ -1,7 +1,7 @@
 {
   "endpoint": "game/reward-tracks/get-all",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:15:00Z",
+  "captured_at": "2026-08-17T11:27:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -19,7 +19,24 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "tracks": []
+      "tracks": [
+        {
+          "id": 600,
+          "track_id": 600,
+          "entries_claimed": [],
+          "entries": [
+            {
+              "id": 601,
+              "resources": [
+                {
+                  "rid": 100,
+                  "amount": 30
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   }
 }

@@ -1,7 +1,7 @@
 {
   "endpoint": "game/auth/login-device",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:15:00Z",
+  "captured_at": "2026-08-17T11:27:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -25,7 +25,7 @@
       "code": 1000,
       "token": "<token>",
       "session_id": 1,
-      "puuid": "e52834b9-6273-42e3-ad9f-5e30514e98a2",
+      "puuid": "dc9dbabf-b407-4a7d-b237-a8f5504ec6f1",
       "legal": {
         "tos_version": 1,
         "pp_version": 1,

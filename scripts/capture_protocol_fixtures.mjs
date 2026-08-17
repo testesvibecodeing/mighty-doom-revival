@@ -70,6 +70,13 @@ const gameData = {
       ]
     }]
   },
+  messages: [
+    { id: 1, title: 'Welcome to the Revival', body: 'Good hunting, slayer.', resources: [{ rid: 100, amount: 50 }] },
+    { id: 2, title: 'Server notice', body: 'Research mode counts unknown endpoints.' }
+  ],
+  reward_tracks: {
+    tracks: [{ id: 600, progress: 1, tiers: [{ id: 601, target: 1, resources: [{ rid: 100, amount: 30 }] }] }]
+  },
   bundles: [{
     id: 1,
     tag: 'starter',
@@ -230,6 +237,12 @@ try {
   await call('chapters-claim-vip-reward-102', '/game/chapters/claim-vip-reward', { chapter_id: 102 }, token)
   await call('chapters-claim-vip-rewards-all', '/game/chapters/claim-vip-rewards-all', {}, token)
   await call('chapters-claim-challenge-reward', '/game/chapters/claim-challenge-reward', { chapter_id: 101, challenge_id: 1 }, token)
+  // Inbox/reward-tracks — InboxApi/RewardTracksApi (metadata v29).
+  await call('inbox-read', '/game/inbox/read', { message_id: 2 }, token)
+  await call('inbox-claim', '/game/inbox/claim', { message_id: 1 }, token)
+  await call('inbox-delete', '/game/inbox/delete', { message_id: 2 }, token)
+  await call('reward-tracks-get-track', '/game/reward-tracks/get-track', { track_id: 600 }, token)
+  await call('reward-tracks-claim', '/game/reward-tracks/claim', { track_id: 600, tier_id: 601 }, token)
   await call('store-get', '/game/store/get', {}, token)
   await call('player-stats', '/game/player/stats', {}, token)
 } finally {
