@@ -1,0 +1,1 @@
+Temporary integration marker for original Revival artwork. PNG assets are committed separately as binary blobs and are consumed by the existing resource artwork resolver.
