@@ -315,6 +315,41 @@ download de APK proprietário modificado
 
 Consulte [`docs/APK-PATCH.md`](docs/APK-PATCH.md).
 
+### Tela de loading personalizada
+
+O editor de tela de loading troca **apenas** a arte de fundo do loading
+(texturas `loading_background` e sazonais `*LoadingBackground*` dentro do
+bundle Addressables), em três modos: imagem, imagem com texto ou só texto.
+
+No Windows:
+
+```bat
+scripts\loading-screen-editor.bat
+```
+
+No Linux/Mac:
+
+```bash
+./scripts/loading-screen-editor.sh
+```
+
+Sem interface (composição + injeção diretas):
+
+```bash
+python scripts/inject_loading_screen.py \
+  --image minha-arte.png --title "MIGHTY DOOM" --subtitle "REVIVAL" \
+  --status "Connecting to Revival Server..."
+```
+
+A injeção é cirúrgica: o APK não passa por apktool, todos os outros membros
+do ZIP são copiados byte a byte (conferidos por CRC32), o bundle re-serializado
+é recarregado e decodificado antes de ser aceito, o `m_Crc` do bundle é zerado
+no `catalog.json` e o APK final é alinhado/assinado com uber-apk-signer. O
+destino só é substituído (com backup em `work/loading-edit/backup/`) depois
+que todos os gates passam. Por padrão o APK de entrada é o
+`output/mighty-doom-revival.apk` já patcheado — o patch de servidor é
+preservado.
+
 ## 9. Clean-room e pesquisa
 
 Contribuições ao servidor devem ser código original do projeto.
