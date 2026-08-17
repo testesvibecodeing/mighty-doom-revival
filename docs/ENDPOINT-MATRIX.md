@@ -19,12 +19,12 @@ Legenda:
 | iap | ⛔ | dinheiro real desativado |
 | ads | ⛔ | anúncios externos desativados |
 | events | 🧪 | schedule, args e estado por jogador |
-| battle-pass | 🔬 | schedule/state preparados; claims, tiers, season e stats pendentes |
+| battle-pass | 🧪 | temporadas arquivadas visíveis, start-season, missões, pontos, tiers, grants e persistência; wire final ainda precisa ser validado no APK real |
 | chapters | 🧪 | start/update/revive/end persistentes; user-data reflete current_run; grants/stage rewards ainda aguardam schema real |
 | daily-rewards | 🧪 | get-state + claim diário transacional/persistente; wire final ainda precisa ser validado no APK real |
 | idle-rewards | 🧪 | get-state + geração por progresso + claim persistente; boost/schema final pendentes |
 | inbox | 🧪 | lista vazia segura; grants/messages pendentes |
-| reward-tracks | 🧪 | lista baseline; progress/claim pendentes |
+| reward-tracks | 🧪 | lista, progresso e claim persistentes com grants; wire final ainda precisa ser validado no APK real |
 | gear | 🔬 | upgrade, multi-upgrade e cosméticos pendentes |
 | slayers | 🔬 | upgrade e cosméticos pendentes |
 | talents | 🧪 | get/buy, requisitos, custos e persistência no user-data; upgrade/schema final pendentes |
@@ -44,6 +44,10 @@ Com `game-data.json` carregado, o registro tenta reproduzir o bootstrap necessá
 5. equipa automaticamente a primeira arma e o primeiro Slayer concedidos pelo starter bundle.
 
 Isso evita hardcode de IDs e permite seguir exatamente a cópia de game data usada pelo cliente.
+
+## Battle Pass arquivado
+
+Em `archive_mode`, temporadas preservadas agora aparecem no progresso de eventos antes do primeiro `start-season`, usando um estado inicial não persistido. Isso permite que o cliente descubra e renderize a temporada restaurada sem bloquear a criação do estado real quando iniciar a temporada. Depois do início, missões, pontos, claims de tiers e grants passam a usar o estado persistido do jogador.
 
 ## Estado de capítulos
 
