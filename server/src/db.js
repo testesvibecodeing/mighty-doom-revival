@@ -302,6 +302,47 @@ export class Repository {
     return valid
   }
 
+  // Contas do jogo (login-device) ainda sem identidade de site: podem ser
+  // "adotadas" por quem provar posse de uma conta de e-mail.
+  listClaimableAccounts (limit = 50) {
+    return this.db.prepare(`
+      SELECT id, display_name, level, chapter_progression, attempt_count, created_at
+      FROM users
+      WHERE (email IS NULL OR email = '') AND is_admin = 0
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(Math.max(1, Math.min(100, Math.floor(Number(limit)) || 50)))
+  }
+
+  // Adoção: move a identidade (e-mail/senha/recovery) da conta do site para a
+  // conta do jogo com progresso real, apaga a conta do site e devolve a linha
+  // adotada. Uma transação: ou vira uma conta só, ou nada muda.
+  claimGameAccount (siteUserId, gameUserId) {
+    return this.tx(() => {
+      const site = this.userById(siteUserId)
+      const game = this.userById(gameUserId)
+      if (!site || !game) return { error: 'not-found' }
+      if (site.id === game.id) return { error: 'same-account' }
+      if (!site.email) return { error: 'site-account-has-no-email' }
+      if (game.email) return { error: 'already-claimed' }
+      // A conta do site perde starter bundle/painel ao ser adotada — só faz
+      // sentido quando ela não tem progresso de jogo próprio.
+      if ((site.attempt_count || 0) > 0 || (site.level || 1) > 1) return { error: 'site-account-has-progress' }
+      this.db.prepare('DELETE FROM users WHERE id = ?').run(site.id)
+      this.db.prepare(`
+        UPDATE users SET
+          email = ?,
+          password_hash = ?,
+          recovery_hash = ?,
+          password_set = ?,
+          display_name = COALESCE(NULLIF(display_name, ''), ?),
+          is_admin = CASE WHEN ? = 1 THEN 1 ELSE is_admin END
+        WHERE id = ?
+      `).run(site.email, site.password_hash, site.recovery_hash, site.password_set === 0 ? 0 : 1, site.display_name || '', site.is_admin ? 1 : 0, game.id)
+      return { account: this.userById(game.id) }
+    })
+  }
+
   createWebSession (userId, ttlSeconds = 30 * 24 * 3600) {
     const token = randomBytes(32).toString('base64url')
     const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds

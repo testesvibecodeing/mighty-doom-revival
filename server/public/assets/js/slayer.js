@@ -48,6 +48,7 @@ async function boot () {
   }
   showRecoveryBanner()
   showPasswordHint()
+  loadClaimable().catch(() => {})
 }
 
 /* ============ ícones do jogo ============ */
@@ -636,6 +637,40 @@ $('#notifyApk').addEventListener('click', () => {
   $('#noticeForm').querySelector('[name="body"]').focus()
   loadAdminNotices().catch(() => {})
 })
+
+/* --- vínculo com a conta do jogo (login-device) --- */
+async function loadClaimable () {
+  const list = $('#claimableList')
+  if (!list) return
+  const { accounts } = await api('/account/claimable')
+  if (!accounts.length) {
+    list.innerHTML = '<p class="empty">Nenhuma conta do jogo sem dono agora.</p>'
+    return
+  }
+  list.innerHTML = accounts.map(account => `
+    <article class="admin-card">
+      <div class="admin-card-head">
+        <h3>#${account.id} ${escapeHtml(account.display_name || 'Sem nome')}</h3>
+        <div class="user-tags">
+          <span class="tag">Nv ${account.level ?? 1}</span>
+          <span class="tag">${formatNumber(account.attempt_count ?? 0)} runs</span>
+        </div>
+      </div>
+      <div class="user-meta"><span>Desde ${formatDate(account.created_at)} · sem e-mail vinculado</span></div>
+      <div class="action-row">
+        <button class="mini-action" data-claim="${account.id}"><i class="fa-solid fa-link"></i> Vincular ao meu e-mail</button>
+      </div>
+    </article>`).join('')
+  list.querySelectorAll('[data-claim]').forEach(button => button.addEventListener('click', async () => {
+    if (!window.confirm(`Vincular a conta do jogo #${button.dataset.claim} a este e-mail? Ela passa a usar seu login atual.`)) return
+    status('claimStatus', 'Vinculando…')
+    try {
+      await api('/account/claim-game', { method: 'POST', body: JSON.stringify({ game_user_id: Number(button.dataset.claim) }) })
+      toast('Conta do jogo vinculada! Recarregando…')
+      setTimeout(() => window.location.reload(), 900)
+    } catch (error) { status('claimStatus', error.message) }
+  }))
+}
 
 /* --- SMTP: login/esqueci-senha por código de e-mail --- */
 async function loadAdminSmtp () {

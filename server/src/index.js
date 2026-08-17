@@ -255,6 +255,14 @@ async function handleAccount (req, res, path) {
     return json(res, 200, { ok: true, notifications: repo.listNotifications(30) })
   }
 
+  // Contas do jogo (login-device) sem dono no site — para a tela de vínculo.
+  if (req.method === 'GET' && path === '/account/claimable') {
+    const user = repo.userByWebSession(accountToken(req))
+    if (!user) return json(res, 401, { ok: false, error: 'session-expired' })
+    const accounts = repo.listClaimableAccounts(50).filter(account => account.id !== user.id)
+    return json(res, 200, { ok: true, accounts })
+  }
+
   // Loja como o jogador vê no painel: só pacotes ativos, preços em moedas.
   if (req.method === 'GET' && path === '/account/store') {
     const user = repo.userByWebSession(accountToken(req))
@@ -387,6 +395,22 @@ async function handleAccount (req, res, path) {
     }
     repo.updatePassword(user.id, body.new_password)
     return json(res, 200, { ok: true, message: firstPassword ? 'Senha criada com sucesso.' : 'Senha alterada com sucesso.' })
+  }
+
+  // Vínculo: adota a conta do jogo (progresso do login-device) passando a
+  // identidade de e-mail dela a pertencer a esta sessão.
+  if (path === '/account/claim-game') {
+    const gameId = Number.parseInt(body.game_user_id)
+    if (!Number.isInteger(gameId)) return json(res, 400, { ok: false, error: 'game-user-id-invalid' })
+    const result = repo.claimGameAccount(user.id, gameId)
+    const statusByError = { 'not-found': 404, 'already-claimed': 409, 'site-account-has-progress': 409 }
+    if (result.error) {
+      const status2 = statusByError[result.error] || 400
+      return json(res, status2, { ok: false, error: result.error })
+    }
+    const session = repo.createWebSession(result.account.id)
+    accountCookie(res, session.token)
+    return json(res, 200, { ok: true, account: publicAccount(result.account), message: 'Conta do jogo vinculada a este e-mail.' })
   }
 
   return json(res, 404, { ok: false, error: 'not-found' })

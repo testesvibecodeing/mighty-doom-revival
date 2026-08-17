@@ -134,6 +134,45 @@ try {
   const xss = await request('/account/admin/site', { method: 'PATCH', headers: { cookie: adminCookie }, body: JSON.stringify({ hero_title: 'ok<script>alert(1)</script>' }) })
   assert.ok(!xss.body.site.hero_title.includes('script'))
 
+  // --- vínculo: conta-device do jogo adotada pela conta do site ---
+  const gameRegister = await fetch(`${base}/game/auth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-ubu-apiversion': '24.0.0' },
+    body: JSON.stringify({ client_version: '1.13.1', device_id: 'device-do-teste' })
+  })
+  assert.equal(gameRegister.status, 200)
+  const gameAccount = (await gameRegister.json())
+  const gameUserId = gameAccount.user_id
+
+  const siteAccount = await request('/account/register', { method: 'POST', body: JSON.stringify({ display_name: 'Dono do Progresso', email: 'dono@exemplo.com', password: 'password-dono-1' }) }, 201)
+  const siteCookie = siteAccount.response.headers.get('set-cookie').split(';')[0]
+
+  const claimable = await request('/account/claimable', { headers: { cookie: siteCookie } })
+  const found = claimable.body.accounts.find(account => account.id === gameUserId)
+  assert.ok(found, `conta-device #${gameUserId} não apareceu nas claimable`)
+  assert.equal(found.id, gameUserId)
+
+  // reivindicar conta inexistente → 404; depois a certa → identidade transferida
+  await request('/account/claim-game', { method: 'POST', headers: { cookie: siteCookie }, body: JSON.stringify({ game_user_id: 999999 }) }, 404)
+  const claimed = await request('/account/claim-game', { method: 'POST', headers: { cookie: siteCookie }, body: JSON.stringify({ game_user_id: gameUserId }) })
+  assert.equal(claimed.body.account.id, gameUserId)
+  assert.equal(claimed.body.account.email, 'dono@exemplo.com')
+  const claimedCookie = claimed.response.headers.get('set-cookie').split(';')[0]
+
+  // sessão antiga do site morreu com a adoção; a nova enxerga o progresso do jogo
+  await request('/account/me', { headers: { cookie: siteCookie } }, 401)
+  const adopted = await request('/account/me', { headers: { cookie: claimedCookie } })
+  assert.equal(adopted.body.account.id, gameUserId)
+  assert.equal(adopted.body.account.email, 'dono@exemplo.com')
+
+  // a conta adotada entra por e-mail+senha normalmente
+  await request('/account/login', { method: 'POST', body: JSON.stringify({ login: 'dono@exemplo.com', password: 'password-dono-1' }) })
+
+  // já reivindicada: segunda tentativa → 409
+  const third = await request('/account/register', { method: 'POST', body: JSON.stringify({ display_name: 'Tentativa', email: 'terceiro@exemplo.com', password: 'password-tres-1' }) }, 201)
+  const thirdCookie = third.response.headers.get('set-cookie').split(';')[0]
+  await request('/account/claim-game', { method: 'POST', headers: { cookie: thirdCookie }, body: JSON.stringify({ game_user_id: gameUserId }) }, 409)
+
   console.log('Mighty DOOM Revival account test: PASS')
 } finally {
   child.kill('SIGTERM')
