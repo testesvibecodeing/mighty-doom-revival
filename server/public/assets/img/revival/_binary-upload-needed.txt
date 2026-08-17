@@ -1,0 +1,1 @@
+Binary PNG upload pending through Git data API.
