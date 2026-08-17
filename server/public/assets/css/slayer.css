@@ -11,7 +11,7 @@
 .icon-link:hover{color:var(--gold);border-color:var(--orange)}
 
 /* ---------- shell ---------- */
-.app-main{width:min(760px,100% - 28px);margin-inline:auto;padding:20px 0 calc(var(--bar-h) + 30px)}
+.app-main{width:min(980px,100% - 32px);margin-inline:auto;padding:28px 0 calc(var(--bar-h) + 38px)}
 .tab-panel{display:none}.tab-panel.active{display:block;animation:panel-in .22s ease}
 @keyframes panel-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .eyebrow{color:var(--orange);font-size:12px;font-weight:700;letter-spacing:.2em}
@@ -23,7 +23,7 @@
 .hint{margin:-6px 0 16px;color:var(--muted);font-size:14px;line-height:1.5}
 
 /* ---------- hero + banner ---------- */
-.hero-card{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:22px;border:1px solid var(--line);background:linear-gradient(145deg,rgba(116,29,8,.9),rgba(28,10,6,.95));clip-path:polygon(3% 0,97% 0,100% 4%,100% 96%,97% 100%,3% 100%,0 96%,0 4%)}
+.hero-card{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:30px;border:1px solid var(--line);background:radial-gradient(circle at 88% 18%,rgba(255,157,52,.22),transparent 28%),linear-gradient(145deg,rgba(116,29,8,.9),rgba(28,10,6,.95));box-shadow:0 24px 60px rgba(0,0,0,.2);clip-path:polygon(3% 0,97% 0,100% 4%,100% 96%,97% 100%,3% 100%,0 96%,0 4%)}
 .hero-card h1{margin:8px 0 6px;font:400 clamp(30px,7vw,44px)/1 'Black Ops One';letter-spacing:-.02em;color:#ffe9cf}
 .hero-meta{margin:0;color:#cbb9a9;font-size:14px}.hero-meta strong{color:#e8d8c9}
 .admin-badge{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;padding:8px 12px;border:1px solid rgba(255,195,78,.45);background:rgba(255,160,40,.1);color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.12em}
@@ -63,11 +63,11 @@
 .empty{margin:4px 0;padding:14px;border:1px dashed rgba(255,255,255,.12);color:var(--muted);font-size:14px;text-align:center}
 
 /* ---------- inventário ---------- */
-.inventory-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.inventory-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 .item-card{display:flex;flex-direction:column;padding:14px;border:1px solid rgba(255,100,30,.18);background:rgba(22,13,10,.85)}
 .item-card.equipped{border-color:rgba(85,232,120,.55);background:linear-gradient(160deg,rgba(20,40,22,.55),rgba(22,13,10,.9))}
-.item-art{position:relative;display:grid;place-items:center;min-height:104px;margin-bottom:10px;background:radial-gradient(circle at 50% 40%,rgba(255,121,28,.14),rgba(0,0,0,.25) 72%)}
-.game-icon{max-width:96px;max-height:96px;width:auto;height:auto;object-fit:contain;filter:drop-shadow(0 6px 10px rgba(0,0,0,.55))}
+.item-art{position:relative;display:grid;place-items:center;min-height:152px;margin-bottom:12px;background:radial-gradient(circle at 50% 40%,rgba(255,121,28,.2),rgba(0,0,0,.25) 72%)}
+.game-icon{max-width:132px;max-height:132px;width:auto;height:auto;object-fit:contain;filter:drop-shadow(0 10px 16px rgba(0,0,0,.62))}
 .game-icon.inline{max-width:20px;max-height:20px;flex-shrink:0;vertical-align:-4px;margin-right:2px}
 .game-icon.thumb{max-width:26px;max-height:26px}
 .equip-badge{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:5px;padding:4px 6px;background:rgba(10,26,12,.92);color:var(--green);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}

@@ -17,6 +17,7 @@
   .item-card::before{content:"";position:absolute;z-index:3;inset:0 0 auto;height:3px;background:var(--rv-common)}
   .item-card.r1::before{background:var(--rv-uncommon)}.item-card.r2::before{background:var(--rv-rare)}.item-card.r3::before{background:var(--rv-epic)}.item-card.r4::before{background:var(--rv-legendary)}.item-card.r5::before,.item-card.r6::before{background:var(--rv-mythic)}
   .item-art{min-height:164px;margin:0;padding:16px 12px 24px;background:radial-gradient(circle at 50% 42%,rgba(255,128,28,.19),transparent 35%),linear-gradient(180deg,rgba(255,117,20,.045),rgba(0,0,0,.3));border-bottom:1px solid rgba(255,130,30,.1)}
+  .item-art .rv-frame{position:absolute;inset:10px;z-index:0;width:calc(100% - 20px);height:calc(100% - 20px);object-fit:contain;opacity:.72;filter:drop-shadow(0 0 12px rgba(255,125,27,.12));pointer-events:none}.item-art .game-icon{position:relative;z-index:1}.item-art .rv-rarity{z-index:2}
   .item-art .game-icon{max-width:140px;max-height:132px;filter:drop-shadow(0 12px 15px rgba(0,0,0,.62))}
   .item-card>.item-kind,.item-card>h3,.item-card>.item-meta{margin-left:14px;margin-right:14px}.item-card>.item-kind{margin-top:13px}.item-card>h3{font-size:17px}.item-card>.item-meta{margin-bottom:14px}
   .item-meta span{padding:3px 7px;border:1px solid rgba(255,255,255,.09);background:rgba(0,0,0,.2)}
@@ -111,17 +112,35 @@
   // tem prioridade; a arte SVG do Revival entra só quando não há PNG para o
   // recurso (ícone de categoria do kinds/).
   if (typeof iconImg === 'function') {
-    const hasPng = r => {
-      const s = String(r?.icon || '')
-      return s && !s.startsWith('/assets/img/kinds/')
+    const REVIVAL_ASSETS = {
+      crystal: 'resources/revival_crystal.png', coin: 'resources/slayer_coin.png', energy: 'resources/energy_cell.png',
+      key: 'resources/ember_key.png', token: 'resources/void_token.png', crate: 'crates/standard_crate.png',
+      epic_crate: 'crates/epic_crate.png', legendary_crate: 'crates/legendary_crate.png', shotgun: 'weapons/weapon_bone_crusher.png',
+      plasma: 'weapons/weapon_void_plasma.png', launcher: 'weapons/launcher_frag_grenade.png', precision: 'weapons/weapon_soul_piercer.png',
+      melee: 'weapons/ultimate_crucible.png', ultimate: 'weapons/ultimate_crucible.png', weapon: 'weapons/weapon_doom_cannon.png',
+      slayer: 'cosmetics/skin_infernal_slayer.png', helmet: 'gear/slayer_helm.png', armor: 'gear/slayer_armor.png',
+      gauntlets: 'gear/rage_gauntlet.png', boots: 'gear/hell_boot.png', cosmetic: 'cosmetics/skin_infernal_slayer.png', badge: 'cosmetics/entitlement_benefit.png'
+    }
+    const revivalAsset = r => {
+      const text = clean(`${r?.tag || ''} ${r?.name || ''} ${r?.kind || ''}`)
+      let type = typeFor(r)
+      if (/legendary/.test(text)) type = 'legendary_crate'
+      else if (/epic/.test(text)) type = 'epic_crate'
+      else if (/doom cannon|heavy cannon|hellfire|machine gun/.test(text)) type = 'weapon'
+      else if (/bone crusher/.test(text)) type = 'shotgun'
+      else if (/soul piercer|sniper|ballista|gauss/.test(text)) type = 'precision'
+      else if (/inferno launcher|grenade|rocket/.test(text)) type = 'launcher'
+      return REVIVAL_ASSETS[type] ? `/assets/img/revival/${REVIVAL_ASSETS[type]}` : null
     }
     iconImg = function (resource = {}, cls = '') {
-      const src = hasPng(resource) ? resource.icon : artUrl(resource)
+      const serverIcon = String(resource?.icon || '')
+      const src = revivalAsset(resource) || (serverIcon && !serverIcon.startsWith('/assets/img/kinds/') ? serverIcon : artUrl(resource))
       return `<img class="game-icon revival-art ${cls}" src="${escapeHtml(src)}" alt="${escapeHtml(resource.name || resource.tag || resource.kind || 'Item Revival')}" loading="lazy">`
     }
   }
 
   const rarity = ['Base','Aprimorado','Raro','Épico','Lendário','Mítico','Mítico']
+  const FRAME_ASSETS = ['frame_common.png','frame_uncommon.png','frame_rare.png','frame_epic.png','frame_legendary.png','frame_mythic.png','frame_mythic.png']
   function tierOf (card) {
     const t = [...card.querySelectorAll('.item-meta span')].map(x => x.textContent.trim()).find(x => /^T\d+$/i.test(x))
     return Math.max(0, Math.min(6, t ? Number(t.slice(1)) || 0 : 0))
@@ -140,7 +159,10 @@
       const t = tierOf(card)
       card.classList.add(`r${t}`); card.dataset.rvDetail='inventory'; card.tabIndex=0
       const art = card.querySelector('.item-art')
-      if (art && !art.querySelector('.rv-rarity')) { const b=document.createElement('span');b.className='rv-rarity';b.textContent=rarity[t];art.appendChild(b) }
+      if (art && !art.querySelector('.rv-rarity')) {
+        const frame=document.createElement('img'); frame.className='rv-frame'; frame.src=`/assets/img/revival/frames/${FRAME_ASSETS[t]}`; frame.alt=''; frame.setAttribute('aria-hidden','true'); art.appendChild(frame)
+        const b=document.createElement('span');b.className='rv-rarity';b.textContent=rarity[t];art.appendChild(b)
+      }
     })
     document.querySelectorAll('#storeList .store-card').forEach(card => {
       card.dataset.rvDetail='store'; card.tabIndex=0
