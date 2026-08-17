@@ -3,33 +3,145 @@
   "license_note": "Original Revival artwork. No official game assets included.",
   "base_url": "/assets/img/revival",
   "assets": {
-    "revival_crystal": {"file":"resources/revival_crystal.png","category":"resource","label":"Revival Crystal"},
-    "slayer_coin": {"file":"resources/slayer_coin.png","category":"resource","label":"Slayer Coin"},
-    "energy_cell": {"file":"resources/energy_cell.png","category":"resource","label":"Energy Cell"},
-    "void_token": {"file":"resources/void_token.png","category":"resource","label":"Void Token"},
-    "ember_key": {"file":"resources/ember_key.png","category":"resource","label":"Ember Key"},
-    "standard_crate": {"file":"crates/standard_crate.png","category":"crate","label":"Standard Crate"},
-    "epic_crate": {"file":"crates/epic_crate.png","category":"crate","label":"Epic Crate"},
-    "legendary_crate": {"file":"crates/legendary_crate.png","category":"crate","label":"Legendary Crate"},
-    "weapon_hellfire_mg": {"file":"weapons/weapon_hellfire_mg.png","category":"weapon","label":"Hellfire MG"},
-    "weapon_bone_crusher": {"file":"weapons/weapon_bone_crusher.png","category":"weapon","label":"Bone Crusher"},
-    "weapon_void_plasma": {"file":"weapons/weapon_void_plasma.png","category":"weapon","label":"Void Plasma"},
-    "weapon_inferno_launcher": {"file":"weapons/weapon_inferno_launcher.png","category":"weapon","label":"Inferno Launcher"},
-    "weapon_soul_piercer": {"file":"weapons/weapon_soul_piercer.png","category":"weapon","label":"Soul Piercer"},
-    "weapon_doom_cannon": {"file":"weapons/weapon_doom_cannon.png","category":"weapon","label":"Revival Heavy Cannon"},
-    "launcher_frag_grenade": {"file":"weapons/launcher_frag_grenade.png","category":"launcher","label":"Frag Grenade"},
-    "ultimate_crucible": {"file":"weapons/ultimate_crucible.png","category":"ultimate","label":"Energy Blade"},
-    "slayer_helm": {"file":"gear/slayer_helm.png","category":"equipment","label":"Slayer Helm"},
-    "slayer_armor": {"file":"gear/slayer_armor.png","category":"equipment","label":"Slayer Armor"},
-    "rage_gauntlet": {"file":"gear/rage_gauntlet.png","category":"equipment","label":"Rage Gauntlet"},
-    "hell_boot": {"file":"gear/hell_boot.png","category":"equipment","label":"Hell Boot"},
-    "skin_infernal_slayer": {"file":"cosmetics/skin_infernal_slayer.png","category":"cosmetic","label":"Infernal Slayer Skin"},
-    "entitlement_benefit": {"file":"cosmetics/entitlement_benefit.png","category":"entitlement","label":"Benefit"},
-    "frame_common": {"file":"frames/frame_common.png","category":"frame","label":"Common"},
-    "frame_uncommon": {"file":"frames/frame_uncommon.png","category":"frame","label":"Uncommon"},
-    "frame_rare": {"file":"frames/frame_rare.png","category":"frame","label":"Rare"},
-    "frame_epic": {"file":"frames/frame_epic.png","category":"frame","label":"Epic"},
-    "frame_legendary": {"file":"frames/frame_legendary.png","category":"frame","label":"Legendary"},
-    "frame_mythic": {"file":"frames/frame_mythic.png","category":"frame","label":"Mythic"}
+    "revival_crystal": {
+      "file": "resources/revival_crystal.png",
+      "category": "resource",
+      "label": "Revival Crystal"
+    },
+    "slayer_coin": {
+      "file": "resources/slayer_coin.png",
+      "category": "resource",
+      "label": "Slayer Coin"
+    },
+    "energy_cell": {
+      "file": "resources/energy_cell.png",
+      "category": "resource",
+      "label": "Energy Cell"
+    },
+    "void_token": {
+      "file": "resources/void_token.png",
+      "category": "resource",
+      "label": "Void Token"
+    },
+    "ember_key": {
+      "file": "resources/ember_key.png",
+      "category": "resource",
+      "label": "Ember Key"
+    },
+    "standard_crate": {
+      "file": "crates/standard_crate.png",
+      "category": "crate",
+      "label": "Standard Crate"
+    },
+    "epic_crate": {
+      "file": "crates/epic_crate.png",
+      "category": "crate",
+      "label": "Epic Crate"
+    },
+    "legendary_crate": {
+      "file": "crates/legendary_crate.png",
+      "category": "crate",
+      "label": "Legendary Crate"
+    },
+    "weapon_hellfire_mg": {
+      "file": "weapons/weapon_hellfire_mg.png",
+      "category": "weapon",
+      "label": "Hellfire MG"
+    },
+    "weapon_bone_crusher": {
+      "file": "weapons/weapon_bone_crusher.png",
+      "category": "weapon",
+      "label": "Bone Crusher"
+    },
+    "weapon_void_plasma": {
+      "file": "weapons/weapon_void_plasma.png",
+      "category": "weapon",
+      "label": "Void Plasma"
+    },
+    "weapon_inferno_launcher": {
+      "file": "weapons/weapon_inferno_launcher.png",
+      "category": "weapon",
+      "label": "Inferno Launcher"
+    },
+    "weapon_soul_piercer": {
+      "file": "weapons/weapon_soul_piercer.png",
+      "category": "weapon",
+      "label": "Soul Piercer"
+    },
+    "weapon_doom_cannon": {
+      "file": "weapons/weapon_doom_cannon.png",
+      "category": "weapon",
+      "label": "Revival Heavy Cannon"
+    },
+    "launcher_frag_grenade": {
+      "file": "weapons/launcher_frag_grenade.png",
+      "category": "launcher",
+      "label": "Frag Grenade"
+    },
+    "ultimate_crucible": {
+      "file": "weapons/ultimate_crucible.png",
+      "category": "ultimate",
+      "label": "Energy Blade"
+    },
+    "slayer_helm": {
+      "file": "gear/slayer_helm.png",
+      "category": "equipment",
+      "label": "Slayer Helm"
+    },
+    "slayer_armor": {
+      "file": "gear/slayer_armor.png",
+      "category": "equipment",
+      "label": "Slayer Armor"
+    },
+    "rage_gauntlet": {
+      "file": "gear/rage_gauntlet.png",
+      "category": "equipment",
+      "label": "Rage Gauntlet"
+    },
+    "hell_boot": {
+      "file": "gear/hell_boot.png",
+      "category": "equipment",
+      "label": "Hell Boot"
+    },
+    "skin_infernal_slayer": {
+      "file": "cosmetics/skin_infernal_slayer.png",
+      "category": "cosmetic",
+      "label": "Infernal Slayer Skin"
+    },
+    "entitlement_benefit": {
+      "file": "cosmetics/entitlement_benefit.png",
+      "category": "entitlement",
+      "label": "Benefit"
+    },
+    "frame_common": {
+      "file": "frames/frame_common.png",
+      "category": "frame",
+      "label": "Common"
+    },
+    "frame_uncommon": {
+      "file": "frames/frame_uncommon.png",
+      "category": "frame",
+      "label": "Uncommon"
+    },
+    "frame_rare": {
+      "file": "frames/frame_rare.png",
+      "category": "frame",
+      "label": "Rare"
+    },
+    "frame_epic": {
+      "file": "frames/frame_epic.png",
+      "category": "frame",
+      "label": "Epic"
+    },
+    "frame_legendary": {
+      "file": "frames/frame_legendary.png",
+      "category": "frame",
+      "label": "Legendary"
+    },
+    "frame_mythic": {
+      "file": "frames/frame_mythic.png",
+      "category": "frame",
+      "label": "Mythic"
+    }
   }
 }
