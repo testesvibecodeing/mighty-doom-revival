@@ -1,26 +1,41 @@
 {
-  "endpoint": "game/chapters/redeem-voucher",
+  "endpoint": "game/battle-pass/start-season",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T12:04:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/chapters/redeem-voucher",
+    "path": "/game/battle-pass/start-season",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
     "body": {
-      "voucher_id": 900
+      "season_id": "season-fixtures"
     }
   },
   "response": {
     "status": 200,
     "body": {
       "uts": "<uts>",
-      "code": 1000
+      "code": 1000,
+      "state": {
+        "season_id": "season-fixtures",
+        "active_state": 1,
+        "premium_state": 0,
+        "points": 0,
+        "prestige": 0,
+        "reward_claims": [],
+        "mission_progress": [
+          {
+            "mission_id": 900,
+            "progress": 0,
+            "claim_state": 1
+          }
+        ]
+      }
     }
   }
 }

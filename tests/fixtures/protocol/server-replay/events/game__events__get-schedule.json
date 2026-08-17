@@ -1,7 +1,7 @@
 {
   "endpoint": "game/events/get-schedule",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:44:00Z",
+  "captured_at": "2026-08-17T12:04:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -35,6 +35,14 @@
           "end_time": 1893456000,
           "availability": 1,
           "args": "e30="
+        },
+        {
+          "id": "season-fixtures",
+          "event_definition_id": 6000,
+          "start_time": null,
+          "end_time": null,
+          "availability": 1,
+          "args": "eyJwcmVtaXVtX2VudGl0bGVtZW50X2lkIjo3MDAsIm1pc3Npb25zIjp7InNlYXNvbmFsX21pc3Npb25zIjpbeyJtaXNzaW9uIjp7ImlkIjo5MDAsInBvaW50cyI6MTAwLCJzdGF0X2lkIjo5MDAxLCJ0YXJnZXQiOjN9fV19LCJyZXdhcmRfdHJhY2siOnsidGllcnMiOlt7ImlkIjoxLCJwb2ludF90aHJlc2hvbGQiOjEwMCwicmV3YXJkcyI6W3siaWQiOjEwLCJyZXdhcmRfaXRlbXMiOnsicmVzb3VyY2VzIjpbeyJyZXNvdXJjZSI6eyJpZCI6MTAwfSwiYW1vdW50IjoyNX1dfX0seyJpZCI6MTEsInJlcXVpcmVzX3ByZW1pdW0iOnRydWUsInJld2FyZF9pdGVtcyI6eyJyZXNvdXJjZXMiOlt7InJlc291cmNlIjp7ImlkIjoxMDB9LCJhbW91bnQiOjQwfV19fV19LHsiaWQiOjIsInBvaW50X3RocmVzaG9sZCI6MTUwLCJyZXdhcmRzIjpbeyJpZCI6MTIsInJld2FyZF9pdGVtcyI6eyJyZXNvdXJjZXMiOlt7InJlc291cmNlIjp7ImlkIjoxMDB9LCJhbW91bnQiOjE1fV19fSx7ImlkIjoxMywicmVxdWlyZXNfcHJlbWl1bSI6dHJ1ZSwicmV3YXJkX2l0ZW1zIjp7InJlc291cmNlcyI6W3sicmVzb3VyY2UiOnsiaWQiOjEwMH0sImFtb3VudCI6MzV9XX19LHsiaWQiOjE0LCJyZXdhcmRfaXRlbXMiOnsicmVzb3VyY2VzIjpbeyJyZXNvdXJjZSI6eyJpZCI6MTAwfSwiYW1vdW50IjoyMH1dfX1dfV0sInByZXN0aWdlX3BvaW50X3N0YXJ0IjoxMCwicHJlc3RpZ2VfcG9pbnRfaW5jcmVtZW50Ijo1LCJwcmVzdGlnZV9yZXdhcmRfcG9vbCI6W3sicmV3YXJkX2l0ZW1zIjp7InJlc291cmNlcyI6W3sicmVzb3VyY2UiOnsiaWQiOjEwMH0sImFtb3VudCI6NTB9XX19XX0sInBvaW50c19leGNoYW5nZV9yYXRlIjp7ImluX2N1cnJlbmN5IjoiY29pbnMiLCJpbl9hbW91bnQiOjEwLCJvdXRfcG9pbnRzIjoyNX19"
         }
       ]
     }

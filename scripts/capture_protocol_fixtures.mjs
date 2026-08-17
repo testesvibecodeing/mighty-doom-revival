@@ -37,7 +37,10 @@ const revival = {
   game_data_token: 'fixtures-game-data',
   game_data_version_id: 'fixtures-v1',
   auto_starter_bundle: true,
-  initial_resources: []
+  initial_resources: [],
+  // Premium desligado para capturar o /redeem-premium-entitlement de verdade
+  // (None=0 -> Premium=2 via entitlement 700 do bundle).
+  unlock_premium_battle_pass: false
 }
 const gameData = {
   server_properties: { starter_bundle: 1 },
@@ -93,6 +96,43 @@ const gameData = {
     ]
   }],
   inventory: { slots: [{ id: 10, tag: 'slot_primary_weapon' }, { id: 11, tag: 'slot_slayer' }] },
+  // Módulo battle-pass — BattlePassApi (metadata v29). Missão 900 completa
+  // via player/increment-stats (stat 9001 x3) feito antes no fluxo.
+  story_battle_passes: [{
+    id: 'season-fixtures',
+    event_definition_id: 6000,
+    availability: 1,
+    start_time: 1,
+    args: {
+      premium_entitlement_id: 700,
+      missions: { seasonal_missions: [{ mission: { id: 900, points: 100, stat_id: 9001, target: 3 } }] },
+      reward_track: {
+        tiers: [
+          {
+            id: 1,
+            point_threshold: 100,
+            rewards: [
+              { id: 10, reward_items: { resources: [{ resource: { id: 100 }, amount: 25 }] } },
+              { id: 11, requires_premium: true, reward_items: { resources: [{ resource: { id: 100 }, amount: 40 }] } }
+            ]
+          },
+          {
+            id: 2,
+            point_threshold: 150,
+            rewards: [
+              { id: 12, reward_items: { resources: [{ resource: { id: 100 }, amount: 15 }] } },
+              { id: 13, requires_premium: true, reward_items: { resources: [{ resource: { id: 100 }, amount: 35 }] } },
+              { id: 14, reward_items: { resources: [{ resource: { id: 100 }, amount: 20 }] } }
+            ]
+          }
+        ],
+        prestige_point_start: 10,
+        prestige_point_increment: 5,
+        prestige_reward_pool: [{ reward_items: { resources: [{ resource: { id: 100 }, amount: 50 }] } }]
+      },
+      points_exchange_rate: { in_currency: 'coins', in_amount: 10, out_points: 25 }
+    }
+  }],
   daily_rewards: { days: [{ resources: [{ resource: 'coins', amount: 25 }] }] },
   idle_reward: { generation_period: 60, chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 1 }] }] }
 }
@@ -281,6 +321,25 @@ try {
   await call('events-game-mode-event-revive', '/game/events/game-mode-event-revive', { scheduled_event_id: 501 }, token)
   await call('events-end-game-mode-event', '/game/events/end-game-mode-event', { scheduled_event_id: 501, progress: { stage: 2, state: 1 } }, token)
   await call('events-activate-store-offer-event', '/game/events/activate-store-offer-event', { scheduled_event_id: 502 }, token)
+
+  // Módulo battle-pass — ciclo completo: missão (completada pelo
+  // increment-stats anterior) -> compra de tier -> claims -> prestige ->
+  // redeem do entitlement -> end-season. Rewards premium ficam para o
+  // redeem provar o gate None=0 -> Premium=2.
+  const seasonId = 'season-fixtures'
+  await call('battle-pass-start-season', '/game/battle-pass/start-season', { season_id: seasonId }, token)
+  // O hook de missões só vê temporadas iniciadas — o increment-stats do
+  // bootstrap veio antes do start, então incrementa de novo aqui (o fixture
+  // da rota continua sendo o da primeira chamada, first-wins).
+  await call('player-increment-stats-2', '/game/player/increment-stats', { stats: [{ id: 9001, increment: 3 }] }, token)
+  await call('battle-pass-claim-mission', '/game/battle-pass/claim-mission', { season_id: seasonId, mission_id: 900 }, token)
+  await call('battle-pass-buy-next-track-tier', '/game/battle-pass/buy-next-track-tier', { season_id: seasonId }, token)
+  await call('battle-pass-claim-track-tier', '/game/battle-pass/claim-track-tier', { season_id: seasonId, tier_id: 1 }, token)
+  await call('battle-pass-claim-track-reward', '/game/battle-pass/claim-track-reward', { season_id: seasonId, tier_id: 2, reward_id: 12 }, token)
+  await call('battle-pass-claim-track-all', '/game/battle-pass/claim-track-all', { season_id: seasonId }, token)
+  await call('battle-pass-prestige', '/game/battle-pass/prestige', { season_id: seasonId }, token)
+  await call('battle-pass-redeem-premium-entitlement', '/game/battle-pass/redeem-premium-entitlement', { season_id: seasonId }, token)
+  await call('battle-pass-end-season', '/game/battle-pass/end-season', { season_id: seasonId }, token)
 } finally {
   child.kill('SIGTERM')
   await new Promise(exit => child.once('exit', exit))

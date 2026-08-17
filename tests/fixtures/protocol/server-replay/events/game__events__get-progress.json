@@ -1,7 +1,7 @@
 {
   "endpoint": "game/events/get-progress",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:44:00Z",
+  "captured_at": "2026-08-17T12:04:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -29,7 +29,23 @@
           "scheduled_event_id": 502
         }
       ],
-      "battle_pass_events_states": []
+      "battle_pass_events_states": [
+        {
+          "season_id": "season-fixtures",
+          "active_state": 1,
+          "premium_state": 0,
+          "points": 0,
+          "prestige": 0,
+          "reward_claims": [],
+          "mission_progress": [
+            {
+              "mission_id": 900,
+              "progress": 0,
+              "claim_state": 1
+            }
+          ]
+        }
+      ]
     }
   }
 }

@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T11:45:30Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T12:05:46Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -23,7 +23,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [inbox](#inbox) | 7 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
 | [player](#player) | 8 | 7 | 0 | 6 | 1 | 1 | 🧪 em convergência |
 | [events](#events) | 9 | 11 | 0 | 11 | 0 | 9 | 🧪 em convergência |
-| [battle-pass](#battle-pass) | 10 | 9 | 0 | 3 | 6 | 0 | 🧪 em convergência |
+| [battle-pass](#battle-pass) | 10 | 9 | 0 | 9 | 0 | 9 | 🧪 em convergência |
 | [daily-rewards](#daily-rewards) | 11 | 2 | 0 | 2 | 0 | 0 | 🧪 em convergência |
 | [idle-rewards](#idle-rewards) | 12 | 4 | 0 | 2 | 2 | 0 | 🧪 em convergência |
 | [store](#store) | 13 | 10 | 0 | 5 | 5 | 0 | 🧪 em convergência |
@@ -140,15 +140,15 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/battle-pass/buy-next-track-tier` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/battle-pass/claim-mission` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
-| `game/battle-pass/claim-track-all` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/battle-pass/claim-track-reward` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/battle-pass/claim-track-tier` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
-| `game/battle-pass/end-season` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/battle-pass/prestige` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/battle-pass/redeem-premium-entitlement` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/battle-pass/start-season` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/battle-pass/buy-next-track-tier` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.BuyNextTrackTier(seasonId) -> Response sem campos (envelope puro); debita ceil(pontos_faltantes/out_points)*in_amount da in_currency via points_exchange_rate (BattlePassPointsExchangeRate extraido); 2300 no-next-tier/insufficient-currency. |
+| `game/battle-pass/claim-mission` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | ClaimMissionResponse{resources}; missao completavel via player/increment-stats (applyBattlePassStatTotals) com stat_id/target no config. |
+| `game/battle-pass/claim-track-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.ClaimTrackAll(seasonId) -> ClaimTrackAllResponse{resources}; varre tiers com pontos suficientes, 2300 nothing-to-claim quando vazio. |
+| `game/battle-pass/claim-track-reward` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.ClaimTrackReward(seasonId,tierId,rewardId) -> {resources}; gates 2200 tier/reward-not-found, 2300 insufficient-points/reward-already-claimed/premium-required. |
+| `game/battle-pass/claim-track-tier` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | ClaimTrackTierResponse{resources}; premium gate agora exige PremiumState=2 conforme enum extraido. |
+| `game/battle-pass/end-season` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.EndSeason(seasonId) -> EndSeasonResponse{resources}; concede os rewards ja conquistados e marca ActiveState=Ended(2); gates 2300 season-ended/season-not-started. |
+| `game/battle-pass/prestige` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.Prestige(seasonId) -> PrestigeResponse{resources}; exige ultimo tier, concede prestige_reward_pool, reseta pontos para prestige_point_start+(prestige-1)*increment e limpa reward_claims (A VERIFICAR); enums e DTOs extraidos do metadata. |
+| `game/battle-pass/redeem-premium-entitlement` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.RedeemPremiumEntitlement(seasonId) -> Response sem campos (envelope puro); PremiumState None=0 -> Premium=2 mediante posse do premium_entitlement_id do args; teste battle-pass.mjs + fixture. |
+| `game/battle-pass/start-season` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | StartSeasonResponse{state} de BattlePassEventState{seasonId,activeState,premiumState,points,prestige,rewardClaims,missionProgress} extraido; premium_state corrigido para o enum (None/Free/Premium). |
 
 ### daily-rewards
 

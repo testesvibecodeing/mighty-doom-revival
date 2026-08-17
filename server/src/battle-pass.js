@@ -3,6 +3,41 @@ import { archiveMode, storyBattlePasses } from './game-data-schema.js'
 
 const NS = 'battle-pass'
 
+// ---- Contrato extraído do global-metadata.dat v29 (2026-08-17) ----
+// BattlePassApi (9 métodos = 9 rotas game/battle-pass/*):
+//   StartSeason(seasonId)                       {season_id}
+//   EndSeason(seasonId)                         {season_id}
+//   RedeemPremiumEntitlement(seasonId)          {season_id}
+//   ClaimTrackReward(seasonId, tierId, rewardId) {season_id, tier_id, reward_id}
+//   ClaimTrackTier(seasonId, tierId)            {season_id, tier_id}
+//   ClaimTrackAll(seasonId)                     {season_id}
+//   Prestige(seasonId)                          {season_id}
+//   BuyNextTrackTier(seasonId)                  {season_id}
+//   ClaimMission(seasonId, missionId)           {season_id, mission_id}
+// Response DTOs (campos confirmados; snake_case do nome C#):
+//   StartSeasonResponse{state}   EndSeasonResponse{resources}
+//   ClaimTrackReward/Tier/All/Mission/Prestige: {resources}
+//   RedeemPremiumEntitlement/BuyNextTrackTier: sem campos -> envelope puro.
+// DataObjects de estado/config (campos confirmados):
+//   BattlePassEventState{seasonId, activeState, premiumState, points,
+//     prestige, rewardClaims, missionProgress}
+//   BattlePassRewardClaim{tierId, rewardId}
+//   BattlePassRewardTier{id, pointThreshold, rewards}
+//   BattlePassReward{id, requiresPremium, rewardItems}
+//   BattlePassRewardItems{resources, dropTableRolls, display}
+//   BattlePassRewardTrack{tiers, prestigePointStart, prestigePointIncrement,
+//     prestigeRequiresPremium, prestigeRewardPool}
+//   BattlePassPointsExchangeRate{inCurrency, outPoints}
+//   ScheduledBattlePassEventArgs{..., premiumEntitlementId, pointsExchangeRate,
+//     rewardTrack, missions, ...}
+// Enums: ActiveState None=0/Active=1/Ended=2; PremiumState None=0/Free=1/
+// Premium=2; MissionClaimState None=0/Unclaimed=1/Claimed=2.
+// CONFIRMADO por literal: season_rewards não; progress/tracks não são daqui.
+// A VERIFICAR até captura do cliente: season_id/tier_id/reward_id/mission_id
+// (fallback snake), custo do BuyNextTrackTier (aqui: exchange rate
+// ceil(pontos_faltantes/out_points) * in_amount) e o reset de pontos do
+// Prestige (aqui: prestige_point_start + (prestige-1) * incremento).
+
 function battlePassById (runtime, seasonId) {
   return storyBattlePasses(runtime.gameData).find(pass => pass?.id === seasonId) || null
 }
@@ -88,7 +123,10 @@ export function battlePassDefaultState (runtime, pass) {
   return {
     season_id: pass.id,
     active_state: 1,
-    premium_state: runtime.revival.unlock_premium_battle_pass === false ? 0 : 1,
+    // PremiumState: None=0, Free=1, Premium=2. Servidor particular libera o
+    // premium por padrão (2); com unlock desligado parte de None (0) e só
+    // sobe via /redeem-premium-entitlement.
+    premium_state: runtime.revival.unlock_premium_battle_pass === false ? 0 : 2,
     points: 0,
     prestige: 0,
     reward_claims: [],
@@ -186,70 +224,244 @@ function alreadyClaimed (state, tierId, rewardId) {
   return state.reward_claims.some(claim => claim?.tier_id === tierId && claim?.reward_id === rewardId)
 }
 
+function sortedTiers (pass) {
+  return tierDefinitions(pass)
+    .slice()
+    .sort((a, b) => Number(a?.point_threshold) - Number(b?.point_threshold))
+}
+
+function rewardResources (reward) {
+  const resources = reward?.reward_items?.resources ?? reward?.resources
+  return Array.isArray(resources) ? resources : []
+}
+
+function grantReward (grants, repo, userId, state, tierId, reward, runtime) {
+  const rewardId = reward?.id
+  if (!Number.isInteger(rewardId)) return
+  if (alreadyClaimed(state, tierId, rewardId)) return
+  if (reward.requires_premium && state.premium_state < 2) return
+  for (const resource of rewardResources(reward)) {
+    grants.push(giveGameResource(repo, userId, resource, runtime).wire)
+  }
+  state.reward_claims.push({ tier_id: tierId, reward_id: rewardId })
+}
+
+// Concede todos os rewards já conquistados (pontos >= threshold, premium ok,
+// ainda não reivindicados) — compartilhado por claim-track-all e end-season.
+function grantEarnedRewards (repo, userId, state, pass, runtime) {
+  const grants = []
+  for (const tier of sortedTiers(pass)) {
+    const threshold = Math.max(0, Number(tier.point_threshold) || 0)
+    if (state.points < threshold) continue
+    for (const reward of Array.isArray(tier.rewards) ? tier.rewards : []) {
+      grantReward(grants, repo, userId, state, tier.id, reward, runtime)
+    }
+  }
+  return grants
+}
+
+function currencyRidFor (value, runtime) {
+  if (Number.isInteger(value)) return value
+  if (typeof value === 'string') {
+    const row = runtime?.index?.byTag?.get(value)
+    if (Number.isInteger(row)) return row
+    if (row) return Number.isInteger(row.id) ? row.id : Number.isInteger(row.rid) ? row.rid : null
+  }
+  return null
+}
+
+// season iniciada + não encerrada; devolve o estado pronto para operar.
+function activeSeasonState (repo, userId, runtime, seasonId) {
+  if (typeof seasonId !== 'string') return { error: [400, 2200, { reason: 'season-required' }] }
+  const pass = battlePassById(runtime, seasonId)
+  if (!pass) return { error: [400, 2200, { reason: 'season-not-found' }] }
+  if (!available(runtime, pass)) return { error: [400, 2300, { reason: 'season-unavailable' }] }
+  const state = battlePassState(repo, userId, runtime, seasonId)
+  if (!state) return { error: [400, 2300, { reason: 'season-not-started' }] }
+  if (state.active_state === 2) return { error: [400, 2300, { reason: 'season-ended' }] }
+  return { pass, state }
+}
+
 export function handleBattlePassRequest (path, body, userId, repo, runtime) {
   if (path === '/game/battle-pass/start-season') {
     const seasonId = body?.season_id
-    if (typeof seasonId !== 'string') return { error: [400, 2200] }
+    if (typeof seasonId !== 'string') return { error: [400, 2200, { reason: 'season-required' }] }
     const pass = battlePassById(runtime, seasonId)
-    if (!available(runtime, pass)) return { error: [400, 2000, { reason: 'season-unavailable' }] }
-    if (battlePassState(repo, userId, runtime, seasonId)) return { error: [400, 2000, { reason: 'season-already-started' }] }
+    if (!available(runtime, pass)) return { error: [400, 2200, { reason: 'season-not-found' }] }
+    if (battlePassState(repo, userId, runtime, seasonId)) return { error: [400, 2300, { reason: 'season-already-started' }] }
     const state = battlePassDefaultState(runtime, pass)
     repo.setState(userId, NS, stateKey(seasonId), state)
     return { data: { state } }
   }
 
+  if (path === '/game/battle-pass/end-season') {
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
+    let resources
+    repo.tx(() => {
+      resources = grantEarnedRewards(repo, userId, state, pass, runtime)
+      state.active_state = 2
+      repo.setState(userId, NS, stateKey(state.season_id), state)
+    })
+    return { data: { resources } }
+  }
+
+  if (path === '/game/battle-pass/redeem-premium-entitlement') {
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
+    const entitlementId = pass?.args?.premium_entitlement_id
+    if (entitlementId === undefined || entitlementId === null) {
+      return { error: [400, 2300, { reason: 'premium-entitlement-config-missing' }] }
+    }
+    if (state.premium_state >= 2) return { error: [400, 2300, { reason: 'already-premium' }] }
+    const owned = (repo.entitlements(userId) || []).some(row =>
+      row?.rid === entitlementId || row?.tag === entitlementId
+    )
+    if (!owned) return { error: [400, 2300, { reason: 'premium-not-entitled' }] }
+    state.premium_state = 2
+    repo.setState(userId, NS, stateKey(state.season_id), state)
+    return { data: {} }
+  }
+
   if (path === '/game/battle-pass/claim-mission') {
-    const seasonId = body?.season_id
     const requestedMissionId = body?.mission_id
-    if (typeof seasonId !== 'string' || !Number.isInteger(requestedMissionId)) return { error: [400, 2200] }
-    const pass = battlePassById(runtime, seasonId)
-    if (!available(runtime, pass)) return { error: [400, 2000] }
+    if (!Number.isInteger(requestedMissionId)) return { error: [400, 2200, { reason: 'mission-id-required' }] }
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
     const definition = missionDefinitions(pass).find(entry => missionId(entry) === requestedMissionId)
-    if (!definition) return { error: [400, 2000] }
-    const state = battlePassState(repo, userId, runtime, seasonId)
-    if (!state) return { error: [400, 2000, { reason: 'season-not-started' }] }
+    if (!definition) return { error: [400, 2200, { reason: 'mission-not-found' }] }
     const mission = state.mission_progress.find(entry => entry.mission_id === requestedMissionId)
-    if (!mission || !mission.completed || mission.claimed) return { error: [400, 2000, { reason: 'mission-not-claimable' }] }
+    if (!mission || !mission.completed || mission.claimed) return { error: [400, 2300, { reason: 'mission-not-claimable' }] }
     mission.claimed = true
     mission.claim_state = 2
     state.points += missionPoints(definition)
-    repo.setState(userId, NS, stateKey(seasonId), state)
+    repo.setState(userId, NS, stateKey(state.season_id), state)
     return { data: { resources: [] } }
   }
 
   if (path === '/game/battle-pass/claim-track-tier') {
-    const seasonId = body?.season_id
     const tierId = body?.tier_id
-    if (typeof seasonId !== 'string' || !Number.isInteger(tierId)) return { error: [400, 2200] }
-    const pass = battlePassById(runtime, seasonId)
-    if (!available(runtime, pass)) return { error: [400, 2000] }
+    if (!Number.isInteger(tierId)) return { error: [400, 2200, { reason: 'tier-required' }] }
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
     const tier = tierDefinitions(pass).find(entry => entry?.id === tierId)
-    if (!tier) return { error: [400, 2000] }
-    const state = battlePassState(repo, userId, runtime, seasonId)
-    if (!state) return { error: [400, 2000, { reason: 'season-not-started' }] }
+    if (!tier) return { error: [400, 2200, { reason: 'tier-not-found' }] }
     const threshold = Math.max(0, Number(tier.point_threshold) || 0)
-    if (state.points < threshold) return { error: [400, 2000, { reason: 'insufficient-points' }] }
+    if (state.points < threshold) return { error: [400, 2300, { reason: 'insufficient-points' }] }
 
     const grants = []
     repo.tx(() => {
-      const rewards = Array.isArray(tier.rewards) ? tier.rewards : []
-      for (const reward of rewards) {
-        const rewardId = reward?.id
-        if (!Number.isInteger(rewardId)) continue
-        if (alreadyClaimed(state, tierId, rewardId)) continue
-        if (reward.requires_premium && state.premium_state < 1) continue
-        const resources = reward?.reward_items?.resources
-        if (Array.isArray(resources)) {
-          for (const resource of resources) {
-            grants.push(giveGameResource(repo, userId, resource, runtime).wire)
-          }
-        }
-        state.reward_claims.push({ tier_id: tierId, reward_id: rewardId })
+      for (const reward of Array.isArray(tier.rewards) ? tier.rewards : []) {
+        grantReward(grants, repo, userId, state, tierId, reward, runtime)
       }
-      repo.setState(userId, NS, stateKey(seasonId), state)
+      repo.setState(userId, NS, stateKey(state.season_id), state)
     })
-
     return { data: { resources: grants } }
+  }
+
+  if (path === '/game/battle-pass/claim-track-reward') {
+    const tierId = body?.tier_id
+    const rewardId = body?.reward_id
+    if (!Number.isInteger(tierId)) return { error: [400, 2200, { reason: 'tier-required' }] }
+    if (!Number.isInteger(rewardId)) return { error: [400, 2200, { reason: 'reward-required' }] }
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
+    const tier = tierDefinitions(pass).find(entry => entry?.id === tierId)
+    if (!tier) return { error: [400, 2200, { reason: 'tier-not-found' }] }
+    const reward = (Array.isArray(tier.rewards) ? tier.rewards : []).find(entry => entry?.id === rewardId)
+    if (!reward) return { error: [400, 2200, { reason: 'reward-not-found' }] }
+    if (state.points < Math.max(0, Number(tier.point_threshold) || 0)) {
+      return { error: [400, 2300, { reason: 'insufficient-points' }] }
+    }
+    if (alreadyClaimed(state, tierId, rewardId)) return { error: [400, 2300, { reason: 'reward-already-claimed' }] }
+    if (reward.requires_premium && state.premium_state < 2) {
+      return { error: [400, 2300, { reason: 'premium-required' }] }
+    }
+    const grants = []
+    repo.tx(() => {
+      grantReward(grants, repo, userId, state, tierId, reward, runtime)
+      repo.setState(userId, NS, stateKey(state.season_id), state)
+    })
+    return { data: { resources: grants } }
+  }
+
+  if (path === '/game/battle-pass/claim-track-all') {
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
+    let resources
+    repo.tx(() => {
+      resources = grantEarnedRewards(repo, userId, state, pass, runtime)
+      repo.setState(userId, NS, stateKey(state.season_id), state)
+    })
+    if (resources.length === 0) return { error: [400, 2300, { reason: 'nothing-to-claim' }] }
+    return { data: { resources } }
+  }
+
+  if (path === '/game/battle-pass/prestige') {
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
+    const track = pass?.args?.reward_track || {}
+    const tiers = sortedTiers(pass)
+    const maxThreshold = tiers.length > 0 ? Math.max(0, Number(tiers[tiers.length - 1].point_threshold) || 0) : null
+    if (maxThreshold === null || state.points < maxThreshold) {
+      return { error: [400, 2300, { reason: 'prestige-not-available' }] }
+    }
+    if (track.prestige_requires_premium && state.premium_state < 2) {
+      return { error: [400, 2300, { reason: 'premium-required' }] }
+    }
+    const pointStart = Number(track.prestige_point_start)
+    const increment = Number(track.prestige_point_increment)
+    if (!Number.isFinite(pointStart) || !Number.isFinite(increment)) {
+      return { error: [400, 2300, { reason: 'prestige-config-missing' }] }
+    }
+    const pool = Array.isArray(track.prestige_reward_pool) ? track.prestige_reward_pool : []
+    const grants = []
+    repo.tx(() => {
+      for (const reward of pool) {
+        for (const resource of rewardResources(reward)) {
+          grants.push(giveGameResource(repo, userId, resource, runtime).wire)
+        }
+      }
+      state.prestige = (Number(state.prestige) || 0) + 1
+      // Novo ciclo: pontos voltam ao base do prestige; claims zeram porque os
+      // tiers podem ser conquistados de novo (A VERIFICAR na captura).
+      state.points = pointStart + (state.prestige - 1) * increment
+      state.reward_claims = []
+      repo.setState(userId, NS, stateKey(state.season_id), state)
+    })
+    return { data: { resources: grants } }
+  }
+
+  if (path === '/game/battle-pass/buy-next-track-tier') {
+    const check = activeSeasonState(repo, userId, runtime, body?.season_id)
+    if (check.error) return { error: check.error }
+    const { pass, state } = check
+    const tiers = sortedTiers(pass)
+    const next = tiers.find(entry => Number(entry?.point_threshold) > state.points)
+    if (!next) return { error: [400, 2300, { reason: 'no-next-tier' }] }
+    const rate = pass?.args?.points_exchange_rate
+    const outPoints = Number(rate?.out_points)
+    const inAmount = Math.max(1, Number(rate?.in_amount) || 1)
+    const rid = currencyRidFor(rate?.in_currency ?? rate?.inCurrency, runtime)
+    if (!Number.isFinite(outPoints) || outPoints <= 0 || rid === null) {
+      return { error: [400, 2300, { reason: 'point-exchange-rate-missing' }] }
+    }
+    const needed = Number(next.point_threshold) - state.points
+    const cost = Math.ceil(needed / outPoints) * inAmount
+    if (repo.balance(userId, rid) < cost) return { error: [400, 2300, { reason: 'insufficient-currency' }] }
+    repo.tx(() => {
+      repo.addCurrency(userId, rid, -cost)
+      state.points = Number(next.point_threshold)
+      repo.setState(userId, NS, stateKey(state.season_id), state)
+    })
+    return { data: {} }
   }
 
   return null

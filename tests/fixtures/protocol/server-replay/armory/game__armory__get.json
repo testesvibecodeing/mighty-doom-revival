@@ -1,7 +1,7 @@
 {
   "endpoint": "game/armory/get",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T11:44:00Z",
+  "captured_at": "2026-08-17T12:04:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
