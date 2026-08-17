@@ -135,11 +135,22 @@ function currencyPacks (runtime) {
 
 export function storeItemsWire (runtime) {
   // GetItemsResponse/GetOfferItemsResponse{storeItems, iapItems, adItems};
-  // IAP desligado por design no Revival — iap_items sempre vazio.
+  // IAP desligado por design no Revival — iap_items sempre vazio. Pacote cuja
+  // tag ainda não resolve para rid (game-data ausente) fica de fora do wire
+  // até o game-data carregar — o painel continua exibindo via preview.
+  const wireable = packs => packs
+    .map(pack => {
+      try {
+        return packToStoreItem(pack, runtime)
+      } catch {
+        return null
+      }
+    })
+    .filter(Boolean)
   return {
-    store_items: currencyPacks(runtime).map(pack => packToStoreItem(pack, runtime)),
+    store_items: wireable(currencyPacks(runtime)),
     iap_items: [],
-    ad_items: adPacks(runtime).map(pack => packToStoreItem(pack, runtime))
+    ad_items: wireable(adPacks(runtime))
   }
 }
 

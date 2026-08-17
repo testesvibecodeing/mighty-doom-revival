@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 
 import { classifyResource, giveGameResource } from './game-data-model.js'
 import { resolveResource } from './config.js'
+import { panelResourceByRef, panelResourceInfo } from './assets.js'
 
 // Kinds aceitos numa concessão explícita de recurso (giveGameResource).
 const GRANT_KINDS = new Set(['currency', 'energy', 'cosmetic', 'entitlement', 'weapon', 'equipment', 'launcher', 'ultimate', 'slayer'])
@@ -256,53 +257,73 @@ function eventStatus (event, now) {
   return 'running'
 }
 
-function resourceName (rid, runtime) {
-  const definition = runtime.index.byId.get(Number(rid))
-  return definition?.display_name || definition?.name || definition?.tag || definition?.key || `Recurso ${rid}`
-}
-
 export function publicPack (pack, runtime) {
-  let preview = null
-  try {
-    preview = {
-      cost: (pack.cost || []).map(entry => ({
-        rid: resolveResource(entry.resource ?? entry.rid, runtime),
-        name: resourceName(resolveResource(entry.resource ?? entry.rid, runtime), runtime),
-        amount: Number(entry.amount || 0)
-      })),
-      contents: (pack.contents || []).map(entry => ({
-        rid: resolveResource(entry.resource ?? entry.rid, runtime),
-        name: resourceName(resolveResource(entry.resource ?? entry.rid, runtime), runtime),
-        amount: Number(entry.amount || 0)
-      }))
+  // Preview por entrada: um recurso que ainda não resolve para rid (game-data
+  // ausente nesta instância) continua exibindo nome/ícone via tag canônica,
+  // em vez de derrubar o preview do pacote inteiro.
+  const entryView = (entry, kindHint) => {
+    const ref = entry.resource ?? entry.rid
+    let rid = null
+    try {
+      rid = resolveResource(ref, runtime)
+    } catch {
+      rid = null
     }
-  } catch {
-    preview = null
+    const info = rid !== null
+      ? panelResourceInfo(rid, runtime, kindHint)
+      : panelResourceByRef(String(ref), runtime, kindHint)
+    return { rid, name: info.name, icon: info.icon, kind: info.kind, amount: Number(entry.amount || 0) }
+  }
+  const preview = {
+    cost: (pack.cost || []).map(entry => entryView(entry, 'currency')),
+    contents: (pack.contents || []).map(entry => entryView(entry, null))
   }
   return { ...pack, preview }
+}
+
+// Referência de recurso válida para config de pack: número (rid) ou string
+// (tag). Sem game-data a tag fica pendente de resolução — o jogo resolve
+// quando o game-data estiver carregado; o painel já exibe nome/ícone dela.
+function packRef (entry) {
+  const ref = entry.resource ?? entry.rid
+  if (Number.isInteger(ref)) return ref
+  if (typeof ref === 'string' && ref.trim()) return ref.trim().slice(0, 96)
+  if (ref && typeof ref === 'object' && (Number.isInteger(ref.rid) || Number.isInteger(ref.id))) return Number(ref.rid ?? ref.id)
+  throw new Error('Recurso inválido no pacote')
+}
+
+function refRid (ref, runtime) {
+  try {
+    return resolveResource(ref, runtime)
+  } catch {
+    return null
+  }
 }
 
 function sanitizeCost (input, runtime) {
   if (!Array.isArray(input)) return []
   return input.map(entry => {
-    const rid = resolveResource(entry.resource ?? entry.rid, runtime)
+    const ref = packRef(entry)
+    const rid = refRid(ref, runtime)
     const amount = Math.floor(Number(entry.amount))
     if (!Number.isFinite(amount) || amount < 0) throw new Error('Valor de custo inválido')
-    // 'unknown' = sem game-data para classificar; só bloqueia quando sabe
-    // com certeza que o recurso não é uma moeda.
-    const kind = classifyResource(rid, runtime, entry.kind)
+    // 'unknown' = sem game-data para classificar (tag pendente); só bloqueia
+    // quando sabe com certeza que o recurso não é uma moeda.
+    const kind = rid !== null ? classifyResource(rid, runtime, entry.kind) : 'unknown'
     if (kind !== 'currency' && kind !== 'unknown') throw new Error(`O recurso não é uma moeda (rid=${rid})`)
-    return { resource: entry.resource ?? entry.rid, kind: 'currency', amount }
+    return { resource: ref, kind: 'currency', amount }
   })
 }
 
 function sanitizeContents (input, runtime) {
   if (!Array.isArray(input)) return []
   return input.map(entry => {
-    const rid = resolveResource(entry.resource ?? entry.rid, runtime)
+    const ref = packRef(entry)
+    const rid = refRid(ref, runtime)
     const amount = Math.floor(Number(entry.amount ?? 1))
     if (!Number.isFinite(amount) || amount <= 0) throw new Error('Quantidade inválida')
-    const row = { resource: entry.resource ?? entry.rid, kind: entry.kind || classifyResource(rid, runtime), amount }
+    const kind = entry.kind || (rid !== null ? classifyResource(rid, runtime) : 'unknown')
+    const row = { resource: ref, kind, amount }
     if (entry.level !== undefined) row.level = Math.max(1, Math.floor(Number(entry.level) || 1))
     if (entry.tier !== undefined) row.tier = Math.floor(Number(entry.tier) || 0)
     return row

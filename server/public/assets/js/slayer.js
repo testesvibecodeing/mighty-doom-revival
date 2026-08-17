@@ -49,6 +49,86 @@ async function boot () {
   showRecoveryBanner()
 }
 
+/* ============ ícones do jogo ============ */
+const KIND_LABELS = {
+  weapon: 'Arma', equipment: 'Equipamento', launcher: 'Launcher',
+  ultimate: 'Ultimate', slayer: 'Slayer', cosmetic: 'Cosmético',
+  entitlement: 'Benefício', currency: 'Moeda', energy: 'Energia', crate: 'Caixa'
+}
+
+function iconImg (resource, cls = '') {
+  const src = escapeHtml(resource.icon || '')
+  const fallback = escapeHtml(resource.fallback || '/assets/img/kinds/pack.svg')
+  const alt = escapeHtml(resource.name || '')
+  return `<img class="game-icon ${cls}" src="${src}" data-fallback="${fallback}" alt="${alt}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback)this.src=this.dataset.fallback;else this.style.visibility='hidden'">`
+}
+
+/* ============ inventário ============ */
+const SLOT_LABELS = {
+  slot_primary_weapon: 'Arma primária', slot_secondary_weapon: 'Arma secundária',
+  slot_slayer: 'Slayer', slot_launcher: 'Launcher', slot_ultimate: 'Ultimate',
+  slot_helmet: 'Capacete', slot_chestplate: 'Peitoral', slot_gauntlets: 'Luvas',
+  slot_boots: 'Botas'
+}
+
+let inventoryFilter = 'all'
+
+function renderInventory () {
+  const { snapshot } = me
+  const items = snapshot.items || []
+  const equipped = new Set((snapshot.equipped || []).map(slot => slot.item_id))
+  const equippedSlots = new Map((snapshot.equipped || []).map(slot => [slot.item_id, slot.slot_id]))
+
+  const byKind = new Map()
+  for (const item of items) {
+    const kind = item.kind || 'other'
+    if (!byKind.has(kind)) byKind.set(kind, [])
+    byKind.get(kind).push(item)
+  }
+
+  const chips = [['all', `Tudo (${items.length})`]]
+  for (const [kind, list] of byKind) chips.push([kind, `${KIND_LABELS[kind] || kind} (${list.length})`])
+  $('#inventoryFilters').innerHTML = chips.map(([key, label]) =>
+    `<button class="chip ${inventoryFilter === key ? 'active' : ''}" data-filter="${escapeHtml(key)}">${escapeHtml(label)}</button>`).join('')
+
+  const visible = inventoryFilter === 'all' ? items : items.filter(item => (item.kind || 'other') === inventoryFilter)
+  $('#inventoryCount').textContent = `${items.length} itens`
+  $('#inventoryGrid').innerHTML = visible.length
+    ? visible.map(item => {
+      const isEquipped = equipped.has(item.id)
+      const slotLabel = isEquipped ? SLOT_LABELS[equippedSlots.get(item.id)] || 'Equipado' : null
+      return `<article class="item-card ${isEquipped ? 'equipped' : ''}">
+        <div class="item-art">${iconImg(item)}${isEquipped ? `<span class="equip-badge"><i class="fa-solid fa-check"></i> ${escapeHtml(slotLabel)}</span>` : ''}</div>
+        <span class="item-kind">${escapeHtml(KIND_LABELS[item.kind] || item.kind)}</span>
+        <h3>${escapeHtml(item.name)}</h3>
+        <div class="item-meta">
+          ${item.tier ? `<span>T${item.tier}</span>` : ''}
+          ${item.level > 1 ? `<span>Nv ${item.level}</span>` : ''}
+          ${item.amount > 1 ? `<span>x${formatNumber(item.amount)}</span>` : ''}
+          ${!item.tier && item.level <= 1 && item.amount <= 1 ? '<span>Base</span>' : ''}
+        </div>
+      </article>`
+    }).join('')
+    : `<p class="empty">${items.length ? 'Nenhum item nesta categoria.' : 'Seu inventário ainda está vazio — compre na loja ou jogue para receber itens.'}</p>`
+
+  renderCollectionGrid('#cosmeticGrid', snapshot.cosmetics, 'Nenhum cosmético desbloqueado ainda.')
+  renderCollectionGrid('#entitlementGrid', snapshot.entitlements, 'Nenhum benefício liberado ainda.')
+}
+
+function renderCollectionGrid (selector, rows, emptyText) {
+  const list = rows || []
+  $(selector).innerHTML = list.length
+    ? list.map(row => `<article class="collection-card">${iconImg(row)}<span>${escapeHtml(row.name)}</span></article>`).join('')
+    : `<p class="empty">${emptyText}</p>`
+}
+
+$('#inventoryFilters').addEventListener('click', event => {
+  const chip = event.target.closest('[data-filter]')
+  if (!chip) return
+  inventoryFilter = chip.dataset.filter
+  renderInventory()
+})
+
 function renderPlayer () {
   const { account, snapshot } = me
   $('#heroName').textContent = account.display_name || `Slayer #${account.id}`
@@ -63,16 +143,13 @@ function renderPlayer () {
   $('#metricCoins').textContent = formatNumber(coins?.amount)
   const resources = [...(snapshot.currencies || []), ...(snapshot.energies || [])]
   $('#resourceList').innerHTML = resources.length
-    ? resources.map(row => `<div class="resource-row"><span>${escapeHtml(row.name)}</span><strong>${formatNumber(row.amount)}</strong></div>`).join('')
+    ? resources.map(row => `<div class="resource-row">${iconImg(row, 'inline')}<span style="flex:1">${escapeHtml(row.name)}</span><strong>${formatNumber(row.amount)}</strong></div>`).join('')
     : '<p class="empty">Nenhum recurso registrado ainda.</p>'
   const stats = progression.stats || []
   $('#statsList').innerHTML = stats.length
     ? stats.slice(0, 10).map(row => `<div class="stat-row"><span>${escapeHtml(row.tag || row.id || 'Estatística')}</span><strong>${formatNumber(row.value)}</strong></div>`).join('')
     : '<p class="empty">Jogue uma partida para gerar estatísticas.</p>'
-  $('#inventoryCount').textContent = `${snapshot.items?.length || 0} itens`
-  $('#inventoryGrid').innerHTML = snapshot.items?.length
-    ? snapshot.items.map(item => `<article class="item-card"><span class="item-kind">${escapeHtml(item.kind)}</span><h3>${escapeHtml(item.name)}</h3><div class="item-meta"><span>Nível ${item.level || 1}</span><span>x${item.amount || 1}</span></div></article>`).join('')
-    : '<p class="empty">Seu inventário ainda está vazio.</p>'
+  renderInventory()
   $('#profileName').value = account.display_name || ''
   $('#profileEmail').value = account.email || ''
 }
@@ -123,13 +200,19 @@ async function loadStore () {
   const { packs } = await api('/account/store')
   $('#storeCount').textContent = `${packs.length} pacotes`
   $('#storeList').innerHTML = packs.length ? packs.map(pack => {
-    const cost = (pack.preview?.cost || []).map(entry => `<span class="cost-pill"><i class="fa-solid fa-coins"></i> ${escapeHtml(entry.name)} · ${formatNumber(entry.amount)}</span>`).join('') || '<span class="cost-pill"><i class="fa-solid fa-gift"></i> Grátis</span>'
-    const contents = (pack.preview?.contents || []).map(entry => `<span>${escapeHtml(entry.name)} <strong>x${formatNumber(entry.amount)}</strong></span>`).join('')
+    const costEntries = pack.preview?.cost || []
+    const contentEntries = pack.preview?.contents || []
+    const cost = costEntries.map(entry => `<span class="cost-pill">${iconImg(entry, 'inline')} ${escapeHtml(entry.name)} · ${formatNumber(entry.amount)}</span>`).join('') || '<span class="cost-pill"><i class="fa-solid fa-gift"></i> Grátis</span>'
+    const contents = contentEntries.map(entry => `<span>${iconImg(entry, 'inline thumb')}<b style="flex:1">${escapeHtml(entry.name)}</b><strong>x${formatNumber(entry.amount)}</strong></span>`).join('')
     const quota = pack.quota ? `<span class="tag">Limite: ${pack.quota.max}x ${pack.quota.period === 'daily' ? 'por dia' : pack.quota.period === 'weekly' ? 'por semana' : 'total'}</span>` : ''
+    const cover = contentEntries[0] || costEntries[0] || null
     return `<article class="store-card">
-      <div class="store-head"><h3>${escapeHtml(pack.tag)}</h3>${quota}</div>
-      <div class="store-cost">${cost}</div>
-      ${contents ? `<div class="store-contents">${contents}</div>` : ''}
+      <div class="store-cover">${iconImg(cover || {}, '')}</div>
+      <div class="store-body">
+        <div class="store-head"><h3>${escapeHtml(pack.tag)}</h3>${quota}</div>
+        <div class="store-cost">${cost}</div>
+        ${contents ? `<div class="store-contents">${contents}</div>` : ''}
+      </div>
     </article>`
   }).join('') : '<p class="empty">Nenhum pacote ativo na loja desta instância.</p>'
 }

@@ -22,6 +22,7 @@ import { playerStatsWire, incrementPlayerStats } from './stats.js'
 import { activePacks, packToStoreItem, purchasePack } from './store.js'
 import { handleTutorialRequest, tutorialProgressionWire } from './tutorial.js'
 import { createSiteRouter } from './site.js'
+import { panelResourceInfo } from './assets.js'
 
 const serverRoot = resolve(import.meta.dirname, '..')
 const envPath = resolve(serverRoot, '.env')
@@ -159,20 +160,18 @@ function publicAccount (user) {
   }
 }
 
-function resourceName (rid) {
-  const definition = runtime.index.byId.get(Number(rid))
-  return definition?.display_name || definition?.name || definition?.tag || definition?.key || `Recurso ${rid}`
-}
-
 function accountSnapshot (user) {
   const items = repo.items(user.id).map(item => {
     let metadata = {}
     try { metadata = JSON.parse(item.metadata_json || '{}') } catch {}
+    const info = panelResourceInfo(item.rid, runtime, item.kind)
     return {
       id: item.id,
       rid: item.rid,
-      name: resourceName(item.rid),
-      kind: item.kind,
+      name: info.name,
+      icon: info.icon,
+      tag: info.tag,
+      kind: info.kind,
       level: item.level,
       tier: item.tier,
       amount: item.amount,
@@ -180,12 +179,12 @@ function accountSnapshot (user) {
     }
   })
   return {
-    currencies: repo.currencies(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
-    energies: repo.energies(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
+    currencies: repo.currencies(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'currency') })),
+    energies: repo.energies(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'energy') })),
     items,
     equipped: repo.slots(user.id),
-    cosmetics: repo.cosmetics(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
-    entitlements: repo.entitlements(user.id).map(row => ({ ...row, name: resourceName(row.rid) })),
+    cosmetics: repo.cosmetics(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'cosmetic') })),
+    entitlements: repo.entitlements(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'entitlement') })),
     progression: {
       level: user.level,
       chapters: user.chapter_progression,

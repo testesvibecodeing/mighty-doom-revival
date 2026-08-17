@@ -2,28 +2,125 @@
   "packs": [
     {
       "id": 900001,
-      "tag": "revival_example_pack",
-      "active": false,
+      "tag": "revival_starter_weapon_pack",
+      "active": true,
       "display_type": 0,
       "priority": 100,
       "cost": [
-        {
-          "resource": "SUBSTITUIR_TAG_DA_MOEDA_DO_JOGO",
-          "kind": "currency",
-          "amount": 2500
-        }
+        { "resource": "coins", "kind": "currency", "amount": 2500 }
       ],
       "contents": [
-        {
-          "resource": "SUBSTITUIR_TAG_DO_RECURSO",
-          "kind": "currency",
-          "amount": 100
-        }
+        { "resource": "heavy_cannon", "kind": "weapon", "amount": 1, "level": 2, "tier": 1 },
+        { "resource": "launcher_frag_grenade", "kind": "launcher", "amount": 1, "level": 1 }
       ],
-      "quota": {
-        "period": "daily",
-        "max": 1
-      }
+      "quota": { "period": "lifetime", "max": 1 }
+    },
+    {
+      "id": 900002,
+      "tag": "revival_coin_pack_small",
+      "active": true,
+      "display_type": 0,
+      "priority": 90,
+      "cost": [
+        { "resource": "crystals", "kind": "currency", "amount": 50 }
+      ],
+      "contents": [
+        { "resource": "coins", "kind": "currency", "amount": 10000 }
+      ],
+      "quota": { "period": "daily", "max": 3 }
+    },
+    {
+      "id": 900003,
+      "tag": "revival_coin_pack_large",
+      "active": true,
+      "display_type": 0,
+      "priority": 80,
+      "cost": [
+        { "resource": "crystals", "kind": "currency", "amount": 180 }
+      ],
+      "contents": [
+        { "resource": "coins", "kind": "currency", "amount": 45000 }
+      ],
+      "quota": { "period": "daily", "max": 2 }
+    },
+    {
+      "id": 900004,
+      "tag": "revival_weapon_crate_pack",
+      "active": true,
+      "display_type": 0,
+      "priority": 70,
+      "cost": [
+        { "resource": "coins", "kind": "currency", "amount": 8000 }
+      ],
+      "contents": [
+        { "resource": "key_weapon_crate", "kind": "currency", "amount": 3 },
+        { "resource": "key_equipment_crate", "kind": "currency", "amount": 3 },
+        { "resource": "tech", "kind": "currency", "amount": 500 }
+      ],
+      "quota": { "period": "weekly", "max": 5 }
+    },
+    {
+      "id": 900005,
+      "tag": "revival_barrage_gear_pack",
+      "active": true,
+      "display_type": 0,
+      "priority": 60,
+      "cost": [
+        { "resource": "coins", "kind": "currency", "amount": 15000 }
+      ],
+      "contents": [
+        { "resource": "helmet_barrage", "kind": "equipment", "amount": 1 },
+        { "resource": "chest_barrage", "kind": "equipment", "amount": 1 },
+        { "resource": "gauntlets_barrage", "kind": "equipment", "amount": 1 },
+        { "resource": "boots_barrage", "kind": "equipment", "amount": 1 }
+      ],
+      "quota": null
+    },
+    {
+      "id": 900006,
+      "tag": "revival_gold_slayer_pack",
+      "active": true,
+      "display_type": 0,
+      "priority": 50,
+      "cost": [
+        { "resource": "crystals", "kind": "currency", "amount": 320 }
+      ],
+      "contents": [
+        { "resource": "gold_slayer", "kind": "slayer", "amount": 1, "level": 1 },
+        { "resource": "tech", "kind": "currency", "amount": 2000 }
+      ],
+      "quota": { "period": "lifetime", "max": 1 }
+    },
+    {
+      "id": 900007,
+      "tag": "revival_ultimate_pack",
+      "active": true,
+      "display_type": 0,
+      "priority": 40,
+      "cost": [
+        { "resource": "coins", "kind": "currency", "amount": 30000 }
+      ],
+      "contents": [
+        { "resource": "chainsaw", "kind": "ultimate", "amount": 1, "level": 1 },
+        { "resource": "bfg", "kind": "ultimate", "amount": 1, "level": 1 }
+      ],
+      "quota": { "period": "lifetime", "max": 1 }
+    },
+    {
+      "id": 900008,
+      "tag": "revival_event_skin_pack",
+      "active": true,
+      "display_type": 0,
+      "priority": 30,
+      "cost": [
+        { "resource": "crystals", "kind": "currency", "amount": 150 }
+      ],
+      "contents": [
+        { "resource": "cosmetic_heavy_cannon_praetor", "kind": "cosmetic", "amount": 1 },
+        { "resource": "cosmetic_plasma_rifle_astro", "kind": "cosmetic", "amount": 1 },
+        { "resource": "cosmetic_ballista_battlemech", "kind": "cosmetic", "amount": 1 }
+      ],
+      "quota": { "period": "lifetime", "max": 1 }
     }
   ]
 }
