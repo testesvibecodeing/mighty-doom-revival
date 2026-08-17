@@ -47,6 +47,7 @@ export function loadRuntimeConfig () {
   const revivalPath = pathFromEnv('REVIVAL_CONFIG_PATH', 'config/revival.json')
   const packsPath = pathFromEnv('PACKS_CONFIG_PATH', 'config/packs.json')
   const eventsPath = pathFromEnv('EVENTS_CONFIG_PATH', 'config/events.json')
+  const sitePath = pathFromEnv('SITE_CONFIG_PATH', 'config/site.json')
 
   const gameData = readJson(gameDataPath, null)
   const revival = readJson(revivalPath, {
@@ -59,17 +60,39 @@ export function loadRuntimeConfig () {
   })
   const packs = readJson(packsPath, { packs: [] })
   const events = readJson(eventsPath, { events: [] })
+  // Personalização do site público editada pelo Super Admin no painel
+  // (/slayer). O site lê em /revival/site e aplica em tempo real.
+  const siteStored = readJson(sitePath, {})
+  const site = {
+    hero_title: text(siteStored.hero_title, 'O clássico ressuscitou.<br>100% offline. 100% seu.', 200),
+    hero_description: text(siteStored.hero_description, 'Reviva toda a ação, progressão, eventos e recompensas do Mighty DOOM em um servidor controlado por você. Sem pay-to-win e sem depender dos serviços oficiais encerrados.', 800),
+    github_url: text(siteStored.github_url, 'https://github.com/testesvibecodeing/mighty-doom-revival', 300),
+    show_github: bool(siteStored.show_github, true),
+    show_status: bool(siteStored.show_status, true),
+    show_features: bool(siteStored.show_features, true),
+    show_download: bool(siteStored.show_download, true),
+    show_faq: bool(siteStored.show_faq, true)
+  }
   const index = gameData ? indexGameData(gameData) : { byTag: new Map(), byId: new Map() }
 
   return {
     root: ROOT,
-    paths: { gameDataPath, revivalPath, packsPath, eventsPath },
+    paths: { gameDataPath, revivalPath, packsPath, eventsPath, sitePath },
     gameData,
     revival,
     packs: Array.isArray(packs.packs) ? packs.packs : [],
     events: Array.isArray(events.events) ? events.events : [],
+    site,
     index
   }
+}
+
+function text (value, fallback, limit) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : fallback
+}
+
+function bool (value, fallback) {
+  return typeof value === 'boolean' ? value : fallback
 }
 
 export function resolveResource (ref, runtime) {

@@ -216,6 +216,38 @@ function applyConfig () {
   })
 }
 
+// Personalização vinda do painel do Super Admin (/slayer): textos do hero,
+// GitHub e quais seções do site aparecem. Sem config salva, o site fica
+// exatamente como está no HTML.
+async function applySiteCustomization () {
+  try {
+    const response = await fetch(`${ORIGIN}/revival/site`, { cache: 'no-store' })
+    if (!response.ok) return
+    const { site } = await response.json()
+    if (!site) return
+    if (site.hero_title) $('#heroTitle').innerHTML = site.hero_title
+    if (site.hero_description) $('#heroDescription').textContent = site.hero_description
+    for (const id of ['#githubBtn', '#footerGithub']) {
+      const el = $(id)
+      if (!el) continue
+      if (site.show_github === false) el.style.display = 'none'
+      else if (site.github_url) el.href = site.github_url
+    }
+    for (const [flag, section] of [
+      ['show_status', 'status'],
+      ['show_features', 'recursos'],
+      ['show_download', 'download'],
+      ['show_faq', 'faq']
+    ]) {
+      if (site[flag] !== false) continue
+      $(`#${section}`)?.style.setProperty('display', 'none')
+      $(`#nav a[href="#${section}"]`)?.style.setProperty('display', 'none')
+    }
+  } catch {
+    // Sem contato com o servidor: o site estático permanece como está.
+  }
+}
+
 function setupUi () {
   const menu = $('#mobileMenu')
   const nav = $('#nav')
@@ -252,6 +284,7 @@ function setupUi () {
 }
 
 applyConfig()
+applySiteCustomization()
 setupUi()
 try {
   startHellScene($('#hell-canvas'))

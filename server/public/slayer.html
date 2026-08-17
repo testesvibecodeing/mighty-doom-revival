@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080403">
+  <meta name="description" content="Painel do Slayer — progresso, itens, loja e administração do servidor Revival">
+  <title>Painel do Slayer — Revival</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A5%3C/text%3E/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <link rel="stylesheet" href="assets/css/slayer.css">
+</head>
+<body>
+  <div class="app-glow"></div>
+
+  <header class="app-topbar">
+    <a class="app-brand" href="/"><span>REVIVAL</span><strong>SLAYER PANEL</strong></a>
+    <div class="topbar-actions">
+      <a class="icon-link" href="/" title="Site principal" aria-label="Site principal"><i class="fa-solid fa-globe"></i></a>
+      <button class="icon-link" id="logoutTop" title="Sair da conta" aria-label="Sair da conta"><i class="fa-solid fa-right-from-bracket"></i></button>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <!-- ===================== INÍCIO ===================== -->
+    <section class="tab-panel active" id="panel-home">
+      <div class="hero-card">
+        <div>
+          <span class="eyebrow">// SLAYER STATUS</span>
+          <h1 id="heroName">Carregando…</h1>
+          <p class="hero-meta">ID <strong id="heroId">--</strong> · membro desde <strong id="heroCreated">--</strong></p>
+        </div>
+        <span class="admin-badge" id="adminBadge" hidden><i class="fa-solid fa-shield-halved"></i> SUPER ADMIN</span>
+      </div>
+
+      <div class="recovery-banner" id="recoveryBanner" hidden>
+        <i class="fa-solid fa-key"></i>
+        <div class="recovery-copy">
+          <b>Guarde seu código de recuperação</b>
+          <code id="recoveryCode">--</code>
+          <small>Ele não é exibido novamente depois de fechar esta mensagem.</small>
+        </div>
+        <button class="mini-action" id="copyRecovery"><i class="fa-solid fa-copy"></i> Copiar</button>
+      </div>
+
+      <h2 class="section-title"><i class="fa-solid fa-bullhorn"></i> Avisos do servidor</h2>
+      <div class="notice-list" id="noticeList"></div>
+
+      <div class="metric-grid">
+        <article class="metric-card accent"><small>NÍVEL</small><strong id="metricLevel">--</strong><span id="metricChapters">--</span></article>
+        <article class="metric-card"><small>MOEDAS</small><strong id="metricCoins">--</strong><span>saldo disponível</span></article>
+        <article class="metric-card"><small>ITENS</small><strong id="metricItems">--</strong><span>no inventário</span></article>
+        <article class="metric-card"><small>TENTATIVAS</small><strong id="metricAttempts">--</strong><span>runs registradas</span></article>
+      </div>
+
+      <div class="card"><div class="card-title"><span>Moedas e recursos</span><i class="fa-solid fa-coins"></i></div><div class="resource-list" id="resourceList"></div></div>
+      <div class="card"><div class="card-title"><span>Estatísticas</span><i class="fa-solid fa-chart-simple"></i></div><div class="stats-list" id="statsList"></div></div>
+    </section>
+
+    <!-- ===================== INVENTÁRIO ===================== -->
+    <section class="tab-panel" id="panel-inventory">
+      <div class="panel-heading">
+        <div><span class="eyebrow">// COLLECTION</span><h2>Seu inventário</h2></div>
+        <span class="panel-count" id="inventoryCount">-- itens</span>
+      </div>
+      <div class="inventory-grid" id="inventoryGrid"></div>
+    </section>
+
+    <!-- ===================== LOJA ===================== -->
+    <section class="tab-panel" id="panel-store">
+      <div class="panel-heading">
+        <div><span class="eyebrow">// STORE</span><h2>Loja do servidor</h2></div>
+        <span class="panel-count" id="storeCount">-- pacotes</span>
+      </div>
+      <p class="hint">Pacotes ativos nesta instância — preços apenas em moedas do jogo. As compras acontecem dentro do próprio jogo.</p>
+      <div class="store-list" id="storeList"></div>
+    </section>
+
+    <!-- ===================== ADMIN ===================== -->
+    <section class="tab-panel" id="panel-admin" hidden>
+      <div class="panel-heading">
+        <div><span class="eyebrow">// SUPER ADMIN</span><h2>Administração</h2></div>
+      </div>
+
+      <nav class="chip-nav" id="adminSubnav" aria-label="Seções de administração">
+        <button class="chip active" data-sub="overview"><i class="fa-solid fa-gauge-high"></i> Visão</button>
+        <button class="chip" data-sub="users"><i class="fa-solid fa-users"></i> Usuários</button>
+        <button class="chip" data-sub="packs"><i class="fa-solid fa-tags"></i> Loja e preços</button>
+        <button class="chip" data-sub="events"><i class="fa-solid fa-calendar-days"></i> Eventos</button>
+        <button class="chip" data-sub="notices"><i class="fa-solid fa-bullhorn"></i> Avisos</button>
+        <button class="chip" data-sub="site"><i class="fa-solid fa-palette"></i> Site</button>
+      </nav>
+
+      <div class="admin-sub active" id="admin-overview">
+        <div class="metric-grid" id="adminTiles"></div>
+        <div class="card" id="apkCard">
+          <div class="card-title"><span>APK publicado</span><i class="fa-brands fa-android"></i></div>
+          <div class="kv-list" id="apkInfo"></div>
+          <button class="secondary-action wide" id="notifyApk"><i class="fa-solid fa-circle-arrow-up"></i> Notificar jogadores sobre novo APK</button>
+        </div>
+      </div>
+
+      <div class="admin-sub" id="admin-users" hidden>
+        <div class="search-row">
+          <input id="userSearch" placeholder="Buscar por ID, nome ou e-mail…" autocomplete="off">
+          <button class="secondary-action" id="userSearchButton"><i class="fa-solid fa-magnifying-glass"></i></button>
+        </div>
+        <div class="user-list" id="userList"></div>
+      </div>
+
+      <div class="admin-sub" id="admin-packs" hidden>
+        <button class="secondary-action wide" id="newPackButton"><i class="fa-solid fa-plus"></i> Criar novo pacote</button>
+        <div class="pack-list" id="packList"></div>
+      </div>
+
+      <div class="admin-sub" id="admin-events" hidden>
+        <button class="secondary-action wide" id="newEventButton"><i class="fa-solid fa-plus"></i> Criar novo evento</button>
+        <div class="event-list" id="eventList"></div>
+      </div>
+
+      <div class="admin-sub" id="admin-notices" hidden>
+        <div class="card">
+          <div class="card-title"><span>Publicar aviso</span><i class="fa-solid fa-paper-plane"></i></div>
+          <form class="stack-form" id="noticeForm">
+            <label>Título<input name="title" maxlength="120" required placeholder="ex.: Novo APK disponível para download"></label>
+            <label>Tipo
+              <select name="kind">
+                <option value="info">Informação</option>
+                <option value="update">Atualização / novo APK</option>
+                <option value="event">Evento</option>
+                <option value="warning">Aviso importante</option>
+              </select>
+            </label>
+            <label>Mensagem<textarea name="body" rows="4" maxlength="2000" placeholder="Detalhes que aparecerão no painel de todos os jogadores."></textarea></label>
+            <button class="primary-action" type="submit"><i class="fa-solid fa-bullhorn"></i> Publicar aviso</button>
+            <p class="form-status" id="noticeStatus"></p>
+          </form>
+        </div>
+        <div class="notice-list" id="noticeAdminList"></div>
+      </div>
+
+      <div class="admin-sub" id="admin-site" hidden>
+        <p class="hint">Personalize o site público sem tocar em código: textos do hero, link do GitHub e quais seções aparecem. As mudanças valem na hora para todos os visitantes.</p>
+        <div class="card" style="margin-top:0">
+          <div class="card-title"><span>Personalização do site</span><i class="fa-solid fa-palette"></i></div>
+          <form class="stack-form" id="siteForm">
+            <label>Título do hero (aceita &lt;br&gt; para quebra de linha)<input name="hero_title" maxlength="200" placeholder="O clássico ressuscitou."></label>
+            <label>Descrição do hero<textarea name="hero_description" rows="3" maxlength="800" placeholder="Texto principal abaixo do título."></textarea></label>
+            <label>URL do GitHub<input name="github_url" type="url" maxlength="300" placeholder="https://github.com/seu-user/seu-repo"></label>
+            <div class="switch-row"><span>Exibir botões do GitHub</span><input type="checkbox" class="switch" name="show_github"></div>
+            <div class="switch-row"><span>Exibir seção "Ao vivo" (status)</span><input type="checkbox" class="switch" name="show_status"></div>
+            <div class="switch-row"><span>Exibir seção "Recursos"</span><input type="checkbox" class="switch" name="show_features"></div>
+            <div class="switch-row"><span>Exibir seção "Download"</span><input type="checkbox" class="switch" name="show_download"></div>
+            <div class="switch-row"><span>Exibir seção "FAQ"</span><input type="checkbox" class="switch" name="show_faq"></div>
+            <button class="primary-action" type="submit"><i class="fa-solid fa-floppy-disk"></i> Salvar e aplicar no site</button>
+            <p class="form-status" id="siteStatus"></p>
+          </form>
+          <a class="mini-action" style="display:inline-flex;align-items:center;gap:8px;margin-top:14px" href="/" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver o site</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CONTA ===================== -->
+    <section class="tab-panel" id="panel-account">
+      <div class="panel-heading">
+        <div><span class="eyebrow">// ACCOUNT</span><h2>Minha conta</h2></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>Dados pessoais</span><i class="fa-solid fa-id-card"></i></div>
+        <form class="stack-form" id="profileForm">
+          <label>Nome de exibição<input name="display_name" id="profileName" maxlength="48"></label>
+          <label>E-mail<input name="email" id="profileEmail" type="email"></label>
+          <button class="primary-action" type="submit">Salvar alterações</button>
+          <p class="form-status" id="profileStatus"></p>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>Segurança</span><i class="fa-solid fa-lock"></i></div>
+        <form class="stack-form" id="passwordForm">
+          <label>Senha atual<input name="current_password" type="password" autocomplete="current-password" required></label>
+          <label>Nova senha<input name="new_password" type="password" minlength="8" autocomplete="new-password" required></label>
+          <button class="secondary-action" type="submit">Trocar senha</button>
+          <p class="form-status" id="passwordStatus"></p>
+        </form>
+        <div class="security-note"><i class="fa-solid fa-circle-info"></i> Esqueceu a senha? Use o código de recuperação exibido na criação da conta em "Esqueci minha senha" na tela de login.</div>
+      </div>
+      <button class="danger-action wide" id="logoutButton"><i class="fa-solid fa-right-from-bracket"></i> Sair da conta</button>
+    </section>
+  </main>
+
+  <!-- ===================== MENU APP (EMBAIXO) ===================== -->
+  <nav class="tabbar" id="tabbar" aria-label="Navegação do painel">
+    <div class="tabbar-inner">
+      <button class="tab active" data-tab="home"><i class="fa-solid fa-house"></i><span>Início</span></button>
+      <button class="tab" data-tab="inventory"><i class="fa-solid fa-box-open"></i><span>Itens</span></button>
+      <button class="tab" data-tab="store"><i class="fa-solid fa-store"></i><span>Loja</span></button>
+      <button class="tab" data-tab="admin" id="tabAdmin" hidden><i class="fa-solid fa-shield-halved"></i><span>Admin</span></button>
+      <button class="tab" data-tab="account"><i class="fa-solid fa-user-gear"></i><span>Conta</span></button>
+    </div>
+  </nav>
+
+  <!-- Modal genérico de resultado (senhas, códigos, confirmações) -->
+  <div class="modal-overlay" id="resultModal" hidden>
+    <div class="modal">
+      <h3 id="resultTitle">Resultado</h3>
+      <p class="modal-text" id="resultText"></p>
+      <code class="modal-code" id="resultCode" hidden></code>
+      <div class="modal-actions">
+        <button class="secondary-action" id="resultCopy" hidden><i class="fa-solid fa-copy"></i> Copiar</button>
+        <button class="danger-action" id="resultConfirm" hidden style="margin-top:0">Confirmar</button>
+        <button class="primary-action" id="resultClose">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de conceder recurso a um jogador -->
+  <div class="modal-overlay" id="grantModal" hidden>
+    <div class="modal">
+      <h3><i class="fa-solid fa-gift"></i> Conceder item / moeda</h3>
+      <p class="modal-text" id="grantTarget">Para: --</p>
+      <form class="stack-form" id="grantForm">
+        <label>Recurso (tag ou ID)<input name="resource" id="grantResource" list="resourceOptions" required placeholder="ex.: gems, weapon_shotgun…">
+          <datalist id="resourceOptions"></datalist>
+        </label>
+        <label>Quantidade<input name="amount" type="number" min="1" step="1" value="1" required></label>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" id="grantCancel">Cancelar</button>
+          <button class="primary-action" type="submit">Conceder</button>
+        </div>
+        <p class="form-status" id="grantStatus"></p>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="assets/js/slayer.js"></script>
+</body>
+</html>

@@ -37,6 +37,14 @@ const uploadDir = process.env.UPLOAD_DIR
   : resolve(serverRoot, 'runtime')
 const site = createSiteRouter({ publicDir, uploadDir })
 
+// Super Admin do painel /slayer: credenciais geradas pelo scripts/install.sh
+// (runtime/admin-credentials.json, consumidas uma única vez no boot) ou env
+// REVIVAL_ADMIN_EMAIL/REVIVAL_ADMIN_PASSWORD. O link temporário de 10 min
+// para trocar o acesso do admin vive em runtime/admin-recover-token.json.
+const adminCredentialsFile = join(uploadDir, 'admin-credentials.json')
+const adminRecoverTokenFile = join(uploadDir, 'admin-recover-token.json')
+ensureSuperAdmin({ repo, credentialsFile: adminCredentialsFile })
+
 function nowSeconds () {
   return Math.floor(Date.now() / 1000)
 }
@@ -122,6 +130,7 @@ function publicAccount (user) {
     uuid: user.uuid,
     email: user.email || '',
     display_name: user.display_name || '',
+    is_admin: Boolean(user.is_admin),
     level: user.level,
     chapter_progression: user.chapter_progression,
     attempt_count: user.attempt_count,
@@ -179,6 +188,30 @@ async function handleAccount (req, res, path) {
     const user = repo.userByWebSession(accountToken(req))
     if (!user) return json(res, 401, { ok: false, error: 'session-expired' })
     return json(res, 200, { ok: true, account: publicAccount(user), snapshot: accountSnapshot(user) })
+  }
+
+  if (req.method === 'GET' && path === '/account/notifications') {
+    const user = repo.userByWebSession(accountToken(req))
+    if (!user) return json(res, 401, { ok: false, error: 'session-expired' })
+    return json(res, 200, { ok: true, notifications: repo.listNotifications(30) })
+  }
+
+  // Loja como o jogador vê no painel: só pacotes ativos, preços em moedas.
+  if (req.method === 'GET' && path === '/account/store') {
+    const user = repo.userByWebSession(accountToken(req))
+    if (!user) return json(res, 401, { ok: false, error: 'session-expired' })
+    return json(res, 200, { ok: true, packs: activePacks(runtime).map(pack => publicPack(pack, runtime)) })
+  }
+
+  if (path.startsWith('/account/admin')) {
+    const user = repo.userByWebSession(accountToken(req))
+    if (!user) return json(res, 401, { ok: false, error: 'session-expired' })
+    if (!user.is_admin) return json(res, 403, { ok: false, error: 'forbidden' })
+    let body = {}
+    if (['POST', 'PATCH', 'PUT'].includes(req.method)) {
+      try { body = await readJsonBody(req) } catch { return json(res, 400, { ok: false, error: 'invalid-json' }) }
+    }
+    return handleAdminApi(req, res, path, body, { repo, runtime, reloadRuntime, site, user })
   }
 
   let body = {}
@@ -595,6 +628,11 @@ async function handle (req, res) {
     })
   }
 
+  // Personalização do site público (editada pelo Super Admin em /slayer).
+  if (req.method === 'GET' && path === '/revival/site') {
+    return json(res, 200, { ok: true, site: runtime.site })
+  }
+
   if (req.method === 'POST' && path === '/revival/reload') {
     if (!adminAuthorized(req)) return json(res, 401, { ok: false })
     const r = reloadRuntime()
@@ -607,6 +645,9 @@ async function handle (req, res) {
   }
 
   if (await handleAccount(req, res, path)) return
+
+  // Link temporário (10 min) para trocar os dados de acesso do Super Admin.
+  if (await handleAdminRecover(req, res, path, { repo, tokenFile: adminRecoverTokenFile })) return
 
   if (req.method === 'GET' && path === '/revival/requests') {
     if (!adminAuthorized(req)) return json(res, 401, { ok: false })

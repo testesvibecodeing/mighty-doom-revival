@@ -45,6 +45,7 @@ export class Repository {
         display_name TEXT,
         recovery_hash TEXT,
         token TEXT NOT NULL UNIQUE,
+        is_admin INTEGER NOT NULL DEFAULT 0,
         level INTEGER NOT NULL DEFAULT 1,
         chapter_progression INTEGER NOT NULL DEFAULT 0,
         attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -145,11 +146,22 @@ export class Repository {
         expires_at INTEGER NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT '',
+        kind TEXT NOT NULL DEFAULT 'info',
+        created_by INTEGER,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
     `)
     const columns = new Set(this.db.prepare('PRAGMA table_info(users)').all().map(row => row.name))
     if (!columns.has('email')) this.db.exec('ALTER TABLE users ADD COLUMN email TEXT')
     if (!columns.has('display_name')) this.db.exec('ALTER TABLE users ADD COLUMN display_name TEXT')
     if (!columns.has('recovery_hash')) this.db.exec('ALTER TABLE users ADD COLUMN recovery_hash TEXT')
+    if (!columns.has('is_admin')) this.db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0')
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(lower(email)) WHERE email IS NOT NULL AND email <> \'\'')
   }
 
@@ -176,9 +188,9 @@ export class Repository {
     const uuid = randomUUID()
     const createdAt = Math.floor(Date.now() / 1000)
     const info = this.db.prepare(`
-      INSERT INTO users (uuid, password_hash, email, display_name, recovery_hash, token, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(uuid, passwordHash(password), options.email || null, options.displayName || null, passwordHash(recoveryCode), token, createdAt)
+      INSERT INTO users (uuid, password_hash, email, display_name, recovery_hash, token, is_admin, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(uuid, passwordHash(password), options.email || null, options.displayName || null, passwordHash(recoveryCode), token, options.isAdmin ? 1 : 0, createdAt)
     const user = this.userById(Number(info.lastInsertRowid))
     return { user, password, recoveryCode }
   }
@@ -270,6 +282,59 @@ export class Repository {
 
   revokeWebSession (token) {
     if (token) this.db.prepare('DELETE FROM web_sessions WHERE token_hash = ?').run(tokenHash(token))
+  }
+
+  revokeUserSessions (userId) {
+    this.db.prepare('DELETE FROM web_sessions WHERE user_id = ?').run(userId)
+  }
+
+  listUsers (query = '', limit = 100) {
+    const term = String(query || '').trim().toLowerCase()
+    const filter = `%${term}%`
+    return this.db.prepare(`
+      SELECT id, uuid, email, display_name, is_admin, level, chapter_progression, attempt_count, created_at
+      FROM users
+      WHERE ? = '' OR lower(CAST(id AS TEXT)) LIKE ? OR lower(email) LIKE ? OR lower(display_name) LIKE ?
+      ORDER BY id
+      LIMIT ?
+    `).all(term, filter, filter, filter, Math.max(1, Math.min(500, Number(limit) || 100)))
+  }
+
+  deleteUser (userId) {
+    const info = this.db.prepare('DELETE FROM users WHERE id = ? AND is_admin = 0').run(userId)
+    return info.changes > 0
+  }
+
+  setAdminFlag (userId, flag) {
+    this.db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(flag ? 1 : 0, userId)
+  }
+
+  resetRecoveryCode (userId) {
+    const recoveryCode = `RV-${randomBytes(6).toString('hex').toUpperCase()}`
+    this.db.prepare('UPDATE users SET recovery_hash = ? WHERE id = ?').run(passwordHash(recoveryCode), userId)
+    return recoveryCode
+  }
+
+  createNotification ({ title, body = '', kind = 'info', createdBy = null }) {
+    const info = this.db.prepare(`
+      INSERT INTO notifications (title, body, kind, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(String(title).slice(0, 120), String(body).slice(0, 2000), kind, createdBy, Math.floor(Date.now() / 1000))
+    return this.notificationById(Number(info.lastInsertRowid))
+  }
+
+  notificationById (id) {
+    return this.db.prepare('SELECT * FROM notifications WHERE id = ?').get(id) || null
+  }
+
+  listNotifications (limit = 30) {
+    return this.db.prepare('SELECT * FROM notifications ORDER BY id DESC LIMIT ?')
+      .all(Math.max(1, Math.min(100, Number(limit) || 30)))
+  }
+
+  deleteNotification (id) {
+    const info = this.db.prepare('DELETE FROM notifications WHERE id = ?').run(id)
+    return info.changes > 0
   }
 
   currencies (userId) {

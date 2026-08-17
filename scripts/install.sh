@@ -794,6 +794,46 @@ if [[ -z "$UPLOAD_EXPIRES_LABEL" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+step "Gerando credenciais do Super Admin do painel (/slayer)"
+
+# O painel web precisa de um Super Admin. Geramos e-mail + senha aqui e
+# gravamos em runtime/admin-credentials.json; o servidor consome o arquivo
+# no próximo boot (aplica UMA vez e apaga, para nunca sobrescrever senhas
+# trocadas depois pelo próprio painel). Reexecutar o instalador gera
+# credenciais novas que voltam a valer.
+ADMIN_EMAIL="$(get_env_var REVIVAL_ADMIN_EMAIL || true)"
+[[ -z "$ADMIN_EMAIL" ]] && ADMIN_EMAIL="admin@revival.local"
+ADMIN_PASSWORD="$(openssl rand -hex 12)"
+ADMIN_CREDENTIALS_FILE="$SERVER_DIR/runtime/admin-credentials.json"
+
+# Link temporário de 10 minutos para trocar os dados de acesso do Super
+# Admin (caso a pessoa esqueça). Depois de usado uma vez, o link é
+# revogado na hora pelo servidor (o arquivo do token é apagado).
+ADMIN_RECOVER_TOKEN="$(openssl rand -hex 32)"
+ADMIN_RECOVER_CREATED_AT="$(date +%s)"
+ADMIN_RECOVER_EXPIRES_AT="$(( ADMIN_RECOVER_CREATED_AT + 600 ))"
+ADMIN_RECOVER_TOKEN_FILE="$SERVER_DIR/runtime/admin-recover-token.json"
+
+mkdir -p "$SERVER_DIR/runtime"
+printf '{\n  "email": "%s",\n  "password": "%s",\n  "created_at": %d\n}\n' \
+  "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_RECOVER_CREATED_AT" > "$ADMIN_CREDENTIALS_FILE"
+printf '{\n  "token": "%s",\n  "expires_at": %d,\n  "created_at": %d\n}\n' \
+  "$ADMIN_RECOVER_TOKEN" "$ADMIN_RECOVER_EXPIRES_AT" "$ADMIN_RECOVER_CREATED_AT" > "$ADMIN_RECOVER_TOKEN_FILE"
+chown "$RUN_USER":"$RUN_USER" "$ADMIN_CREDENTIALS_FILE" "$ADMIN_RECOVER_TOKEN_FILE" 2>/dev/null || true
+chmod 600 "$ADMIN_CREDENTIALS_FILE" "$ADMIN_RECOVER_TOKEN_FILE"
+
+# O arquivo de credenciais só é lido no boot do serviço: reinicia agora
+# para o Super Admin já nascer/ser atualizado com o que geramos acima.
+if systemctl restart "$SERVICE_NAME" >>"$LOG_FILE" 2>&1; then
+  for _ in $(seq 1 30); do
+    curl -fsS --max-time 2 http://127.0.0.1:8080/revival/health -o /dev/null 2>>"$LOG_FILE" && break
+    sleep 1
+  done
+else
+  echo "[AVISO] Não consegui reiniciar $SERVICE_NAME; o servidor aplica as credenciais do Super Admin no próximo boot."
+fi
+
+# ---------------------------------------------------------------------------
 # Mantém só os 20 logs de instalação mais recentes.
 ls -1t "$LOG_DIR"/install-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
 
@@ -828,6 +868,24 @@ echo "  Depois de eliminado, ninguém consegue enviar ou substituir o"
 echo "  APK sem rodar este instalador de novo. O APK já publicado"
 echo "  continua no ar normalmente em:"
 echo "  https://$DOMAIN/download/mighty-doom-revival.apk"
+echo ""
+echo "------------------------------------------------------------"
+echo " PAINEL DO SLAYER (conta, progresso e administração)"
+echo "------------------------------------------------------------"
+echo "Login / criar conta:      https://$DOMAIN/account"
+echo "Painel (após login):      https://$DOMAIN/slayer"
+echo ""
+echo "Super Admin gerado por ESTA instalação:"
+echo "  e-mail: $ADMIN_EMAIL"
+echo "  senha:  $ADMIN_PASSWORD"
+echo ""
+echo "Esqueceu os dados de acesso do Super Admin? Abra este link"
+echo "TEMPORÁRIO (10 minutos, uso único) para trocar e-mail e senha:"
+echo ""
+echo "  https://$DOMAIN/admin-recover/$ADMIN_RECOVER_TOKEN"
+echo ""
+echo "  Depois de concluir a troca, o link é revogado na hora. Se"
+echo "  expirar, rode este instalador de novo para gerar um novo."
 echo ""
 echo "REVIVAL_ADMIN_TOKEN atual: $(get_env_var REVIVAL_ADMIN_TOKEN)"
 echo "(guarde este token; ele autoriza POST /revival/reload)"

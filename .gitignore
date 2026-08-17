@@ -51,6 +51,7 @@ server/data/*
 server/config/revival.json
 server/config/packs.json
 server/config/events.json
+server/config/site.json
 server/.env
 reports/
 

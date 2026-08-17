@@ -21,6 +21,10 @@ mkdirSync(uploadDir, { recursive: true })
 
 writeFileSync(resolve(publicDir, 'index.html'),
   '<!doctype html><html lang="pt-BR"><title>Mighty DOOM Revival</title><canvas id="hell-canvas"></canvas></html>')
+writeFileSync(resolve(publicDir, 'account.html'),
+  '<!doctype html><html lang="pt-BR"><title>Entrar</title><div id="loginForm"></div></html>')
+writeFileSync(resolve(publicDir, 'slayer.html'),
+  '<!doctype html><html lang="pt-BR"><title>Painel do Slayer</title><div id="tabbar"></div></html>')
 writeFileSync(resolve(publicDir, 'assets/js/config.js'), 'window.MD_CONFIG = { serverUrl: "" };')
 
 writeFileSync(resolve(work, 'config/revival.json'), JSON.stringify({
@@ -104,7 +108,8 @@ try {
   // --- site estático ---
   const health = await waitForHealth()
   assert.equal(health.ok, true)
-  assert.equal(health.players, 0)
+  // O Super Admin do painel é semeado no boot, então já existe 1 usuário.
+  assert.equal(health.players, 1)
   assert.equal(Number.isFinite(health.uptime_seconds), true)
 
   const home = await fetch(`${base}/`)
@@ -113,6 +118,15 @@ try {
   const homeHtml = await home.text()
   assert.ok(homeHtml.includes('Mighty DOOM Revival'))
   assert.ok(homeHtml.includes('hell-canvas'))
+
+  // Páginas de conta (login) e painel (/slayer) são servidas com no-cache.
+  for (const [page, marker] of [['/account', 'loginForm'], ['/slayer', 'tabbar']]) {
+    const response = await fetch(`${base}${page}`)
+    assert.equal(response.status, 200, page)
+    assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8')
+    assert.equal(response.headers.get('cache-control'), 'no-cache')
+    assert.ok((await response.text()).includes(marker), page)
+  }
 
   const asset = await fetch(`${base}/assets/js/config.js`)
   assert.equal(asset.status, 200)
@@ -200,7 +214,7 @@ try {
   })
   assert.equal(register.status, 200)
   const healthFinal = await (await fetch(`${base}/revival/health`)).json()
-  assert.equal(healthFinal.players, 1)
+  assert.equal(healthFinal.players, 2)
 
   console.log('Mighty DOOM Revival site/upload test: PASS')
 } finally {
