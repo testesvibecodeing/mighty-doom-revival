@@ -1,25 +1,33 @@
 {
-  "endpoint": "game/inventory/get-equip-sequence-id",
+  "endpoint": "game/gear/upgrade",
   "provenance": "server-replay",
   "captured_at": "2026-08-17T10:55:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
     "method": "POST",
-    "path": "/game/inventory/get-equip-sequence-id",
+    "path": "/game/gear/upgrade",
     "headers": {
       "content-type": "application/json",
       "x-ubu-apiversion": "24.0.0",
       "x-ubu-token": "<token>"
     },
-    "body": {}
+    "body": {
+      "gear_uid": 1
+    }
   },
   "response": {
     "status": 200,
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "sequence_id": 0
+      "gear": {
+        "uid": 1,
+        "rid": 200,
+        "level": 2,
+        "tier": 1
+      },
+      "gear_upgrade_sequence_id": 1
     }
   }
 }

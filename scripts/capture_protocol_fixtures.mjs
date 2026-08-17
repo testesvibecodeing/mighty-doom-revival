@@ -42,17 +42,23 @@ const revival = {
 const gameData = {
   server_properties: { starter_bundle: 1 },
   resources: [{ id: 100, tag: 'coins', category_id: 1 }],
-  weapons: [{ id: 200, tag: 'heavy_cannon', category_id: 2 }],
-  slayers: [{ id: 300, tag: 'mini_slayer', category_id: 7 }],
+  weapons: [{ id: 200, tag: 'heavy_cannon', category_id: 2, max_level: 3, upgrade_costs: [{ level: 2, cost: [{ resource: 'coins', amount: 100 }] }, { level: 3, cost: [{ resource: 'coins', amount: 100 }] }] }],
+  slayers: [{ id: 300, tag: 'mini_slayer', category_id: 7, max_level: 5, upgrade_costs: [{ level: 2, cost: [{ resource: 'coins', amount: 50 }] }] }],
+  cosmetics: [{ id: 800, tag: 'skin_revival', category_id: 9 }],
   energies: [{ id: 400, tag: 'energy', category_id: 5, max_amount: 20, regen_minutes: 1 }],
   talents: { talents: [{ id: 500, cost: [{ resource: 'coins', amount: 50 }] }] },
+  gear_fusion: { input_count: 2, tier_gain: 1 },
+  dismantle: { tiers: { 1: [{ resource: 'coins', amount: 25 }] } },
   bundles: [{
     id: 1,
     tag: 'starter',
     resources: [
       { resource: { id: 100 }, kind: 'currency', amount: 2000 },
       { resource: { id: 200 }, kind: 'weapon', level: 1, tier: 1 },
+      { resource: { id: 200 }, kind: 'weapon', level: 1, tier: 1 },
+      { resource: { id: 200 }, kind: 'weapon', level: 1, tier: 1 },
       { resource: { id: 300 }, kind: 'slayer', level: 1, tier: 1 },
+      { resource: { id: 800 }, kind: 'cosmetic' },
       { resource: { id: 400 }, kind: 'energy', amount: 10 }
     ]
   }],
@@ -150,7 +156,7 @@ try {
   const token = registration.token
   await call('login-device', '/game/auth/login-device', { client_version: '1.13.1', user_id: registration.user_id, password: registration.password })
   await call('game-data-token', '/game/player/game-data-token', {}, token)
-  await call('user-data', '/game/player/user-data', {}, token)
+  const userData = await call('user-data', '/game/player/user-data', {}, token)
   await call('armory-get', '/game/armory/get', {}, token)
   await call('events-get-schedule', '/game/events/get-schedule', {}, token)
   await call('events-get-progress', '/game/events/get-progress', {}, token)
@@ -164,7 +170,24 @@ try {
   await call('daily-rewards-get-state', '/game/daily-rewards/get-state', {}, token)
   await call('daily-rewards-claim', '/game/daily-rewards/claim', {}, token)
   await call('inventory-get-equip-sequence-id', '/game/inventory/get-equip-sequence-id', {}, token)
-  await call('talents-buy', '/game/talents/buy', { talent: 500 }, token)
+  await call('talents-buy', '/game/talents/buy', { talent_id: 500 }, token)
+
+  // Módulo gear/slayers — contrato extraído do metadata v29:
+  // Upgrade(gearUid) / MultiUpgrade(gearUid, levelsToUpgrade) / Fuse(inputUids)
+  // / Dismantle(gearUid) / ApplyCosmetic(gearUid|slayerUid, cosmeticId).
+  const weapons = userData.user_data.inventory.weapons
+  const slayers = userData.user_data.inventory.slayers
+  const keep = weapons[0].uid
+  const fuseA = weapons[1].uid
+  const fuseB = weapons[2].uid
+  await call('gear-upgrade', '/game/gear/upgrade', { gear_uid: keep }, token)
+  await call('gear-multi-upgrade', '/game/gear/multi-upgrade', { gear_uid: keep, levels_to_upgrade: 1 }, token)
+  await call('slayers-upgrade', '/game/slayers/upgrade', { slayer_uid: slayers[0].uid }, token)
+  await call('gear-apply-cosmetic', '/game/gear/apply-cosmetic', { gear_uid: keep, cosmetic_id: 800 }, token)
+  await call('slayers-apply-cosmetic', '/game/slayers/apply-cosmetic', { slayer_uid: slayers[0].uid, cosmetic_id: 800 }, token)
+  await call('gear-fuse', '/game/gear/fuse', { input_uids: [fuseA, fuseB] }, token)
+  await call('gear-dismantle', '/game/gear/dismantle', { gear_uid: keep }, token)
+
   await call('chapters-start', '/game/chapters/start', { chapter: 101, stage: 0 }, token)
   await call('chapters-update', '/game/chapters/update', { stage: 3, checkpoint: 'c3' }, token)
   await call('chapters-end', '/game/chapters/end', { stage: 5, success: true }, token)

@@ -390,6 +390,20 @@ export class Repository {
     return Number(info.lastInsertRowid)
   }
 
+  updateItemMetadata (userId, itemId, metadata) {
+    const result = this.db.prepare('UPDATE items SET metadata_json = ? WHERE user_id = ? AND id = ?')
+      .run(JSON.stringify(metadata || {}), userId, itemId)
+    return result.changes === 1
+  }
+
+  // Remove o item e limpa slots que o referenciam (mesma transação do chamador),
+  // senão o wire de inventário expõe slot apontando para item inexistente.
+  deleteItem (userId, itemId) {
+    this.db.prepare('DELETE FROM inventory_slots WHERE user_id = ? AND item_id = ?').run(userId, itemId)
+    const result = this.db.prepare('DELETE FROM items WHERE user_id = ? AND id = ?').run(userId, itemId)
+    return result.changes === 1
+  }
+
   items (userId) {
     return this.db.prepare('SELECT * FROM items WHERE user_id = ? ORDER BY id').all(userId)
   }

@@ -1,7 +1,7 @@
 {
   "endpoint": "game/chapters/end",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T10:36:00Z",
+  "captured_at": "2026-08-17T10:55:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -29,7 +29,7 @@
             "chapter": 101,
             "completed": true,
             "best_stage": 5,
-            "completed_at": 1786962982
+            "completed_at": 1786964122
           }
         ],
         "challenges": [],

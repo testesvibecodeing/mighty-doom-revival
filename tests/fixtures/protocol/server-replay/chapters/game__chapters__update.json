@@ -1,7 +1,7 @@
 {
   "endpoint": "game/chapters/update",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T10:36:00Z",
+  "captured_at": "2026-08-17T10:55:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -27,8 +27,8 @@
         "chapter": 101,
         "challenge": 0,
         "stage": 3,
-        "started_at": 1786962982,
-        "updated_at": 1786962982,
+        "started_at": 1786964122,
+        "updated_at": 1786964122,
         "revives": 0,
         "weapons": [],
         "gear": [],

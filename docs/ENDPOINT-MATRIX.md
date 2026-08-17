@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T10:36:38Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T10:57:03Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -14,9 +14,9 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Módulo | Pri | Endpoints | ✅ DoD | 🧪 impl. | ❌ falta | 🔬 schema | Estado |
 |---|---:|---:|---:|---:|---:|---:|---|
-| [gear](#gear) | 1 | 5 | 0 | 2 | 3 | 0 | 🧪 em convergência |
-| [slayers](#slayers) | 2 | 2 | 0 | 1 | 1 | 0 | 🧪 em convergência |
-| [talents](#talents) | 3 | 1 | 0 | 1 | 0 | 0 | 🧪 em convergência |
+| [gear](#gear) | 1 | 5 | 0 | 5 | 0 | 5 | 🧪 em convergência |
+| [slayers](#slayers) | 2 | 2 | 0 | 2 | 0 | 2 | 🧪 em convergência |
+| [talents](#talents) | 3 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
 | [chapters](#chapters) | 4 | 13 | 0 | 5 | 8 | 0 | 🧪 em convergência |
 | [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 0 | 🧪 em convergência |
 | [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 2 | 1 | 0 | 🧪 em convergência |
@@ -46,24 +46,24 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/gear/apply-cosmetic` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/gear/dismantle` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/gear/fuse` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/gear/multi-upgrade` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
-| `game/gear/upgrade` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/gear/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.ApplyCosmetic(gearUid, cosmeticId); cosmetic_id literal confirmado |
+| `game/gear/dismantle` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Dismantle(gearUid); refund via dismantle.tiers no game-data |
+| `game/gear/fuse` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Fuse(inputUids); requer gear_fusion no game-data (erro 2300 explicito sem config) |
+| `game/gear/multi-upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade) |
+| `game/gear/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29 2026-08-17: GearApi.Upgrade(gearUid); levels_to_upgrade e literal confirmado, gear_uid do fallback snake (A VERIFICAR em captura cliente) |
 
 ### slayers
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/slayers/apply-cosmetic` | · | · | · | · | · | — | · | · | — | não implementado |
-| `game/slayers/upgrade` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/slayers/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SlayerApi.ApplyCosmetic(slayerUid, cosmeticId) |
+| `game/slayers/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SlayerApi.Upgrade(slayerUid) |
 
 ### talents
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/talents/buy` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/talents/buy` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: TalentsApi.Buy() sem parametros de metodo; talent_id e literal do wire |
 
 ### chapters
 

@@ -1,7 +1,7 @@
 {
   "endpoint": "game/player/user-data",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T10:36:00Z",
+  "captured_at": "2026-08-17T10:55:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -34,6 +34,20 @@
               "cosmetic": null,
               "rid": 200,
               "tier": 1
+            },
+            {
+              "uid": 2,
+              "level": 1,
+              "cosmetic": null,
+              "rid": 200,
+              "tier": 1
+            },
+            {
+              "uid": 3,
+              "level": 1,
+              "cosmetic": null,
+              "rid": 200,
+              "tier": 1
             }
           ],
           "equipment": [],
@@ -42,13 +56,13 @@
             {
               "rid": 400,
               "amount": 10,
-              "regen_epoch": 1786963042
+              "regen_epoch": 1786964182
             }
           ],
           "ultimates": [],
           "slayers": [
             {
-              "uid": 2,
+              "uid": 4,
               "level": 1,
               "cosmetic": null,
               "rid": 300,
@@ -63,10 +77,14 @@
             },
             {
               "id": 11,
-              "item": 2
+              "item": 4
             }
           ],
-          "cosmetics": []
+          "cosmetics": [
+            {
+              "rid": 800
+            }
+          ]
         },
         "chapter_progression": {
           "chapters": [],

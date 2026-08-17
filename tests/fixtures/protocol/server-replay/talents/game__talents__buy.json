@@ -1,7 +1,7 @@
 {
   "endpoint": "game/talents/buy",
   "provenance": "server-replay",
-  "captured_at": "2026-08-17T10:36:00Z",
+  "captured_at": "2026-08-17T10:55:00Z",
   "sanitized": true,
   "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
   "request": {
@@ -13,7 +13,7 @@
       "x-ubu-token": "<token>"
     },
     "body": {
-      "talent": 500
+      "talent_id": 500
     }
   },
   "response": {
