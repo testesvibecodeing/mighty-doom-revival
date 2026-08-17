@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-17T15:49:04Z",
+    "updated": "2026-08-17T15:54:14Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -1650,19 +1650,7 @@
       "evidence": "metadata v29: XboxApi; XboxUnavailable=3127 real (extraído)"
     }
   },
-  "server_only_routes": [
-    "game/armory",
-    "game/devices",
-    "game/events",
-    "game/idle-rewards/claim-rewards",
-    "game/quests/claim",
-    "game/quests/claim-daily-milestone",
-    "game/reward-tracks/claim-reward",
-    "game/reward-tracks/claim-tier",
-    "game/reward-tracks/get-progress",
-    "game/reward-tracks/get-state",
-    "game/talents/get"
-  ],
+  "server_only_routes": [],
   "out_of_scope_modules": [
     "ads",
     "iap"

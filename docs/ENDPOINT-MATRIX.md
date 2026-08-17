@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T15:49:04Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T15:54:14Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -289,14 +289,4 @@ Implementadas em `server/src` mas ausentes das 116 rotas do metadata —
 provável erro de transcrição histórico. Candidatas a remoção;
 nenhum cliente 1.13.1 as chama.
 
-- `game/armory`
-- `game/devices`
-- `game/events`
-- `game/idle-rewards/claim-rewards`
-- `game/quests/claim`
-- `game/quests/claim-daily-milestone`
-- `game/reward-tracks/claim-reward`
-- `game/reward-tracks/claim-tier`
-- `game/reward-tracks/get-progress`
-- `game/reward-tracks/get-state`
-- `game/talents/get`
+- nenhuma

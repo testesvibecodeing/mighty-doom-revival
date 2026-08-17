@@ -267,9 +267,13 @@ def build_compat(metadata: Path | None, previous: dict | None) -> dict:
 
     client_routes = set(metadata_routes or prev_routes)
     prefix_stems = {p.rstrip("/") for p in PREFIX_ROUTES}
+    # Um literal de prefixo (ex.: '/game/armory/' do startsWith do dispatcher)
+    # não é legado quando o cliente chama rotas sob esse prefixo — o match
+    # exato acima flagga 'game/armory' mesmo com game/armory/get no cliente.
     legacy = sorted(r for r in scan_literals(SERVER_SRC, (".js",))
                     if not r.endswith("/") and r != "game" and r not in client_routes
-                    and r not in prefix_stems)
+                    and r not in prefix_stems
+                    and not any(rt.startswith(r + "/") for rt in client_routes))
 
     return {
         "_meta": {

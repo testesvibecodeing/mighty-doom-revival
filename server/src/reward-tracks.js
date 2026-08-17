@@ -178,18 +178,7 @@ export function handleRewardTrackRequest (path, body, userId, repo, runtime) {
     return { data: { track: rewardTrackWire(track) } }
   }
 
-  if (
-    path === '/game/reward-tracks/get-progress' ||
-    path === '/game/reward-tracks/get-state'
-  ) {
-    return { data: { tracks: rewardTrackState(repo, userId, runtime) } }
-  }
-
-  if (
-    path === '/game/reward-tracks/claim' ||
-    path === '/game/reward-tracks/claim-reward' ||
-    path === '/game/reward-tracks/claim-tier'
-  ) {
+  if (path === '/game/reward-tracks/claim') {
     const trackId = requestTrackId(body)
     const tierId = requestTierId(body)
     if (trackId === undefined || trackId === null || tierId === undefined || tierId === null) {

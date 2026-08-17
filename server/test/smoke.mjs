@@ -222,8 +222,8 @@ try {
 
   const talentBuy = await post('/game/talents/buy', { talent: 500 }, token)
   assert.equal(talentBuy.talent, 500)
-  const talents = await post('/game/talents/get', {}, token)
-  assert.deepEqual(talents.talents, [500])
+  // TalentsApi só tem Buy no cliente 1.13.1; a leitura é o talent_progression
+  // do user-data (a rota talents/get legada foi removida do servidor).
   const afterTalent = await post('/game/player/user-data', {}, token)
   assert.deepEqual(afterTalent.user_data.talent_progression.talents, [500])
   assert.equal(afterTalent.user_data.inventory.currencies[0].amount, 1975)
@@ -401,7 +401,7 @@ try {
   const implementedPaths = new Set([
     '/game/auth/register', '/game/auth/login-device', '/game/player/user-data',
     '/game/player/game-data-token', '/game/daily-rewards/get-state', '/game/daily-rewards/claim',
-    '/game/talents/buy', '/game/talents/get', '/game/store/get', '/game/store/purchase',
+    '/game/talents/buy', '/game/store/get', '/game/store/purchase',
     '/game/events/get-schedule', '/game/events/get-progress', '/game/chapters/start',
     '/game/chapters/update', '/game/chapters/revive', '/game/chapters/end',
     '/game/idle-rewards/get-state', '/game/session/heartbeat',

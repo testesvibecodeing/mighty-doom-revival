@@ -247,7 +247,8 @@ function applyCosmetic (repo, userId, body, isSlayer) {
 }
 
 export function handleProgressionRequest (path, body, userId, repo, runtime) {
-  if (path === '/game/talents/get') return { data: talentsWire(repo, userId) }
+  // TalentsApi só tem Buy no cliente 1.13.1: a leitura vem do
+  // talent_progression do user-data (user-data.js usa talentsWire daqui).
   if (path === '/game/talents/buy') {
     let result
     try {

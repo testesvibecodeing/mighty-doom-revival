@@ -205,7 +205,7 @@ export function handleQuestRequest (path, body, userId, repo, runtime) {
     return { data: dailyQuestState(repo, userId, runtime) }
   }
 
-  if (path === '/game/quests/claim-daily-quest' || path === '/game/quests/claim') {
+  if (path === '/game/quests/claim-daily-quest') {
     const id = requestedQuestId(body)
     if (id === undefined || id === null) return { error: [400, 2200] }
     const result = claimDailyQuest(repo, userId, runtime, id)
@@ -215,7 +215,7 @@ export function handleQuestRequest (path, body, userId, repo, runtime) {
     return { data: { resources: result.resources } }
   }
 
-  if (path === '/game/quests/claim-daily-milestone' || path === '/game/quests/claim-milestone') {
+  if (path === '/game/quests/claim-milestone') {
     const id = requestedMilestoneId(body)
     if (id === undefined || id === null) return { error: [400, 2200] }
     const result = claimDailyQuestMilestone(repo, userId, runtime, id)

@@ -42,10 +42,7 @@ export function handleCompatRequest (path, body, userId, repo, runtime) {
     return { data: { resources: result.resources, claimed_day: result.claimed_day } }
   }
 
-  if (
-    path === '/game/idle-rewards/claim' ||
-    path === '/game/idle-rewards/claim-rewards'
-  ) {
+  if (path === '/game/idle-rewards/claim') {
     const result = claimIdleReward(repo, userId, runtime)
     if (!result.ok) return { error: [400, 2000, { reason: result.reason, state: result.state }] }
     return { data: { resources: result.resources, periods: result.periods } }
