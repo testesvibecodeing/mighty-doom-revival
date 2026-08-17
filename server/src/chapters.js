@@ -66,13 +66,24 @@ function recordCompletion (state, run, body = {}) {
     const row = {
       chapter: run.chapter,
       completed: true,
-      best_stage: run.stage ?? 0,
+      best_stage: Math.max(Number(existing?.best_stage || 0), Number(run.stage || 0)),
       completed_at: Math.floor(Date.now() / 1000)
     }
     if (existing) Object.assign(existing, row)
     else chapters.push(row)
   }
   return { ...state, chapters, current_run: null }
+}
+
+function completedChapterCount (state) {
+  if (!Array.isArray(state?.chapters)) return 0
+  return new Set(
+    state.chapters
+      .filter(row => row?.completed === true)
+      .map(row => row?.chapter ?? row?.id)
+      .filter(value => value !== undefined && value !== null)
+      .map(String)
+  ).size
 }
 
 function attemptWire (run) {
@@ -98,7 +109,10 @@ export function handleChapterRequest (path, body, userId, repo) {
     if (state.current_run) return { error: [400, 2000, { reason: 'run-already-active' }] }
     const run = runFromBody(body)
     if (!run) return { error: [400, 2200, { reason: 'chapter-required' }] }
-    saveProgression(repo, userId, { ...state, current_run: run })
+    repo.tx(() => {
+      repo.incrementAttemptCount(userId)
+      saveProgression(repo, userId, { ...state, current_run: run })
+    })
     return { data: { attempt: attemptWire(run), current_run: run } }
   }
 
@@ -127,7 +141,12 @@ export function handleChapterRequest (path, body, userId, repo) {
     if (!state.current_run) return { error: [400, 2000, { reason: 'no-active-run' }] }
     const finalRun = mergeRun(state.current_run, body)
     const next = recordCompletion(state, finalRun, body)
-    saveProgression(repo, userId, next)
+    repo.tx(() => {
+      saveProgression(repo, userId, next)
+      if (completedFromProgress(body)) {
+        repo.setChapterProgression(userId, completedChapterCount(next))
+      }
+    })
     return {
       data: {
         loot: Array.isArray(finalRun.loot) ? finalRun.loot : [],
