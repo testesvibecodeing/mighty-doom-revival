@@ -29,6 +29,9 @@ Il2CppDumper-output/
 *.pfx
 *.key
 *.pem
+*.png
+*.jpg
+*.jpeg
 !docs/examples/*.pem.example
 
 # Python
@@ -56,9 +59,10 @@ reports/
 .idea/
 .DS_Store
 Thumbs.db
-.claude/
+
 
 # Claude Code local/personal settings (per-machine, not team-shared)
+.claude/
 .claude/settings.local.json
 
 # Logs / temporary files
