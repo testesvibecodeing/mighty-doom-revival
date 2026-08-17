@@ -80,6 +80,16 @@ try {
     season.args
   )
 
+  // Archive mode must advertise preserved seasons before the client explicitly
+  // starts one, but the preview must not persist and block /start-season.
+  const preview = eventProgress(repo, user.id, runtime)
+  assert.equal(preview.battle_pass_events_states.length, 1)
+  assert.equal(preview.battle_pass_events_states[0].season_id, season.id)
+  assert.equal(preview.battle_pass_events_states[0].points, 0)
+  assert.equal(preview.battle_pass_events_states[0].premium_state, 1)
+  assert.equal(preview.battle_pass_events_states[0].mission_progress[0].mission_id, 500)
+  assert.equal(repo.getState(user.id, 'battle-pass', season.id, null), null)
+
   const started = handleBattlePassRequest(
     '/game/battle-pass/start-season',
     { season_id: season.id },
