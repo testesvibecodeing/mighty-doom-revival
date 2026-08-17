@@ -191,12 +191,16 @@ try {
   const token = registration.token
 
   const login = await post('/game/auth/login-device', { client_version: '1.13.1', user_id: userId, password })
-  assert.equal(login.token, token)
+  // Desde o token JWT (cliente real exige "well formed JWT"), cada login emite
+  // um JWT novo do mesmo usuário em vez do token estático antigo.
+  const jwtPayload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+  assert.equal(jwtPayload.ubu_user_id, userId)
+  assert.equal(JSON.parse(Buffer.from(login.token.split('.')[1], 'base64url').toString('utf8')).ubu_user_id, userId)
 
   // O APK real chama a API com o path completo da base Gear:
   // https://<host>/collections/doom/game/...
   const gearLogin = await post('/collections/doom/game/auth/login-device', { client_version: '1.13.1', user_id: userId, password })
-  assert.equal(gearLogin.token, token)
+  assert.equal(JSON.parse(Buffer.from(gearLogin.token.split('.')[1], 'base64url').toString('utf8')).ubu_user_id, userId)
 
   const userData = await post('/game/player/user-data', {}, token)
   const inventory = userData.user_data.inventory

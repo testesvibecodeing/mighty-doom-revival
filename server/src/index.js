@@ -24,6 +24,7 @@ import { handleTutorialRequest, tutorialProgressionWire } from './tutorial.js'
 import { createSiteRouter } from './site.js'
 import { panelResourceInfo } from './assets.js'
 import { readSmtpConfig, sendMail, smtpConfigured } from './mail.js'
+import { createSessionToken, sessionSecret, verifySessionToken } from './jwt.js'
 
 const serverRoot = resolve(import.meta.dirname, '..')
 const envPath = resolve(serverRoot, '.env')
@@ -521,6 +522,13 @@ function storePayload () {
   }
 }
 
+// Token de sessão JWT (ver jwt.js): o cliente real exige JWT bem formado no
+// register/login/refresh — o token opaco da coluna users.token continua como
+// fallback legado na autenticação.
+function issueSessionToken (userId) {
+  return createSessionToken(userId, { secret: sessionSecret(runtime.revival) })
+}
+
 function bootstrapUser (body, accountOptions = {}) {
   const { user, password, recoveryCode } = repo.createUser(accountOptions)
 
@@ -546,7 +554,7 @@ function bootstrapUser (body, accountOptions = {}) {
     device_id: typeof body.device_id === 'string' && body.device_id ? body.device_id : user.uuid,
     password,
     recovery_code: recoveryCode,
-    token: user.token,
+    token: issueSessionToken(user.id),
     session_id: 1,
     puuid: user.uuid,
     legal: {
@@ -569,7 +577,7 @@ function loginUser (body) {
   if (!user) return { error: [403, 2101] }
   return {
     data: {
-      token: user.token,
+      token: issueSessionToken(user.id),
       session_id: 1,
       puuid: user.uuid,
       legal: {
@@ -586,7 +594,7 @@ function loginUser (body) {
 
 function handleBaseline (path, body, user) {
   if (path === '/game/session/heartbeat') return { data: {} }
-  if (path === '/game/session/refresh') return { data: { token: user.token } }
+  if (path === '/game/session/refresh') return { data: { token: issueSessionToken(user.id) } }
   if (path === '/game/identity/list') return { data: { identities: [] } }
   if (path === '/game/identity/link-game-center' || path === '/game/identity/link-google-play-games') return { error: [400, 2000] }
 
@@ -944,7 +952,9 @@ async function handle (req, res) {
   }
 
   const token = extractToken(req)
-  const user = token ? repo.userByToken(token) : null
+  // JWT assinado primeiro; token opaco legado (users.token) como fallback.
+  const session = token ? verifySessionToken(token, sessionSecret(runtime.revival)) : null
+  const user = session ? repo.userById(session.userId) : (token ? repo.userByToken(token) : null)
   if (!user) return fail(res, 401, 2101)
 
   repo.logRequest(user.id, path, body)
