@@ -84,3 +84,6 @@ deploy/.install-state
 # Nunca commitados: são assets do jogo obtidos da cópia local do usuário.
 # Os SVGs originais em server/public/assets/img/kinds/ são do Revival e ficam versionados.
 server/public/assets/img/game/
+
+# arquivos estacionados fora do versionamento (limpezas de scripts/)
+tmp/

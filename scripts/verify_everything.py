@@ -49,6 +49,10 @@ PYTHON_TESTS = [
     "scripts/test_patcher_orchestration.py",
     "scripts/test_inspect_apk_unity_candidates.py",
     "scripts/test_verify_patched_apk.py",
+    # Órfãos resgatados pelo run_tests.py (autodescoberta) — nunca mais fora do gate:
+    "scripts/test_check_patch_length.py",
+    "scripts/test_patch_unity_bundle.py",
+    "scripts/test_patch_unity_raw_strings.py",
     "tests/test_zero_catalog_crc.py",
     "tests/test_inject_loading_screen.py",
     "tests/test_generate_endpoint_matrix.py",

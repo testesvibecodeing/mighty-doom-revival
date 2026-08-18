@@ -34,7 +34,7 @@ def main() -> int:
 
         code, lines = check(apk, "doom.debruinsistemas.com.br")  # 27 bytes, mismatched
         assert code == 4, lines
-        assert any("[BLOQUEADO]" in line for line in lines), lines
+        assert any("[FALLBACK]" in line for line in lines), lines
         assert any("24" in line for line in lines), lines
 
         empty_apk = Path(tmp) / "empty.apk"

@@ -65,6 +65,7 @@ propósito. O detalhe operacional está nas skills (`.claude/skills/`) e em `doc
 | `scripts/generate_endpoint_matrix.py` | Sincroniza `compatibility.json` (campos derivados de `server/src`, `server/test`, fixtures) e regenera `docs/ENDPOINT-MATRIX.md`; `--check` é gate de CI |
 | `scripts/next_task.py` | Seleciona deterministicamente o próximo gap (módulo por prioridade → primeiro gate DoD falso) |
 | `scripts/verify_everything.py` | **Gate único de conclusão**: npm test + regressões Python + sync do registro + coerência + servidor vivo/APK opcionais |
+| `run_tests.py` | Ponto de partida na raiz: roda TODA a suíte Python direto (`python run_tests.py`), autodescobrindo `scripts/test_*.py` + `tests/**/test_*.py` — suite órfã aparece aqui antes de apodrecer |
 | `scripts/client_harness.py` | Valida fluxo no cliente/emulador via ADB (logcat, assinaturas fatais, sequência de endpoints, fallbacks; exit != 0 = fluxo falhou) |
 | `scripts/capture_protocol_fixtures.mjs` | Captura fixtures `server-replay` de req/res sanitizados |
 | `tests/fixtures/protocol/` | Pares req/res reais sanitizados; provenance `client` (harness) liga `request/response_observed` no registro |
@@ -85,7 +86,8 @@ propósito. O detalhe operacional está nas skills (`.claude/skills/`) e em `doc
 | `work/apk-patch/*.txt` | Logcats de boot (ignorados pelo git) |
 
 Ignorados e **não versionados**: `input/`, `output/`, `work/`, `.tools/`,
-`reports/`, `server/data/*`, `server/config/{revival,packs,events,site}.json`.
+`reports/`, `server/data/*`, `server/config/{revival,packs,events,site}.json`,
+`tmp/` (scripts estacionados em limpezas — na raiz, fora do versionamento).
 
 ---
 
