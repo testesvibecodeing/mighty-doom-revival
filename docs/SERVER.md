@@ -6,9 +6,13 @@ O projeto comunitário `dannyhpy/mightydoom-gameserver` continua sendo uma refer
 
 ## Stack
 
-- Node.js 24+
-- Koa 3
-- SQLite via `better-sqlite3`
+CONFIRMADO em 2026-08-17 (`server/package.json` sem `dependencies`,
+`grep -n "^import" server/src/index.js`, `server/src/db.js:4`):
+
+- Node.js **>= 22.5.0** (`engines` do `package.json`; o CI usa 24)
+- HTTP: `node:http` builtin — **sem Koa** e sem framework
+- SQLite: `node:sqlite` (`DatabaseSync`) — **sem `better-sqlite3`**
+- **zero dependências npm**: `npm install` não baixa nada
 - JSON para configuração de packs/eventos
 - Nginx/Caddy recomendado para HTTPS
 

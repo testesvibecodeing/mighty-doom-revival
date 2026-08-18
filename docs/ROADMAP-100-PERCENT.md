@@ -6,7 +6,7 @@ O objetivo é preservar tudo o que o cliente 1.13.1 ainda contém e substituir s
 
 - [x] download verificável do APK 1.13.1 sem commit do binário;
 - [x] relatório estático sanitizado com hashes/offsets;
-- [x] servidor Koa próprio;
+- [x] servidor HTTP próprio (`node:http` builtin, sem Koa);
 - [x] SQLite persistente;
 - [x] autenticação local;
 - [x] endpoint de game data;

@@ -112,6 +112,20 @@ Depois de `apktool d`, o patcher:
 
 ## Como o patch lida com o tamanho (e por que hostname maior é bloqueado)
 
+> **Correção (CONFIRMADO 2026-08-17).** Esta seção descrevia o host ancilar
+> `slayersclub.bethesda.net` (24 bytes) como se fosse o orçamento do build. Não é.
+> O host da **API de gameplay** do 1.13.1 é `international.gear.bethesda.net` =
+> **31 bytes**, e é ele que `patch_apk.py` patcheia quando presente. Quem decide o
+> orçamento é o precheck, não esta tabela:
+>
+> ```bash
+> python scripts/check_patch_length.py input/mighty-doom.apk <host>
+> # medido nesta base: host de 31 bytes -> exit 0; 32 bytes -> exit 4
+> ```
+>
+> Leia "24" como "31" nos parágrafos abaixo; a mecânica (padding de userinfo,
+> bloqueio do host maior) continua exata.
+
 No APK real 1.13.1, o endpoint não está em um Addressable/bundle — está
 embutido duas vezes no `global-metadata.dat` do IL2CPP como a URL completa
 `https://slayersclub.bethesda.net/` (33 bytes): uma na tabela de string
@@ -140,7 +154,8 @@ O patcher aceita qualquer hostname com **até o comprimento do oficial**
 Hosts conhecidos atualmente:
 
 ```text
-slayersclub.bethesda.net                  -> 24 bytes ASCII
+international.gear.bethesda.net           -> 31 bytes ASCII  (API de gameplay; define o orçamento)
+slayersclub.bethesda.net                  -> 24 bytes ASCII  (ancilar)
 game.9095be396f3547555fe1039cbc894c88.net -> 41 bytes ASCII
 ```
 
