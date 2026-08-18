@@ -3,6 +3,17 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 cd /d "%~dp0\.."
 
+rem studio-forward: sem argumentos, abre o Revival Studio, que roda este mesmo
+rem pipeline como servico (mesmos CLIs, com relatorio estruturado e cancelamento).
+rem O caminho headless de prompts abaixo permanece intacto para CI/VPS.
+if "%~1"=="" (
+  where python >nul 2>nul
+  if not errorlevel 1 (
+    python "%~dp0revival_studio.py"
+    exit /b !errorlevel!
+  )
+)
+
 echo ============================================================
 echo  Mighty DOOM Revival - APK patcher
 echo  Uso pessoal / preservacao. O APK original nao e distribuido.

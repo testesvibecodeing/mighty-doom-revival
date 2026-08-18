@@ -39,10 +39,13 @@ __all__ = [
     "PrecheckResult",
     "PrecheckVerdict",
     "ServerPreflightResult",
+    "CaFileError",
+    "CaInfo",
     "analyze_apk",
     "read_metadata_version",
     "check_hostname_budget",
     "server_preflight",
+    "validate_ca_file",
 ]
 
 Logger = Callable[[str], None]
@@ -488,3 +491,63 @@ def server_preflight(
         log(f"relatório: {destino}")
 
     return resultado
+
+
+# --------------------------------------------------------------------------
+# Validação de CA (fase 5: dois perfis — certificado público ou CA local)
+# --------------------------------------------------------------------------
+
+
+class CaFileError(Exception):
+    """CA recusada — mensagem acionável (a UI mostra direto)."""
+
+
+@dataclass(frozen=True)
+class CaInfo:
+    """Fatos de um arquivo de CA, sem copiar chave privada nem corpo PEM."""
+
+    path: str
+    certificates: int
+    sha256: str
+    size_bytes: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def validate_ca_file(path: Path | str) -> CaInfo:
+    """Valida que `path` é certificado (ou bundle de certificados) PEM.
+
+    Fase 5 do plano: *"Validar arquivo CA sem copiar chave privada"* e o gate
+    *"o relatório não contém segredo nem chave privada"*. Recusa explícita se
+    houver qualquer bloco de chave privada; `CaInfo` carrega só contagem,
+    hash e tamanho — o corpo do certificado nunca entra em relatório.
+    """
+    import hashlib
+    import re
+
+    caminho = Path(path)
+    if not caminho.is_file():
+        raise CaFileError(f"CA não encontrada: {caminho}")
+    try:
+        conteudo = caminho.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise CaFileError(f"não consegui ler a CA ({caminho}): {exc}") from exc
+
+    if re.search(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", conteudo):
+        raise CaFileError(
+            f"{caminho} contém chave privada. A CA que o APK incorpora é "
+            "certificado público; chave privada não entra no projeto nem no relatório."
+        )
+    certificados = len(re.findall(r"-----BEGIN CERTIFICATE-----", conteudo))
+    if certificados == 0:
+        raise CaFileError(
+            f"{caminho} não tem nenhum bloco '-----BEGIN CERTIFICATE-----'. "
+            "Use o PEM da CA (certificado público), não a chave nem o CSR."
+        )
+    return CaInfo(
+        path=str(caminho),
+        certificates=certificados,
+        sha256=hashlib.sha256(caminho.read_bytes()).hexdigest(),
+        size_bytes=caminho.stat().st_size,
+    )

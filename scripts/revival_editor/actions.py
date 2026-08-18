@@ -87,6 +87,13 @@ ACTIONS: tuple[ActionSpec, ...] = (
         handler="act_resumo_hashes",
         requires=Stage.APK_ANALISADO,
     ),
+    ActionSpec(
+        action_id="pipeline.completo",
+        menu="APK",
+        label="Aplicar endpoint (decode → patch → build → sign → verify)",
+        handler="act_pipeline_completo",
+        requires=Stage.SERVIDOR_VALIDADO,
+    ),
     # -- Servidor ----------------------------------------------------------
     ActionSpec(
         action_id="servidor.preflight",

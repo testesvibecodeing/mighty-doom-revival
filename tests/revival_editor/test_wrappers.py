@@ -37,7 +37,7 @@ NUNCA = "nunca"
 WRAPPER_INVENTORY: dict[str, tuple[str | None, str, tuple[str, ...]]] = {
     "patch-apk": (
         "pipeline.completo",
-        PENDENTE,  # fase 6
+        PRONTO,  # fase 6: pipeline.py + ação pipeline.completo no registro
         ("apktool",),
     ),
     "loading-screen-editor": (

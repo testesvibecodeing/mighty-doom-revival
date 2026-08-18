@@ -624,6 +624,60 @@ class StudioApp:
         )
         self.refresh()
 
+    def act_pipeline_completo(self) -> None:
+        """Fase 6: o pipeline inteiro como serviço — o mesmo do patch-apk.*."""
+        if not (self._exige_projeto() and self._exige_livre()):
+            return
+        assert self.project is not None
+        if not self.project.input_apk:
+            messagebox.showwarning("Aplicar endpoint", "escolha o APK de entrada no formulário primeiro.")
+            return
+        if not self.project.server_host:
+            messagebox.showwarning(
+                "Aplicar endpoint",
+                "informe o hostname do servidor e valide-o (menu Servidor) primeiro.",
+            )
+            return
+        projeto = self.project
+        diretorio = project_dir(projeto.project_id, studio_root=self.studio_root)
+        self._submit(
+            "aplicar-endpoint",
+            lambda ctx: _trabalho_pipeline(projeto, diretorio, ctx),
+            ao_concluir=self._apos_pipeline,
+        )
+
+    def _apos_pipeline(self, evento: DoneEvent) -> None:
+        """Marca WORKSPACE_PREPARADO…APK_VERIFICADO — só depois de tudo verde."""
+        if self.project is None:
+            return
+        resultado = evento.result
+        for etapa in (
+            Stage.WORKSPACE_PREPARADO,
+            Stage.PATCH_APLICADO,
+            Stage.APK_RECONSTRUIDO,
+            Stage.APK_ASSINADO,
+            Stage.APK_VERIFICADO,
+        ):
+            self.project.state.mark(etapa)
+        self.project.output_apk = resultado.output_apk
+        reports = self._reports_dir()
+        self.project.reports["patch"] = str(reports / "patch-report.json")
+        self.project.reports["verify"] = str(reports / "final-apk-verification.json")
+        self.project.reports["pipeline"] = str(reports / "pipeline.json")
+        save_project(self.project, studio_root=self.studio_root)
+        self.log.append(
+            f"[OK] APK final: {resultado.output_apk} "
+            f"(estratégia {resultado.strategy_used} · precheck exit {resultado.precheck_exit})",
+            "info",
+        )
+        if resultado.bundles_alterados:
+            self.log.append(
+                f"bundles alterados: {len(resultado.bundles_alterados)} · "
+                f"CRCs zerados: {len(resultado.crcs_zerados)}",
+                "info",
+            )
+        self.refresh()
+
     # ==================================================================
     # menus — Cliente / Testes / Log
     # ==================================================================
@@ -749,6 +803,43 @@ def _trabalho_servidor(host: str, ca: str | None, destino: Path, ctx: Any) -> An
         raise RuntimeError(
             "servidor não passou no preflight: " + "; ".join(resultado.errors)
         )
+    return resultado
+
+
+def _trabalho_pipeline(projeto: Project, diretorio: Path, ctx: Any) -> Any:
+    """Roda `pipeline.apply_endpoint` na worker thread.
+
+    O pipeline devolve resultado estruturado mesmo quando uma etapa falha; aqui
+    a falha vira exceção para o JobRunner classificar o job como FALHOU — mas
+    o `pipeline.json` com steps/failure já foi gravado como evidência antes.
+    """
+    from ..pipeline import apply_endpoint
+
+    resultado = apply_endpoint(
+        ctx,
+        apk=projeto.input_apk or "",
+        host=projeto.server_host or "",
+        project_dir=diretorio,
+        ca_file=projeto.ca_path,
+        strategy=projeto.patch_strategy,
+    )
+    relatorio = diretorio / "reports" / "pipeline.json"
+    relatorio.parent.mkdir(parents=True, exist_ok=True)
+    relatorio.write_text(
+        json.dumps(resultado.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    ctx.log(f"relatório do pipeline: {relatorio}")
+    if not resultado.ok:
+        falha = resultado.failure
+        assert falha is not None
+        partes = [f"[{falha.code}] {falha.message}"]
+        if falha.exit_code is not None:
+            partes[0] += f" (exit {falha.exit_code})"
+        if falha.details:
+            partes.append(falha.details)
+        if falha.report_path:
+            partes.append(f"relatório: {falha.report_path}")
+        raise RuntimeError("\n".join(partes))
     return resultado
 
 
