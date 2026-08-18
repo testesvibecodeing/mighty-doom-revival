@@ -1,6 +1,18 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\.."
+
+rem studio-forward: sem argumentos, abre o Revival Studio, que prepara o
+rem servidor local como servico (mesmos passos, com relatorio estruturado
+rem e cancelamento). O caminho headless de prompts abaixo permanece intacto
+rem para terminal/CI/VPS.
+if "%~1"=="" (
+  where python >nul 2>nul
+  if not errorlevel 1 (
+    python "%~dp0revival_studio.py"
+    exit /b !errorlevel!
+  )
+)
 
 echo ============================================================
 echo  Mighty DOOM Revival - preparar servidor standalone (Windows)

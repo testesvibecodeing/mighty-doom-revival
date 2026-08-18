@@ -52,6 +52,7 @@ from ..runner import (
     LogEvent,
     ProgressEvent,
 )
+from ..server import prepare_server, server_status, start_server, stop_server
 from ..services import analyze_apk, check_hostname_budget, server_preflight
 
 __all__ = ["StudioApp", "main"]
@@ -735,6 +736,147 @@ class StudioApp:
             messagebox.showerror("Validar servidor", detalhe)
         self.refresh()
 
+    # -- Servidor local (§6.1: setup/start do servidor como serviço) -------
+
+    def act_preparar_servidor_local(self) -> None:
+        """Preparo do servidor local — nível repositório, sem projeto aberto."""
+        if not self._exige_livre():
+            return
+        self._submit(
+            "preparar-servidor",
+            _trabalho_preparar_servidor,
+            ao_concluir=self._apos_preparar_servidor,
+        )
+
+    def _apos_preparar_servidor(self, evento: DoneEvent) -> None:
+        resultado = evento.result
+        if resultado.ok:
+            self.log.append(
+                f"[OK] preparar-servidor: node {resultado.node_version} · "
+                f"{len(resultado.copied)} config(s) criado(s)",
+                "info",
+            )
+            self.var_status.set("servidor local preparado")
+            if resultado.copied:
+                extras = "Configs criados (de *.example):\n  - " + "\n  - ".join(resultado.copied)
+            else:
+                extras = "Nenhum config novo: todos já existiam — nada foi sobrescrito."
+            messagebox.showinfo(
+                "Preparar servidor local",
+                "Preparo concluído com sucesso.\n\n"
+                f"Node: {resultado.node_version}\n\n"
+                + extras
+                + "\n\nRevise server/.env (troque REVIVAL_ADMIN_TOKEN=change-me).",
+            )
+        else:
+            self.log.append(f"[FALHOU] preparar-servidor: {resultado.erro}", "erro")
+            self.var_status.set("preparar-servidor: FALHOU")
+            messagebox.showerror("Preparar servidor local", resultado.erro or "falha sem detalhe")
+        self.refresh()
+
+    def act_iniciar_servidor_local(self) -> None:
+        if not self._exige_livre():
+            return
+        self._submit(
+            "iniciar-servidor",
+            _trabalho_iniciar_servidor,
+            ao_concluir=self._apos_iniciar_servidor,
+        )
+
+    def _apos_iniciar_servidor(self, evento: DoneEvent) -> None:
+        resultado = evento.result
+        if not resultado.ok:
+            self.log.append(f"[FALHOU] iniciar-servidor: {resultado.erro}", "erro")
+            self.var_status.set("iniciar-servidor: FALHOU")
+            messagebox.showerror("Iniciar servidor local", resultado.erro or "falha sem detalhe")
+            self.refresh()
+            return
+        saude = resultado.health or {}
+        if resultado.ja_em_execucao:
+            self.log.append(
+                f"[OK] iniciar-servidor: já estava em execução na porta {resultado.port}",
+                "info",
+            )
+        else:
+            self.log.append(
+                f"[OK] iniciar-servidor: pid {resultado.pid} na porta {resultado.port} · "
+                f"game_data_loaded={saude.get('game_data_loaded')}",
+                "info",
+            )
+        self.var_status.set(f"servidor local ativo (porta {resultado.port})")
+        messagebox.showinfo(
+            "Iniciar servidor local",
+            f"Servidor Revival ativo em http://127.0.0.1:{resultado.port}\n\n"
+            f"PID: {resultado.pid if resultado.pid is not None else 'desconhecido (iniciado fora do Studio)'}\n"
+            f"game_data_loaded: {saude.get('game_data_loaded')}\n"
+            f"research_mode: {saude.get('research_mode')}\n\n"
+            f"Log: {resultado.log_path}\n"
+            "Encerre pelo menu Servidor → Encerrar servidor local.",
+        )
+        self.refresh()
+
+    def act_parar_servidor_local(self) -> None:
+        if not self._exige_livre():
+            return
+        if not messagebox.askyesno(
+            "Encerrar servidor local",
+            "Encerrar o servidor Revival local?\n\n"
+            "O processo registrado em work/revival-studio/server/server.pid será "
+            "terminado agora. Testes de dispositivo em andamento perderão o servidor.",
+        ):
+            return
+        self._submit(
+            "encerrar-servidor",
+            _trabalho_parar_servidor,
+            ao_concluir=self._apos_parar_servidor,
+        )
+
+    def _apos_parar_servidor(self, evento: DoneEvent) -> None:
+        resultado = evento.result
+        if resultado.ok:
+            for passo in resultado.steps:
+                self.log.append(f"[OK] encerrar-servidor: {passo}", "info")
+            self.var_status.set("servidor local encerrado")
+        else:
+            self.log.append(f"[FALHOU] encerrar-servidor: {resultado.erro}", "erro")
+            self.var_status.set("encerrar-servidor: FALHOU")
+            messagebox.showerror("Encerrar servidor local", resultado.erro or "falha sem detalhe")
+        self.refresh()
+
+    def act_status_servidor_local(self) -> None:
+        if not self._exige_livre():
+            return
+        self._submit(
+            "status-servidor",
+            _trabalho_status_servidor,
+            ao_concluir=self._apos_status_servidor,
+        )
+
+    def _apos_status_servidor(self, evento: DoneEvent) -> None:
+        estado = evento.result
+        saude = estado["health"]
+        if saude is None:
+            mensagem = (
+                f"Sem resposta em http://127.0.0.1:{estado['porta']}/revival/health\n\n"
+                "O servidor local não está em execução."
+            )
+            self.var_status.set("servidor local: parado")
+        else:
+            mensagem = (
+                f"Servidor ativo em http://127.0.0.1:{estado['porta']}\n\n"
+                f"ok: {saude.get('ok')}\n"
+                f"game_data_loaded: {saude.get('game_data_loaded')}\n"
+                f"packs: {saude.get('packs')} · events: {saude.get('events')} · "
+                f"players: {saude.get('players')}\n"
+                f"research_mode: {saude.get('research_mode')}\n\n"
+                f"PID registrado: {estado['pid']} "
+                f"({'vivo' if estado['pid_vivo'] else 'não encontrado'})"
+            )
+            self.var_status.set(f"servidor local: ativo (porta {estado['porta']})")
+        self.log.append(f"[info] status-servidor: {mensagem.splitlines()[0]}", "info")
+        messagebox.showinfo("Status do servidor local", mensagem)
+        self.refresh()
+
     def act_pipeline_completo(self) -> None:
         """Fase 6: o pipeline inteiro como serviço — o mesmo do patch-apk.*."""
         if not (self._exige_projeto() and self._exige_livre()):
@@ -1000,6 +1142,28 @@ def _trabalho_servidor(host: str, ca: str | None, destino: Path, ctx: Any) -> An
     """
     ctx.progress("servidor", f"preflight HTTPS de {host}…", None)
     return server_preflight(host, ca_file=ca, report_path=destino, log=ctx.log)
+
+
+def _trabalho_preparar_servidor(ctx: Any) -> Any:
+    """Servidor → Preparar: espelho estruturado do wrapper de setup (§6.1)."""
+    ctx.progress("servidor", "preparando servidor local…", None)
+    return prepare_server(REPO_ROOT, ctx)
+
+
+def _trabalho_iniciar_servidor(ctx: Any) -> Any:
+    """Servidor → Iniciar: servidor local em segundo plano com health check."""
+    ctx.progress("servidor", "iniciando servidor local…", None)
+    return start_server(REPO_ROOT, ctx)
+
+
+def _trabalho_parar_servidor(ctx: Any) -> Any:
+    ctx.progress("servidor", "encerrando servidor local…", None)
+    return stop_server(REPO_ROOT, ctx)
+
+
+def _trabalho_status_servidor(ctx: Any) -> Any:
+    ctx.progress("servidor", "consultando estado do servidor local…", None)
+    return server_status(REPO_ROOT)
 
 
 def _trabalho_pipeline(projeto: Project, diretorio: Path, ctx: Any) -> Any:

@@ -1,6 +1,18 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\.."
+
+rem studio-forward: sem argumentos, abre o Revival Studio, que inicia o
+rem servidor local como servico de segundo plano (com health check e PID
+rem registrado). O caminho headless abaixo (foreground, CTRL+C para
+rem encerrar) permanece intacto para terminal/CI/VPS.
+if "%~1"=="" (
+  where python >nul 2>nul
+  if not errorlevel 1 (
+    python "%~dp0revival_studio.py"
+    exit /b !errorlevel!
+  )
+)
 
 echo ============================================================
 echo  Mighty DOOM Revival - iniciar servidor
@@ -24,7 +36,9 @@ if errorlevel 1 (
 
 if not exist "server\.env" (
   echo Configuracao inicial ausente. Preparando...
-  call "scripts\setup-server.bat"
+  rem --headless: chamada argumentada, o branch studio-forward do setup exige
+  rem zero argumentos — sem isso abriria a GUI no meio de um fluxo headless.
+  call "scripts\setup-server.bat" --headless
   if errorlevel 1 (
     pause
     exit /b %ERRORLEVEL%

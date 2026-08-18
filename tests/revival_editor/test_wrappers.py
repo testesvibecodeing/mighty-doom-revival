@@ -57,12 +57,12 @@ WRAPPER_INVENTORY: dict[str, tuple[str | None, str, tuple[str, ...]]] = {
     ),
     "setup-server": (
         "servidor.preparar",
-        PENDENTE,  # fase 5
+        PRONTO,  # §6.1/§9.2 fechadas: serviço server.py + menu Servidor
         ("server",),
     ),
     "start-server": (
         "servidor.iniciar",
-        PENDENTE,  # fase 5
+        PRONTO,  # §6.1/§9.2 fechadas: start_server com PID + health check
         ("server",),
     ),
     "install": (None, NUNCA, ()),  # deploy: nunca encaminhar
@@ -180,14 +180,25 @@ class TestRecursao(unittest.TestCase):
 
     @staticmethod
     def _linhas_executaveis(texto: str) -> list[str]:
+        import re
+
         saida = []
+        heredoc_ate: str | None = None  # delimitador do <<'EOF' aberto
         for linha in texto.splitlines():
             l = linha.strip()
+            if heredoc_ate is not None:
+                # corpo de heredoc é texto impresso (documentação), não comando
+                if l == heredoc_ate:
+                    heredoc_ate = None
+                continue
             if not l or l.startswith("#") or l.startswith("rem ") or l == "rem":
                 continue
             if l.startswith("echo ") or l.startswith("echo.") or l.startswith('echo"'):
                 continue
             saida.append(l)
+            abertura = re.search(r"<<-?\s*['\"]?(\w+)", l)
+            if abertura:
+                heredoc_ate = abertura.group(1)
         return saida
 
     def test_nenhum_wrapper_invoca_wrapper_encaminhador(self) -> None:

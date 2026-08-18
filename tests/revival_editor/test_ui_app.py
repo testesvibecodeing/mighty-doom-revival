@@ -844,5 +844,155 @@ class TestCompatLogica(unittest.TestCase):
                            "implemented", "true", _CtxFake(self.repo))
 
 
+class TestServidorLocal(unittest.TestCase):
+    """Menu Servidor local (§6.1/§9.2): preparar/iniciar/encerrar/status."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.studio = Path(self._tmp.name) / "studio"
+        self.root = tk.Tk()
+        self.root.withdraw()
+        from revival_editor.ui.app import StudioApp
+
+        with mock.patch("revival_editor.ui.app.messagebox"):
+            self.app = StudioApp(self.root, studio_root=self.studio)
+
+    def tearDown(self) -> None:
+        try:
+            self.app._fechar()
+        except tk.TclError:
+            pass
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
+        self._tmp.cleanup()
+
+    def _estado_entrada(self, action_id: str) -> str:
+        menu, indice = self.app._entradas[action_id]
+        return str(menu.entrycget(indice, "state"))
+
+    def test_acoes_registradas_sem_projeto(self) -> None:
+        """Servidor local é nível repositório: nenhum item exige projeto."""
+        for action_id in ("servidor.preparar", "servidor.iniciar",
+                          "servidor.parar", "servidor.status"):
+            spec = action_by_id(action_id)
+            self.assertFalse(spec.needs_project)
+            self.assertEqual(self._estado_entrada(action_id), "normal")
+
+    def test_preparar_servidor_passa_pelo_servico(self) -> None:
+        from revival_editor.server import ServerReport
+
+        relatorio = ServerReport(ok=True, node_version="v24.0.0",
+                                 copied=[".env", "config/revival.json"])
+        with (
+            mock.patch("revival_editor.ui.app.prepare_server",
+                       return_value=relatorio) as preparar,
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+        ):
+            self.app.act_preparar_servidor_local()
+            ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
+            self.assertTrue(ok, self.app.var_status.get())
+
+        preparar.assert_called_once()
+        _args = preparar.call_args.args
+        self.assertEqual(len(_args), 2, "assinatura esperada: (repo_root, ctx)")
+        self.assertTrue((Path(_args[0]) / "server").is_dir(),
+                        f"repo_root inválido: {_args[0]}")
+        _titulo, texto = caixa.showinfo.call_args[0]
+        self.assertIn("v24.0.0", texto)
+        self.assertIn("config/revival.json", texto)
+        self.assertIn("REVIVAL_ADMIN_TOKEN", texto, "lembrete de revisar o .env local")
+
+    def test_preparar_falhando_mostra_erro(self) -> None:
+        from revival_editor.server import ServerReport
+
+        relatorio = ServerReport(ok=False, erro="Node.js não encontrado no PATH.")
+        with (
+            mock.patch("revival_editor.ui.app.prepare_server", return_value=relatorio),
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+        ):
+            self.app.act_preparar_servidor_local()
+            ok = _bombeiar(self.root, lambda: caixa.showerror.called)
+            self.assertTrue(ok, self.app.var_status.get())
+
+        _titulo, texto = caixa.showerror.call_args[0]
+        self.assertIn("Node.js", texto)
+        self.assertIn("FALHOU", self.app.log.content)
+
+    def test_iniciar_mostra_pid_porta_e_game_data(self) -> None:
+        from revival_editor.server import ServerReport
+
+        relatorio = ServerReport(
+            ok=True, pid=4242, port=8080,
+            health={"ok": True, "game_data_loaded": True, "research_mode": True},
+            log_path="work/revival-studio/server/local-server.log",
+        )
+        with (
+            mock.patch("revival_editor.ui.app.start_server", return_value=relatorio),
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+        ):
+            self.app.act_iniciar_servidor_local()
+            ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
+            self.assertTrue(ok, self.app.var_status.get())
+
+        _titulo, texto = caixa.showinfo.call_args[0]
+        self.assertIn("127.0.0.1:8080", texto)
+        self.assertIn("4242", texto)
+        self.assertIn("game_data_loaded: True", texto)
+        self.assertIn("Encerrar servidor local", texto, "usuário precisa saber como parar")
+
+    def test_iniciar_ja_em_execucao_nao_mata_nada(self) -> None:
+        from revival_editor.server import ServerReport
+
+        relatorio = ServerReport(ok=True, ja_em_execucao=True, port=8080,
+                                 health={"ok": True})
+        with (
+            mock.patch("revival_editor.ui.app.start_server", return_value=relatorio),
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+        ):
+            self.app.act_iniciar_servidor_local()
+            ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
+            self.assertTrue(ok, self.app.var_status.get())
+
+        self.assertIn("já estava em execução", self.app.log.content)
+        self.assertIn("ativo", self.app.var_status.get())
+
+    def test_encerrar_exige_confirmacao(self) -> None:
+        with mock.patch("revival_editor.ui.app.messagebox") as caixa:
+            caixa.askyesno.return_value = False
+            self.app.act_parar_servidor_local()
+        self.assertFalse(self.app.runner.is_running)
+        caixa.askyesno.assert_called_once()
+
+    def test_status_servidor_parado_e_ativo(self) -> None:
+        parado = {"porta": 8080, "pid": None, "pid_vivo": False,
+                  "health": None, "log_path": "…/local-server.log"}
+        with (
+            mock.patch("revival_editor.ui.app.server_status", return_value=parado),
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+        ):
+            self.app.act_status_servidor_local()
+            ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
+            self.assertTrue(ok, self.app.var_status.get())
+        self.assertIn("não está em execução", caixa.showinfo.call_args[0][1])
+
+        ativo = {"porta": 8080, "pid": 4242, "pid_vivo": True,
+                 "health": {"ok": True, "game_data_loaded": True,
+                            "packs": 8, "events": 0, "players": 2,
+                            "research_mode": True},
+                 "log_path": "…/local-server.log"}
+        with (
+            mock.patch("revival_editor.ui.app.server_status", return_value=ativo),
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+        ):
+            self.app.act_status_servidor_local()
+            ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
+            self.assertTrue(ok, self.app.var_status.get())
+        _titulo, texto = caixa.showinfo.call_args[0]
+        self.assertIn("game_data_loaded: True", texto)
+        self.assertIn("vivo", texto)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

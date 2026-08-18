@@ -72,6 +72,21 @@ Menu **Servidor**:
 
 - **Validar servidor**: preflight HTTPS (`/revival/health` + `uts` do
   envelope vivo). Exige o servidor rodando com certificado válido.
+- **Preparar servidor local**: o fluxo do `setup-server` como serviço —
+  valida Node.js + `node:sqlite`, cria `server/.env` e `config/*.json` a
+  partir dos `*.example` **somente quando faltam** (configs existentes
+  nunca são sobrescritos), roda `node --check` nos módulos e o smoke test
+  end-to-end.
+- **Iniciar servidor local**: sobe o servidor em segundo plano (PID e log
+  em `work/revival-studio/server/`) e espera o `/revival/health` ficar
+  verde. Idempotente: se já está ativo, não cria segundo processo.
+- **Encerrar servidor local**: termina o processo registrado (com
+  confirmação). Recusa-se a matar servidor iniciado fora do Studio.
+- **Status do servidor local**: porta, PID, `game_data_loaded` e research
+  mode do servidor vivo agora.
+
+Fechar o Studio **não** encerra o servidor local — para não interromper um
+teste de dispositivo em andamento; use o menu quando quiser parar.
 
 Cada etapa grava relatório JSON em `work/revival-studio/<id-do-projeto>/reports/`
 e o log da sessão em `…/logs/`.

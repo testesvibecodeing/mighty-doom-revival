@@ -4,6 +4,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_DIR="$ROOT/server"
 
+# studio-forward: sem argumentos e em sessão gráfica interativa, abre o Revival
+# Studio — que prepara o servidor local como serviço (mesmos passos, com
+# relatório estruturado e cancelamento). O caminho headless abaixo permanece
+# intacto para terminal/CI/VPS: com argumentos, ou sem display, segue direto.
+if [[ $# -eq 0 ]] && [[ -t 0 ]] && { [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] || [[ "$(uname -s)" == "Darwin" ]]; }; then
+  if command -v python3 >/dev/null 2>&1; then
+    exec python3 "$(dirname "${BASH_SOURCE[0]}")/revival_studio.py"
+  elif command -v python >/dev/null 2>&1; then
+    exec python "$(dirname "${BASH_SOURCE[0]}")/revival_studio.py"
+  fi
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo '[ERRO] Node.js não encontrado. Instale Node.js 22.5+; Node 24 LTS é recomendado.' >&2
   exit 2

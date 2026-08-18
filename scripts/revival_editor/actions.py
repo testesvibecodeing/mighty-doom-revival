@@ -117,6 +117,34 @@ ACTIONS: tuple[ActionSpec, ...] = (
         handler="act_validar_servidor",
         requires=Stage.APK_ANALISADO,
     ),
+    ActionSpec(
+        action_id="servidor.preparar",
+        menu="Servidor",
+        label="Preparar servidor local (configs + validação)",
+        handler="act_preparar_servidor_local",
+        needs_project=False,
+    ),
+    ActionSpec(
+        action_id="servidor.iniciar",
+        menu="Servidor",
+        label="Iniciar servidor local (segundo plano)",
+        handler="act_iniciar_servidor_local",
+        needs_project=False,
+    ),
+    ActionSpec(
+        action_id="servidor.parar",
+        menu="Servidor",
+        label="Encerrar servidor local…",
+        handler="act_parar_servidor_local",
+        needs_project=False,
+    ),
+    ActionSpec(
+        action_id="servidor.status",
+        menu="Servidor",
+        label="Status do servidor local",
+        handler="act_status_servidor_local",
+        needs_project=False,
+    ),
     # -- Visuais ------------------------------------------------------------
     ActionSpec(
         action_id="visuals.loading_screen",
