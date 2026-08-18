@@ -65,6 +65,15 @@ function iconImg (resource, cls = '') {
   return `<img class="game-icon ${cls}" src="${src}" data-fallback="${fallback}" alt="${alt}" loading="lazy" onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback)this.src=this.dataset.fallback;else this.style.visibility='hidden'">`
 }
 
+// A capa do pacote é apenas uma composição visual do conteúdo que o cliente
+// já recebe. Assim o site mostra os mesmos itens/ícones do jogo, sem inventar
+// um campo de imagem no wire da Store API.
+function packVisual (entries, cls = '') {
+  const visible = (entries || []).slice(0, 4)
+  if (!visible.length) return iconImg({}, cls)
+  return `<div class="pack-visual ${escapeHtml(cls)}">${visible.map(entry => iconImg(entry, 'pack-visual-icon')).join('')}${entries.length > visible.length ? `<span class="pack-visual-more">+${entries.length - visible.length}</span>` : ''}</div>`
+}
+
 /* ============ inventário ============ */
 const SLOT_LABELS = {
   slot_primary_weapon: 'Arma primária', slot_secondary_weapon: 'Arma secundária',
@@ -216,9 +225,9 @@ async function loadStore () {
     const cost = costEntries.map(entry => `<span class="cost-pill">${iconImg(entry, 'inline')} ${escapeHtml(entry.name)} · ${formatNumber(entry.amount)}</span>`).join('') || '<span class="cost-pill"><i class="fa-solid fa-gift"></i> Grátis</span>'
     const contents = contentEntries.map(entry => `<span>${iconImg(entry, 'inline thumb')}<b style="flex:1">${escapeHtml(entry.name)}</b><strong>x${formatNumber(entry.amount)}</strong></span>`).join('')
     const quota = pack.quota ? `<span class="tag">Limite: ${pack.quota.max}x ${pack.quota.period === 'daily' ? 'por dia' : pack.quota.period === 'weekly' ? 'por semana' : 'total'}</span>` : ''
-    const cover = contentEntries[0] || costEntries[0] || null
+    const coverEntries = contentEntries.length ? contentEntries : costEntries
     return `<article class="store-card">
-      <div class="store-cover">${iconImg(cover || {}, '')}</div>
+      <div class="store-cover">${packVisual(coverEntries)}</div>
       <div class="store-body">
         <div class="store-head"><h3>${escapeHtml(pack.tag)}</h3>${quota}</div>
         <div class="store-cost">${cost}</div>
@@ -467,6 +476,7 @@ function renderPackEditor (pack) {
       <h3>#${pack.id}</h3>
       <label class="switch-row" style="border:0;padding:0">Ativo na loja <input type="checkbox" class="switch" data-field="active" ${pack.active !== false ? 'checked' : ''}></label>
     </div>
+    <div class="pack-admin-preview"><span class="editor-label">PREVIEW DOS ITENS</span>${packVisual(pack.preview?.contents || [], 'pack-visual-admin')}</div>
     <div class="editor-grid">
       <label>Tag do pacote<input data-field="tag" value="${escapeHtml(pack.tag || '')}" placeholder="revival_pack_x"></label>
     </div>

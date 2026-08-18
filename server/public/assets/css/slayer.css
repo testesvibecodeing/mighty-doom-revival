@@ -84,6 +84,12 @@
 .store-list{display:grid;gap:12px}
 .store-card{display:flex;gap:14px;padding:14px;border:1px solid rgba(255,100,30,.18);background:rgba(22,13,10,.85)}
 .store-cover{display:grid;place-items:center;flex-shrink:0;width:116px;min-height:116px;background:radial-gradient(circle at 50% 40%,rgba(255,121,28,.16),rgba(0,0,0,.3) 74%);border:1px solid rgba(255,100,30,.14)}
+.pack-visual{position:relative;display:grid;grid-template-columns:repeat(2,1fr);grid-auto-rows:1fr;place-items:center;gap:4px;width:100%;height:100%;min-height:108px;padding:8px}
+.pack-visual-icon{max-width:48px;max-height:48px;width:auto;height:auto}
+.pack-visual-more{position:absolute;right:5px;bottom:5px;padding:2px 5px;border:1px solid rgba(255,195,78,.5);background:rgba(20,8,3,.9);color:var(--gold);font-size:11px;font-weight:700}
+.pack-admin-preview{margin-top:14px;padding:10px;border:1px solid rgba(255,100,30,.14);background:rgba(0,0,0,.16)}
+.pack-visual-admin{min-height:74px;max-width:180px;margin-top:6px}
+.pack-visual-admin .pack-visual-icon{max-width:34px;max-height:34px}
 .store-body{flex:1;min-width:0}
 .store-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
 .store-head h3{margin:0;font:400 16px 'Black Ops One';color:#f5e5d1;word-break:break-word}
@@ -93,7 +99,7 @@
 .store-contents{margin-top:10px;display:grid;gap:6px;color:#b3a496;font-size:13px}
 .store-contents span{display:flex;align-items:center;gap:8px;border-bottom:1px dashed rgba(255,255,255,.07);padding-bottom:5px}
 .store-contents b{font-weight:600;color:#d9c9b8}
-@media(max-width:480px){.store-card{flex-direction:column}.store-cover{width:100%;min-height:150px}}
+@media(max-width:480px){.store-card{flex-direction:column}.store-cover{width:100%;min-height:150px}.pack-visual{min-height:138px}.pack-visual-icon{max-width:64px;max-height:64px}}
 
 /* ---------- formulários ---------- */
 label{display:grid;gap:6px;color:#cbbdb0;font-size:14px;font-weight:600}

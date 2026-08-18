@@ -22,5 +22,8 @@ assert.match(js, /\/account\/admin\/events/)
 assert.match(js, /\/account\/admin\/notifications/)
 assert.match(js, /\/account\/admin\/site/)
 assert.match(js, /\/account\/admin\/smtp/)
+assert.match(js, /function packVisual/)
+assert.match(js, /packVisual\(coverEntries\)/)
+assert.match(js, /packVisual\(pack\.preview\?\.contents/)
 
 console.log('Mighty DOOM Revival admin UI test: PASS')
