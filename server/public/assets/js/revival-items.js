@@ -134,7 +134,7 @@
     }
     iconImg = function (resource = {}, cls = '') {
       const serverIcon = String(resource?.icon || '')
-      const src = revivalAsset(resource) || (serverIcon && !serverIcon.startsWith('/assets/img/kinds/') ? serverIcon : artUrl(resource))
+      const src = serverIcon && !serverIcon.startsWith('/assets/img/kinds/') ? `${serverIcon}${serverIcon.includes('?') ? '&' : '?'}v=revival-unique-20260817` : (revivalAsset(resource) || artUrl(resource))
       return `<img class="game-icon revival-art ${cls}" src="${escapeHtml(src)}" alt="${escapeHtml(resource.name || resource.tag || resource.kind || 'Item Revival')}" loading="lazy">`
     }
   }
