@@ -392,7 +392,7 @@ class TestJanelaMinima(unittest.TestCase):
             "report_path": str(self.studio / "visuais" / "reports" / "loading-inject.json"),
         }
         with (
-            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+            mock.patch("revival_editor.ui.visuals_tab.messagebox") as caixa,
             mock.patch(
                 "revival_editor.ui.visuals_tab._trabalho_injetar", return_value=relatorio
             ) as trabalho,
@@ -417,6 +417,76 @@ class TestJanelaMinima(unittest.TestCase):
         self.assertEqual(self.app.project.output_apk, relatorio["apk_out"])
         self.assertIn("loading_inject", self.app.project.reports)
         self.assertIn("etapas invalidadas", self.app.log.content)
+
+    # -- Branding Android (fase 8) --------------------------------------------
+
+    def test_aba_branding_existe_e_acao_abre(self) -> None:
+        abas = [self.app.notebook.tab(widget, "text") for widget in self.app.notebook.tabs()]
+        self.assertIn("Branding", abas)
+        self.app.act_branding_android()
+        self.assertEqual(self.app.notebook.select(), str(self.app.branding_tab))
+
+    def test_branding_sem_arvore_decoded_mostra_erro(self) -> None:
+        projeto, _ = new_project("sem-decode", studio_root=self.studio)
+        self.app._abrir_projeto_memoria(projeto)
+        with mock.patch("revival_editor.ui.branding_tab.messagebox") as caixa:
+            self.app.branding_tab.ler_arvore()
+        caixa.showerror.assert_called_once()
+        self.assertIsNone(self.app.branding_tab.decoded)
+
+    def test_branding_aplica_diff_e_invalida_build(self) -> None:
+        """Fase 8: planejar mostra diff, aplicar muda o recurso (não o manifest),
+        invalida build/assinatura e grava relatório no projeto."""
+        from test_branding import arvore_decodificada
+
+        from revival_editor.paths import project_dir
+
+        projeto, _ = new_project("branding1", studio_root=self.studio)
+        for etapa in Stage:
+            projeto.state.mark(etapa)
+        self.app._abrir_projeto_memoria(projeto)
+        self.app.refresh()
+
+        decoded = arvore_decodificada(project_dir("branding1", studio_root=self.studio) / "decoded")
+        bytes_manifesto = (decoded / "AndroidManifest.xml").read_bytes()
+        aba = self.app.branding_tab
+        aba.ler_arvore()
+        self.assertIsNotNone(aba.manifest_antes)
+        self.assertIn("com.bethsoft.ubu", aba.lbl_info.cget("text"))
+
+        aba.var_label.set("DOOM Revival")
+        aba.planejar_label()
+        self.assertIsNotNone(aba.plano)
+        self.assertIn("+<string name=\"app_name\">DOOM Revival</string>", aba.txt_diff.get("1.0", "end"))
+        self.assertEqual(str(aba.btn_aplicar.instate(["disabled"])), "False")
+
+        with mock.patch("revival_editor.ui.branding_tab.messagebox") as caixa:
+            caixa.askyesno.return_value = True
+            aba.aplicar()
+            ok = _bombeiar(
+                self.root,
+                lambda: self.app.project is not None
+                and self.app.project.state.has(Stage.CUSTOMIZACOES_APLICADAS)
+                and not self.app.project.state.has(Stage.APK_RECONSTRUIDO),
+            )
+            self.assertTrue(ok, self.app.var_status.get())
+        caixa.askyesno.assert_called_once()
+
+        # recurso mudou de verdade; manifest intocado
+        self.assertIn(
+            "DOOM Revival",
+            (decoded / "res" / "values" / "strings.xml").read_text(encoding="utf-8"),
+        )
+        self.assertEqual((decoded / "AndroidManifest.xml").read_bytes(), bytes_manifesto)
+        # etapas invalidadas + relatório no projeto
+        self.assertIn("etapas invalidadas", self.app.log.content)
+        relatorio = Path(self.app.project.reports["branding"])
+        self.assertTrue(relatorio.is_file(), relatorio)
+        dados = json.loads(relatorio.read_text(encoding="utf-8"))
+        self.assertTrue(dados["verified_untouched"])
+        self.assertEqual(len(dados["result"]["labels_alterados"]), 2)
+        # o plano consumido sai da tela
+        self.assertIsNone(aba.plano)
 
     def test_fechar_durante_job_confirma_cancela_e_destroi(self) -> None:
         def dorme(ctx):

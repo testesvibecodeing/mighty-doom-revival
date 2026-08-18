@@ -118,6 +118,13 @@ ACTIONS: tuple[ActionSpec, ...] = (
         handler="act_visuals_loading",
         needs_project=False,
     ),
+    ActionSpec(
+        action_id="branding.android",
+        menu="Visuais",
+        label="Branding Android: nome/ícone/cor (aba Branding)",
+        handler="act_branding_android",
+        needs_project=False,
+    ),
     # -- Ferramentas --------------------------------------------------------
     ActionSpec(
         action_id="ferramentas.status",

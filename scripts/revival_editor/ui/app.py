@@ -125,10 +125,13 @@ class StudioApp:
         self.notebook.add(pagina_projeto, text="Projeto")
         pagina_projeto.columnconfigure(0, weight=1)
 
+        from .branding_tab import BrandingTab
         from .visuals_tab import VisualsTab
 
         self.visuals_tab = VisualsTab(self.notebook, self)
         self.notebook.add(self.visuals_tab, text="Visuais")
+        self.branding_tab = BrandingTab(self.notebook, self)
+        self.notebook.add(self.branding_tab, text="Branding")
 
         # ---- formulário do projeto ----
         form = ttk.LabelFrame(pagina_projeto, text="Projeto")
@@ -787,6 +790,10 @@ class StudioApp:
     def act_visuals_loading(self) -> None:
         """Abre a aba Visuais (fase 7) — alvo do wrapper loading-screen-editor."""
         self.notebook.select(self.visuals_tab)
+
+    def act_branding_android(self) -> None:
+        """Abre a aba Branding (fase 8): nome/ícone/cor com diff e bloqueios."""
+        self.notebook.select(self.branding_tab)
 
     # ==================================================================
     # menus — Ferramentas
