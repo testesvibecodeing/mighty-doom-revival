@@ -390,9 +390,21 @@ async function loadAdminUserProfile (userId) {
   const { profile } = await api(`/account/admin/users/${userId}/profile`)
   const account = profile.account
   const profileEl = $('#userProfile')
-  profileEl.innerHTML = `<div class="profile-head"><div><span class="eyebrow">// PLAYER PROFILE</span><h3>#${account.id} ${escapeHtml(account.display_name || 'Sem nome')}</h3><p class="hint">${escapeHtml(account.email || 'Sem e-mail')} · UUID ${escapeHtml(account.uuid)}</p></div><button class="secondary-action" data-close-profile>Fechar perfil</button></div><div class="metric-grid"><article class="metric-card"><small>NÍVEL</small><strong>${account.level}</strong><span>${account.chapter_progression} capítulos</span></article><article class="metric-card"><small>RUNS</small><strong>${formatNumber(account.attempt_count)}</strong><span>tentativas</span></article><article class="metric-card"><small>ITENS</small><strong>${profile.items.length}</strong><span>no inventário</span></article><article class="metric-card"><small>ADMIN</small><strong>${account.is_admin ? 'SIM' : 'NÃO'}</strong><span>${account.password_set ? 'senha definida' : 'sem senha'}</span></article></div><div class="profile-columns"><div><h4>Moedas e energia</h4><div class="profile-resource-list">${profileResourceRows([...(profile.currencies || []), ...(profile.energies || [])], 'Nenhuma moeda ou energia')}</div></div><div><h4>Itens</h4><div class="profile-resource-list">${profileResourceRows(profile.items, 'Inventário vazio')}</div></div></div><div class="profile-actions"><button class="primary-action" data-profile-grant="${account.id}"><i class="fa-solid fa-gift"></i> Dar item / dinheiro</button><button class="secondary-action" data-profile-refresh="${account.id}"><i class="fa-solid fa-rotate"></i> Atualizar perfil</button></div>`
+  const groups = [
+    ['Armas', profile.items.filter(row => row.kind === 'weapon')],
+    ['Armaduras / equipamentos', profile.items.filter(row => row.kind === 'equipment')],
+    ['Launchers', profile.items.filter(row => row.kind === 'launcher')],
+    ['Ultimates', profile.items.filter(row => row.kind === 'ultimate')],
+    ['Slayers', profile.items.filter(row => row.kind === 'slayer')],
+    ['Cosméticos', profile.cosmetics],
+    ['Benefícios', profile.entitlements]
+  ]
+  const sections = groups.map(([title, rows]) => `<div class="profile-section"><h4>${title}</h4><div class="profile-resource-list">${profileResourceRows(rows, 'Nenhum')}</div></div>`).join('')
+  const equipped = profile.equipped?.length ? profile.equipped.map(row => `<span class="tag"><i class="fa-solid fa-shield-halved"></i> slot ${row.slot_id} → item ${row.item_id}</span>`).join('') : '<span class="empty">Nenhum item equipado</span>'
+  const stats = profile.stats?.length ? profile.stats.map(row => `<div class="profile-resource"><span>${escapeHtml(String(row.id))}</span><strong>${formatNumber(row.value)}</strong></div>`).join('') : '<p class="empty">Nenhuma estatística registrada</p>'
+  profileEl.innerHTML = `<div class="modal admin-profile-modal" role="dialog" aria-modal="true" aria-labelledby="adminProfileTitle"><div class="profile-head"><div><span class="eyebrow">// PLAYER PROFILE</span><h3 id="adminProfileTitle">#${account.id} ${escapeHtml(account.display_name || 'Sem nome')}</h3><p class="hint">${escapeHtml(account.email || 'Sem e-mail')} · UUID ${escapeHtml(account.uuid)}</p></div><button class="secondary-action" data-close-profile>Fechar</button></div><div class="metric-grid"><article class="metric-card"><small>NÍVEL</small><strong>${account.level}</strong><span>${account.chapter_progression} capítulos</span></article><article class="metric-card"><small>RUNS</small><strong>${formatNumber(account.attempt_count)}</strong><span>tentativas</span></article><article class="metric-card"><small>ITENS</small><strong>${profile.items.length}</strong><span>no inventário</span></article><article class="metric-card"><small>ADMIN</small><strong>${account.is_admin ? 'SIM' : 'NÃO'}</strong><span>${account.password_set ? 'senha definida' : 'sem senha'}</span></article></div><div class="profile-section"><h4>Dinheiro e energia</h4><div class="profile-resource-list">${profileResourceRows([...(profile.currencies || []), ...(profile.energies || [])], 'Nenhuma moeda ou energia')}</div></div><div class="profile-columns">${sections}</div><div class="profile-section"><h4>Equipados</h4><div class="user-tags">${equipped}</div></div><div class="profile-section"><h4>Estatísticas</h4><div class="profile-resource-list">${stats}</div></div><div class="profile-actions"><button class="primary-action" data-profile-grant="${account.id}"><i class="fa-solid fa-gift"></i> Dar item / dinheiro</button><button class="secondary-action" data-profile-refresh="${account.id}"><i class="fa-solid fa-rotate"></i> Atualizar</button></div></div>`
   profileEl.hidden = false
-  profileEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  document.body.classList.add('profile-open')
 }
 
 $('#userSearchButton').addEventListener('click', () => loadAdminUsers($('#userSearch').value).catch(error => toast(error.message)))
@@ -437,7 +449,10 @@ $('#userList').addEventListener('click', async event => {
 })
 
 $('#userProfile').addEventListener('click', event => {
-  if (event.target.closest('[data-close-profile]')) $('#userProfile').hidden = true
+  if (event.target === $('#userProfile') || event.target.closest('[data-close-profile]')) {
+    $('#userProfile').hidden = true
+    document.body.classList.remove('profile-open')
+  }
   const grant = event.target.closest('[data-profile-grant]')
   if (grant) openGrantModal(Number(grant.dataset.profileGrant))
   const refresh = event.target.closest('[data-profile-refresh]')
