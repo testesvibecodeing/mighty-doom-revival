@@ -23,18 +23,22 @@ ARM64 / IL2CPP
 Instale e deixe no `PATH`:
 
 - Python 3.11+ (com `UnityPy==1.25.3`; o patcher instala sozinho se faltar)
-- Java/JDK 17+
+- Java/JDK 17+ — o patcher resolve na ordem: `REVIVAL_JAVA` explícito >
+  JRE 17 embarcado em `.tools\jre17\` > `PATH` **somente se for 17+**
+  (Java 11 no `PATH` é rejeitado com instrução; veja `scripts/resolve_java.py`)
 - ADB, recomendado para instalação/testes
 
 O `apktool.jar` e o `uber-apk-signer.jar` são baixados automaticamente para
-`.tools\` pelo `scripts\setup-patcher-tools.bat`/`.sh` — não é preciso instalar
+`.tools\` pelo `scripts/setup-patcher-tools.bat`/`.sh` — não é preciso instalar
 apktool/zipalign/apksigner do Android SDK; o signer cuida de alinhar e assinar.
+No Revival Studio, o mesmo preparo está em **Ferramentas → Preparar
+ferramentas…** (com confirmação antes do download).
 
 Confirme no Prompt/PowerShell:
 
 ```bat
 python --version
-java -version
+python scripts\resolve_java.py
 adb version
 ```
 

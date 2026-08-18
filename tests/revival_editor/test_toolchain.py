@@ -250,5 +250,46 @@ class TestRelatorioDaToolchain(unittest.TestCase):
         self.assertIn("tools", relatorio.to_dict())
 
 
+class TestCliResolveJava(unittest.TestCase):
+    """Contrato do `scripts/resolve_java.py` — a ponte dos orquestradores
+    headless (patch-apk.*, setup-patcher-tools.*) para este mesmo resolvedor.
+
+    stdout = caminho + exit 0; stderr = instrução + exit 3. O caminho impresso
+    nunca é um Java < 17: o resolvedor recusa antes de chegar aqui.
+    """
+
+    def test_ok_imprime_caminho_e_exit_0(self) -> None:
+        from io import StringIO
+
+        import resolve_java  # scripts/ já está no sys.path deste teste
+
+        bom = tc.ToolStatus(name="java", ok=True, path="C:/jre17/bin/java.exe", version="17")
+        with (
+            mock.patch.object(resolve_java, "resolve_java", return_value=bom) as resolvido,
+            mock.patch("sys.stdout", new_callable=StringIO) as saida,
+        ):
+            codigo = resolve_java.main()
+        self.assertEqual(codigo, 0)
+        self.assertEqual(saida.getvalue().strip(), "C:/jre17/bin/java.exe")
+        resolvido.assert_called_once_with()
+
+    def test_recusa_imprime_instrucao_e_exit_3(self) -> None:
+        from io import StringIO
+
+        import resolve_java
+
+        ruim = tc.ToolStatus(
+            name="java", ok=False, detail="nenhum Java 17+ utilizável.\nUse o JRE embarcado."
+        )
+        with (
+            mock.patch.object(resolve_java, "resolve_java", return_value=ruim),
+            mock.patch("sys.stderr", new_callable=StringIO) as erro,
+        ):
+            codigo = resolve_java.main()
+        self.assertEqual(codigo, 3)
+        self.assertIn("Java 17+", erro.getvalue())
+        self.assertIn("JRE embarcado", erro.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

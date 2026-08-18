@@ -69,14 +69,24 @@ if "!LENGTH_RC!"=="4" (
   echo [INFO] Se a referencia exigir realocacao de metadata IL2CPP, a etapa posterior bloqueara com seguranca.
 )
 
-call :require java || (pause & exit /b 3)
+rem fase 3: mesmo resolvedor do Studio - explicito/REVIVAL_JAVA > .tools\jre17
+rem > PATH somente se 17+. A recusa imprime a instrucao no stderr do resolvedor.
+set "JAVA_BIN="
+for /f "usebackq delims=" %%J in (`python scripts\resolve_java.py 2^>nul`) do set "JAVA_BIN=%%J"
+if not defined JAVA_BIN (
+  python scripts\resolve_java.py
+  echo [FALTA] Nenhum Java 17+ utilizavel.
+  pause
+  exit /b 3
+)
+echo [OK] java: !JAVA_BIN!
 
-if not exist ".tools\apktool.jar" call "scripts\setup-patcher-tools.bat"
+if not exist ".tools\apktool.jar" call "scripts\setup-patcher-tools.bat" --headless
 if errorlevel 1 (
   pause
   exit /b %ERRORLEVEL%
 )
-if not exist ".tools\uber-apk-signer.jar" call "scripts\setup-patcher-tools.bat"
+if not exist ".tools\uber-apk-signer.jar" call "scripts\setup-patcher-tools.bat" --headless
 if errorlevel 1 (
   pause
   exit /b %ERRORLEVEL%
@@ -136,7 +146,7 @@ if errorlevel 1 (
 
 echo.
 echo [3/8] Desmontando APK...
-java -jar "%APKTOOL%" d -f "%APK%" -o "%DECODED%"
+"%JAVA_BIN%" -jar "%APKTOOL%" d -f "%APK%" -o "%DECODED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao desmontar o APK.
   pause
@@ -170,7 +180,7 @@ if not "%PATCH_RC%"=="0" (
 
 echo.
 echo [5/8] Reconstruindo APK...
-java -jar "%APKTOOL%" b "%DECODED%" -o "%UNSIGNED%"
+"%JAVA_BIN%" -jar "%APKTOOL%" b "%DECODED%" -o "%UNSIGNED%"
 if errorlevel 1 (
   echo [ERRO] Apktool falhou ao reconstruir o APK.
   pause
@@ -189,14 +199,14 @@ if errorlevel 1 (
 
 echo.
 echo [7/8] Alinhando, assinando e verificando assinatura...
-java -jar "%SIGNER%" -a "%UNSIGNED%" --overwrite --verbose
+"%JAVA_BIN%" -jar "%SIGNER%" -a "%UNSIGNED%" --overwrite --verbose
 if errorlevel 1 (
   echo [ERRO] Falha ao alinhar/assinar o APK.
   pause
   exit /b 7
 )
 
-java -jar "%SIGNER%" -a "%UNSIGNED%" --onlyVerify --verbose
+"%JAVA_BIN%" -jar "%SIGNER%" -a "%UNSIGNED%" --onlyVerify --verbose
 if errorlevel 1 (
   echo [ERRO] A verificacao da assinatura falhou.
   pause

@@ -1,23 +1,49 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\.."
+
+rem studio-forward: sem argumentos, abre o Revival Studio, cujo botao "Preparar
+rem ferramentas" executa este mesmo script em modo --headless (mesmo download,
+rem mesmos hashes). Com argumentos segue direto para o caminho headless.
+if "%~1"=="" (
+  where python >nul 2>nul
+  if not errorlevel 1 (
+    python "%~dp0revival_studio.py"
+    exit /b !errorlevel!
+  )
+)
+
+set "HEADLESS=0"
+if /i "%~1"=="--headless" set "HEADLESS=1"
 
 echo ============================================================
 echo  Mighty DOOM Revival - preparar ferramentas do patcher
 echo ============================================================
 echo.
 
-where java >nul 2>nul || (
-  echo [ERRO] Java nao encontrado no PATH.
-  echo Instale um JDK/JRE moderno ^(Java 17+ recomendado^) e tente novamente.
-  pause
+where python >nul 2>nul || (
+  echo [ERRO] Python nao encontrado no PATH.
+  echo Necessario ao resolvedor de Java do projeto.
+  call :pause_if_interactive
   exit /b 2
 )
 where powershell >nul 2>nul || (
   echo [ERRO] PowerShell nao encontrado.
-  pause
+  call :pause_if_interactive
   exit /b 2
 )
+
+rem fase 3: o Java vem do mesmo resolvedor do Studio (explicito/REVIVAL_JAVA
+rem > .tools\jre17 > PATH 17+), nao do PATH as cegas.
+set "JAVA_BIN="
+for /f "usebackq delims=" %%J in (`python scripts\resolve_java.py 2^>nul`) do set "JAVA_BIN=%%J"
+if not defined JAVA_BIN (
+  python scripts\resolve_java.py
+  echo [ERRO] Nenhum Java 17+ utilizavel.
+  call :pause_if_interactive
+  exit /b 2
+)
+echo [OK] java: !JAVA_BIN!
 
 set "TOOL_DIR=.tools"
 set "APKTOOL=%TOOL_DIR%\apktool.jar"
@@ -32,35 +58,35 @@ if not exist "%TOOL_DIR%" mkdir "%TOOL_DIR%"
 
 call :download_and_verify "%APKTOOL_URL%" "%APKTOOL%" "%APKTOOL_SHA%" "Apktool 3.0.3"
 if errorlevel 1 (
-  pause
+  call :pause_if_interactive
   exit /b %ERRORLEVEL%
 )
 
 call :download_and_verify "%SIGNER_URL%" "%SIGNER%" "%SIGNER_SHA%" "Uber APK Signer 1.3.0"
 if errorlevel 1 (
-  pause
+  call :pause_if_interactive
   exit /b %ERRORLEVEL%
 )
 
 echo.
 echo Validando executaveis Java...
-java -jar "%APKTOOL%" --version
+"%JAVA_BIN%" -jar "%APKTOOL%" --version
 if errorlevel 1 (
   echo [ERRO] Apktool baixado nao executou corretamente.
-  pause
+  call :pause_if_interactive
   exit /b 5
 )
-java -jar "%SIGNER%" --version
+"%JAVA_BIN%" -jar "%SIGNER%" --version
 if errorlevel 1 (
   echo [ERRO] Uber APK Signer baixado nao executou corretamente.
-  pause
+  call :pause_if_interactive
   exit /b 5
 )
 
 echo.
 echo [OK] Ferramentas do patcher preparadas em %TOOL_DIR%.
 echo      Essa pasta e ignorada pelo Git.
-pause
+call :pause_if_interactive
 exit /b 0
 
 :download_and_verify
@@ -103,3 +129,8 @@ set "ACTUAL_HASH="
 for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '%FILE%').Hash.ToLowerInvariant()"`) do set "ACTUAL_HASH=%%H"
 if /I "%ACTUAL_HASH%"=="%EXPECTED_HASH%" exit /b 0
 exit /b 1
+
+:pause_if_interactive
+if "%HEADLESS%"=="1" exit /b 0
+pause
+exit /b 0

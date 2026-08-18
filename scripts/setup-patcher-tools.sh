@@ -5,16 +5,35 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# studio-forward: sem argumentos e em sessão gráfica interativa, abre o Revival
+# Studio — cujo botão "Preparar ferramentas" executa este mesmo script em modo
+# --headless (mesmo download, mesmos hashes). Com argumentos, ou sem display,
+# segue direto para o caminho headless de CI/VPS.
+if [[ $# -eq 0 ]] && [[ -t 0 ]] && { [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] || [[ "$(uname -s)" == "Darwin" ]]; }; then
+  if command -v python3 >/dev/null 2>&1; then
+    exec python3 "$(dirname "${BASH_SOURCE[0]}")/revival_studio.py"
+  elif command -v python >/dev/null 2>&1; then
+    exec python "$(dirname "${BASH_SOURCE[0]}")/revival_studio.py"
+  fi
+fi
+
 echo "============================================================"
 echo " Mighty DOOM Revival - preparar ferramentas do patcher"
 echo "============================================================"
 echo
 
-if ! command -v java >/dev/null 2>&1; then
-  echo "[ERRO] Java não encontrado no PATH." >&2
-  echo "Instale um JDK/JRE moderno (Java 17+ recomendado) e tente novamente." >&2
+# fase 3: o Java vem do mesmo resolvedor do Studio (explícito/REVIVAL_JAVA >
+# .tools/jre17 > PATH 17+), não do PATH às cegas. A recusa imprime a instrução.
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN=python3
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN=python
+else
+  echo "[ERRO] python3 não está no PATH (necessário ao resolvedor de Java)." >&2
   exit 2
 fi
+JAVA_BIN="$("$PYTHON_BIN" scripts/resolve_java.py)" || exit 2
+echo "[OK] java: $JAVA_BIN"
 
 if command -v curl >/dev/null 2>&1; then
   DOWNLOADER=curl
@@ -85,11 +104,11 @@ download_and_verify "$SIGNER_URL" "$SIGNER" "$SIGNER_SHA" "Uber APK Signer 1.3.0
 
 echo
 echo "Validando executáveis Java..."
-if ! java -jar "$APKTOOL" --version; then
+if ! "$JAVA_BIN" -jar "$APKTOOL" --version; then
   echo "[ERRO] Apktool baixado não executou corretamente." >&2
   exit 5
 fi
-if ! java -jar "$SIGNER" --version; then
+if ! "$JAVA_BIN" -jar "$SIGNER" --version; then
   echo "[ERRO] Uber APK Signer baixado não executou corretamente." >&2
   exit 5
 fi

@@ -768,6 +768,69 @@ class StudioApp:
         self.refresh()
 
     # ==================================================================
+    # menus — Ferramentas
+    # ==================================================================
+
+    def act_verificar_ferramentas(self) -> None:
+        """Fase 3, gate: a tela informa caminho e versão de cada ferramenta."""
+        if not self._exige_livre():
+            return
+        destino = self.studio_root / "logs" / "toolchain.json"
+        self._submit(
+            "ferramentas-status",
+            lambda ctx: _trabalho_ferramentas_status(destino, ctx),
+            ao_concluir=self._apos_ferramentas_status,
+        )
+
+    def _apos_ferramentas_status(self, evento: DoneEvent) -> None:
+        relatorio = evento.result
+        if relatorio.ok:
+            titulo = "Ferramentas: nenhuma pendência obrigatória"
+        else:
+            titulo = "Ferramentas bloqueando: " + ", ".join(t.name for t in relatorio.blocking)
+        linhas = [titulo, ""]
+        for ferramenta in relatorio.tools:
+            marca = "✓" if ferramenta.ok else "✗"
+            obrigatorio = "" if ferramenta.required else " (opcional)"
+            versao = f" {ferramenta.version}" if ferramenta.version else ""
+            linhas.append(f"{marca} {ferramenta.name}{versao}{obrigatorio}")
+            if ferramenta.path:
+                linhas.append(f"    caminho: {ferramenta.path}")
+            if not ferramenta.ok and ferramenta.detail:
+                linhas.append("    " + ferramenta.detail.replace("\n", "\n    "))
+        messagebox.showinfo("Verificar ferramentas", "\n".join(linhas))
+
+    def act_preparar_ferramentas(self) -> None:
+        """Fase 3: usa os scripts existentes — nunca uma segunda implementação
+        de download — e pede confirmação antes de baixar qualquer coisa."""
+        if not self._exige_livre():
+            return
+        confirmado = messagebox.askyesno(
+            "Preparar ferramentas",
+            "Baixar/validar em .tools/ (SHA-256 pinado, sem trocar de versão):\n"
+            "  • Apktool 3.0.3 → apktool.jar\n"
+            "  • uber-apk-signer 1.3.0 → uber-apk-signer.jar\n"
+            "\n"
+            "O Java é resolvido antes (explícito > REVIVAL_JAVA > .tools/jre17\n"
+            "> PATH apenas se 17+); Java antigo é rejeitado com instrução.\n"
+            "\nConfirmar o download?",
+        )
+        if not confirmado:
+            return
+        comando = _comando_preparar_ferramentas(self.repo_root)
+        self.log.append("== preparar ferramentas: " + " ".join(comando), "info")
+        self._submit(
+            "preparar-ferramentas",
+            lambda ctx: _trabalho_preparar_ferramentas(comando, ctx),
+            ao_concluir=self._reverificar_pos_preparo,
+        )
+
+    def _reverificar_pos_preparo(self, _evento: DoneEvent) -> None:
+        """Encadeia a verificação depois do preparo — o gate da fase 3 pede
+        caminho e versão de cada ferramenta na tela."""
+        self.act_verificar_ferramentas()
+
+    # ==================================================================
     # menus — Cliente / Testes / Log
     # ==================================================================
 
@@ -976,6 +1039,47 @@ def _trabalho_testes(comando: list[str], ctx: Any) -> int:
         raise RuntimeError(f"comando falhou com exit {codigo} (veja o log acima)")
     ctx.progress("testes", "tudo verde", 1.0)
     return codigo
+
+
+def _comando_preparar_ferramentas(repo_root: Path) -> list[str]:
+    """Linha de comando headless do preparador oficial (fase 3 do plano).
+
+    O botão usa os scripts existentes — nunca uma segunda implementação de
+    download. `--headless` é obrigatório: sem ele o wrapper encaminhador
+    abriria o Studio de novo (recursão §9.2), e o teste de wrappers falha se
+    esta chamada perder a flag.
+    """
+    if sys.platform.startswith("win"):
+        return ["cmd", "/c", str(repo_root / "scripts" / "setup-patcher-tools.bat"), "--headless"]
+    return ["bash", str(repo_root / "scripts" / "setup-patcher-tools.sh"), "--headless"]
+
+
+def _trabalho_preparar_ferramentas(comando: list[str], ctx: Any) -> int:
+    ctx.progress("ferramentas", "baixando/validando JARs (hashes pinados)…", None)
+    codigo = ctx.run_process(comando, cwd=REPO_ROOT, stage="ferramentas", timeout=1800)
+    ctx.log(f"exit {codigo}")
+    if codigo != 0:
+        raise RuntimeError(f"preparo de ferramentas falhou com exit {codigo} (veja o log acima)")
+    ctx.progress("ferramentas", "JARs prontos", 1.0)
+    return codigo
+
+
+def _trabalho_ferramentas_status(destino: Path, ctx: Any):
+    from ..toolchain import detect_toolchain
+
+    ctx.progress("ferramentas", "inspecionando toolchain…", None)
+    relatorio = detect_toolchain()
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(
+        json.dumps(relatorio.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    for ferramenta in relatorio.tools:
+        marca = "✓" if ferramenta.ok else "✗"
+        onde = f" — {ferramenta.path}" if ferramenta.path else ""
+        primeira = ferramenta.detail.splitlines()[0] if ferramenta.detail else ""
+        ctx.log(f"{marca} {ferramenta.name}: {primeira}{onde}")
+    ctx.progress("ferramentas", "toolchain inspecionada", 1.0)
+    return relatorio
 
 
 def _abrir_no_sistema(caminho: Path) -> None:

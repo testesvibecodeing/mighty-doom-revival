@@ -52,7 +52,7 @@ WRAPPER_INVENTORY: dict[str, tuple[str | None, str, tuple[str, ...]]] = {
     ),
     "setup-patcher-tools": (
         "ferramentas.preparar",
-        PENDENTE,  # fase 3 (botão Preparar ferramentas)
+        PRONTO,  # fase 3: botão Preparar ferramentas no menu Ferramentas
         ("apktool",),
     ),
     "setup-server": (
@@ -172,12 +172,10 @@ class TestRecursao(unittest.TestCase):
 
     Wrappers que se chamam entre si por razões legítimas de pipeline headless
     (patch-apk chama setup-patcher-tools quando falta ferramenta) podem
-    continuar — o que não pode existir é uma cadeia que volte ao launcher no
-    meio de um fluxo headless. Por isso a regra mira em quem **encaminha**
-    (PRONTO): nenhum wrapper pode invocar um wrapper encaminhador, senão um
-    pipeline headless abriria GUI no meio (ou entraria em loop). Quando um
-    PENDENTE virar PRONTO, este teste obriga o chamador a passar argumento
-    explícito de modo headless.
+    continuar **desde que passem `--headless` explícito** — o branch de
+    encaminhamento só dispara sem argumentos, então a chamada argumentada não
+    pode abrir GUI nem gerar loop. O que este teste proíbe é invocar um
+    encaminhador (PRONTO) sem essa proteção.
     """
 
     @staticmethod
@@ -197,20 +195,22 @@ class TestRecursao(unittest.TestCase):
         for caminho in _todos_wrappers():
             texto = caminho.read_text(encoding="utf-8", errors="replace")
             for linha in self._linhas_executaveis(texto):
+                if "--headless" in linha:
+                    continue  # chamada argumentada: o branch forward exige zero args
                 for base in prontos:
                     if base == caminho.stem:
                         continue
                     self.assertNotIn(
                         f"{base}.sh",
                         linha,
-                        f"{caminho.name} invoca {base}.sh (encaminhador) — "
-                        "passe argumento headless explícito",
+                        f"{caminho.name} invoca {base}.sh (encaminhador) sem --headless — "
+                        "abrira a GUI no meio de um fluxo headless",
                     )
                     self.assertNotIn(
                         f"{base}.bat",
                         linha,
-                        f"{caminho.name} invoca {base}.bat (encaminhador) — "
-                        "passe argumento headless explícito",
+                        f"{caminho.name} invoca {base}.bat (encaminhador) sem --headless — "
+                        "abrira a GUI no meio de um fluxo headless",
                     )
 
     def test_launcher_nao_referencia_wrapper(self) -> None:
@@ -221,6 +221,12 @@ class TestRecursao(unittest.TestCase):
         o que não pode existir é o nome aparecendo em string de **código**,
         que é como um subprocesso seria montado. Por isso a análise é por AST,
         não por texto bruto.
+
+        Exceção deliberada (fase 3): a ação "Preparar ferramentas" executa o
+        script oficial de setup em modo `--headless` — o branch de
+        encaminhamento exige zero argumentos, então essa chamada não pode
+        voltar ao launcher. A exceção vale apenas para chamadas cujo argumento
+        literal `--headless` está na mesma invocação.
         """
         import ast
 
@@ -242,18 +248,32 @@ class TestRecursao(unittest.TestCase):
                         and isinstance(primeiro.value.value, str)
                     ):
                         docstrings.add(id(primeiro.value))
+            # strings dentro de uma invocação (lista de comando ou chamada)
+            # que contém --headless: protegidas por construção — o branch de
+            # encaminhamento exige zero argumentos, logo não há recursão.
+            permitidas: set[int] = set()
+            for no in ast.walk(arvore):
+                if not isinstance(no, (ast.List, ast.Call)):
+                    continue
+                subliterais = [
+                    s for s in ast.walk(no)
+                    if isinstance(s, ast.Constant) and isinstance(s.value, str)
+                ]
+                if any(s.value.strip() == "--headless" for s in subliterais):
+                    permitidas.update(id(s) for s in subliterais)
             for no in ast.walk(arvore):
                 if (
                     isinstance(no, ast.Constant)
                     and isinstance(no.value, str)
                     and id(no) not in docstrings
+                    and id(no) not in permitidas
                 ):
                     for nome in nomes:
                         self.assertNotIn(
                             nome,
                             no.value,
                             f"{fonte.relative_to(SCRIPTS_DIR)} usa {nome}* em código — "
-                            "recursão launcher→wrapper proibida",
+                            "recursão launcher→wrapper proibida (exceto com --headless)",
                         )
 
 

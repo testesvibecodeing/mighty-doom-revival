@@ -279,6 +279,81 @@ class TestJanelaMinima(unittest.TestCase):
                 f"{chave} não pode ter verde sem ter sido medido",
             )
 
+    # -- Ferramentas (fase 3) ------------------------------------------------
+
+    def test_ferramentas_disponiveis_sem_projeto(self) -> None:
+        """Preparar/verificar ferramentas não depende de projeto aberto."""
+        self.assertEqual(self._estado_entrada("ferramentas.status"), "normal")
+        self.assertEqual(self._estado_entrada("ferramentas.preparar"), "normal")
+
+    def test_verificar_ferramentas_mostra_caminho_e_versao(self) -> None:
+        """Gate da fase 3: a tela informa caminho e versão de cada ferramenta."""
+        from revival_editor.toolchain import ToolStatus, ToolchainReport
+
+        relatorio = ToolchainReport(
+            tools=[
+                ToolStatus(name="java", ok=True, path="C:/jre17/bin/java.exe", version="17",
+                           detail="ok", source="JRE 17 embarcado (.tools/jre17)"),
+                ToolStatus(name="apktool", ok=False, detail=".tools/apktool.jar ausente."),
+            ]
+        )
+        with (
+            mock.patch("revival_editor.ui.app._trabalho_ferramentas_status", return_value=relatorio),
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+        ):
+            self.app.act_verificar_ferramentas()
+            ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
+            self.assertTrue(ok, self.app.var_status.get())
+
+        _titulo, texto = caixa.showinfo.call_args[0]
+        self.assertIn("bloqueando: apktool", texto, "pendência obrigatória precisa aparecer")
+        self.assertIn("java 17", texto)
+        self.assertIn("C:/jre17/bin/java.exe", texto, "caminho do Java na tela")
+        self.assertIn("apktool", texto)
+
+    def test_preparar_ferramentas_exige_confirmacao(self) -> None:
+        """O plano manda confirmar antes de download — recusa não submete job."""
+        with mock.patch("revival_editor.ui.app.messagebox") as caixa:
+            caixa.askyesno.return_value = False
+            self.app.act_preparar_ferramentas()
+        self.assertFalse(self.app.runner.is_running)
+        caixa.askyesno.assert_called_once()
+
+    def test_comando_preparar_ferramentas_e_headless(self) -> None:
+        """O botão usa o script oficial e SEMPRE em modo --headless (§9.2)."""
+        from revival_editor.ui.app import _comando_preparar_ferramentas
+
+        comando = _comando_preparar_ferramentas(self.app.repo_root)
+        self.assertEqual(comando[-1], "--headless", "sem a flag o wrapper reabriria o Studio")
+        self.assertTrue(Path(comando[-2]).is_file(), f"script ausente: {comando[-2]}")
+        esperado = ".bat" if sys.platform.startswith("win") else ".sh"
+        self.assertTrue(comando[-2].endswith(esperado))
+
+    def test_preparar_ferramentas_confirma_e_encadeia_verificacao(self) -> None:
+        from revival_editor.toolchain import ToolStatus, ToolchainReport
+
+        relatorio = ToolchainReport(tools=[ToolStatus(name="java", ok=True, version="17", detail="ok")])
+        comando_inofensivo = [sys.executable, "-c", "print('preparado-dry')"]
+        with (
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+            mock.patch(
+                "revival_editor.ui.app._comando_preparar_ferramentas",
+                return_value=comando_inofensivo,
+            ),
+            mock.patch("revival_editor.ui.app._trabalho_ferramentas_status", return_value=relatorio),
+        ):
+            caixa.askyesno.return_value = True
+            self.app.act_preparar_ferramentas()
+            # 1º job: preparo; ao concluir, encadeia a verificação da toolchain
+            ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
+            self.assertTrue(ok, self.app.var_status.get())
+
+        caixa.askyesno.assert_called_once()
+        self.assertIn("preparado-dry", self.app.log.content)
+        # a verificação encadeada mostrou o relatório mockado na tela
+        _titulo, texto = caixa.showinfo.call_args[0]
+        self.assertIn("java 17", texto)
+
     def test_fechar_durante_job_confirma_cancela_e_destroi(self) -> None:
         def dorme(ctx):
             for _ in range(300):

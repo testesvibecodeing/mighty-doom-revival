@@ -96,15 +96,16 @@ case "$LENGTH_RC" in
     ;;
 esac
 
-if ! command -v java >/dev/null 2>&1; then
-  echo "[FALTA] java não está no PATH." >&2
-  exit 3
-fi
-echo "[OK] java"
+# fase 3: mesmo resolvedor do Studio — explícito/REVIVAL_JAVA > .tools/jre17 >
+# PATH somente se 17+. O detalhe da recusa vai ao stderr do próprio resolvedor.
+JAVA_BIN="$("$PYTHON_BIN" scripts/resolve_java.py)" || exit 3
+echo "[OK] java: $JAVA_BIN"
 
 step "preparação das ferramentas do patcher"
 if [[ ! -f ".tools/apktool.jar" || ! -f ".tools/uber-apk-signer.jar" ]]; then
-  "$ROOT/scripts/setup-patcher-tools.sh"
+  # --headless: sem isso, com o wrapper encaminhador, abriria o Studio no meio
+  # do pipeline (regra de recursão §9.2).
+  "$ROOT/scripts/setup-patcher-tools.sh" --headless
 fi
 
 echo "Verificando suporte bundle-aware..."
@@ -144,7 +145,7 @@ step "[2/8] análise do APK"
 echo
 echo "[3/8] Desmontando APK..."
 step "[3/8] apktool decode"
-java -jar "$APKTOOL" d -f "$APK" -o "$DECODED"
+"$JAVA_BIN" -jar "$APKTOOL" d -f "$APK" -o "$DECODED"
 
 echo
 echo "[4/8] Aplicando servidor e configuração TLS..."
@@ -174,7 +175,7 @@ fi
 echo
 echo "[5/8] Reconstruindo APK..."
 step "[5/8] apktool build"
-java -jar "$APKTOOL" b "$DECODED" -o "$UNSIGNED"
+"$JAVA_BIN" -jar "$APKTOOL" b "$DECODED" -o "$UNSIGNED"
 
 echo
 echo "[6/8] Validando endpoint dentro do APK reconstruído..."
@@ -184,8 +185,8 @@ step "[6/8] verificação do endpoint no APK reconstruído"
 echo
 echo "[7/8] Alinhando, assinando e verificando assinatura..."
 step "[7/8] assinatura do APK"
-java -jar "$SIGNER" -a "$UNSIGNED" --overwrite --verbose
-java -jar "$SIGNER" -a "$UNSIGNED" --onlyVerify --verbose
+"$JAVA_BIN" -jar "$SIGNER" -a "$UNSIGNED" --overwrite --verbose
+"$JAVA_BIN" -jar "$SIGNER" -a "$UNSIGNED" --onlyVerify --verbose
 
 step "[7/8] verificação final do endpoint pós-assinatura"
 "$PYTHON_BIN" scripts/verify_patched_apk.py --apk "$UNSIGNED" --server "$SERVER_HOST" --report "$VERIFY_REPORT"
