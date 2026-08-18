@@ -2,6 +2,12 @@
 setlocal EnableExtensions
 cd /d "%~dp0\.."
 where python >nul 2>nul || (echo [ERROR] Python not found.& exit /b 2)
+rem studio-forward: sem argumentos abre o Revival Studio (acao projeto.analisar).
+rem Com qualquer argumento segue o caminho headless de sempre (plano, par. 9.2).
+if "%~1"=="" (
+    python "%~dp0revival_studio.py" %*
+    exit /b %errorlevel%
+)
 set "APK_PATH=%~1"
 if "%APK_PATH%"=="" set "APK_PATH=input\mighty-doom.apk"
 if not exist "%APK_PATH%" (
