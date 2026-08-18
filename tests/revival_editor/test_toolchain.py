@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+"""Regressão da toolchain determinística do Revival Studio.
+
+Trava os dois comportamentos que o plano exige na fase 3:
+
+  - "Java 11 é rejeitado com instrução clara; Java 17 local é selecionado";
+  - "hash divergente de JAR bloqueia o build".
+
+Os testes não dependem de nenhum Java instalado: a execução de `java -version`
+é substituída, então valem igual em Windows, Linux e CI.
+
+Execução: python tests/revival_editor/test_toolchain.py
+"""
+from __future__ import annotations
+
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
+sys.path.insert(0, str(SCRIPTS_DIR))
+
+from revival_editor import toolchain as tc  # noqa: E402
+
+JAVA_11 = (
+    'java version "11.0.18" 2023-01-17 LTS\n'
+    "Java(TM) SE Runtime Environment 18.9 (build 11.0.18+9-LTS-195)\n"
+)
+JAVA_17 = (
+    'openjdk version "17.0.20" 2026-07-21\n'
+    "OpenJDK Runtime Environment Temurin-17.0.20+8 (build 17.0.20+8)\n"
+)
+JAVA_8 = 'java version "1.8.0_382"\n'
+
+
+class TestParseJavaMajor(unittest.TestCase):
+    def test_formato_moderno(self) -> None:
+        self.assertEqual(tc.parse_java_major(JAVA_11), 11)
+        self.assertEqual(tc.parse_java_major(JAVA_17), 17)
+
+    def test_formato_pre_9(self) -> None:
+        self.assertEqual(tc.parse_java_major(JAVA_8), 8)
+
+    def test_saida_irreconhecivel(self) -> None:
+        for bad in ("", "comando nao encontrado", 'version "abc"'):
+            self.assertIsNone(tc.parse_java_major(bad))
+
+
+class TestResolveJava(unittest.TestCase):
+    """Ordem de resolução: explícito > REVIVAL_JAVA > embarcado > PATH(17+)."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        raiz = Path(self._tmp.name)
+        self.embarcado = raiz / "jre17" / "java"
+        self.embarcado.parent.mkdir(parents=True)
+        self.embarcado.write_text("fake", encoding="utf-8")
+        self.do_path = raiz / "path" / "java"
+        self.do_path.parent.mkdir(parents=True)
+        self.do_path.write_text("fake", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _resolver(self, versoes: dict[Path, str], explicit=None, env=None):
+        """Executa resolve_java com um mundo de Javas controlado."""
+
+        def fake_run(command, timeout=20.0):
+            saida = versoes.get(Path(command[0]))
+            return (0, saida) if saida else (1, "não encontrado")
+
+        with mock.patch.object(tc, "BUNDLED_JAVA", self.embarcado), \
+             mock.patch.object(tc, "_run", fake_run), \
+             mock.patch.object(tc.shutil, "which", lambda _: str(self.do_path)), \
+             mock.patch.dict(tc.os.environ, env or {}, clear=False):
+            if env is None:
+                tc.os.environ.pop(tc.JAVA_ENV_VAR, None)
+            return tc.resolve_java(explicit)
+
+    def test_prefere_o_embarcado_quando_o_path_e_java_11(self) -> None:
+        """O caso real desta máquina: PATH=11, .tools/jre17=17."""
+        status = self._resolver({self.embarcado: JAVA_17, self.do_path: JAVA_11})
+        self.assertTrue(status.ok)
+        self.assertEqual(status.path, str(self.embarcado))
+        self.assertEqual(status.version, "17")
+        self.assertIn("embarcado", status.source)
+
+    def test_usa_o_path_quando_ele_e_17_e_nao_ha_embarcado(self) -> None:
+        self.embarcado.unlink()
+        status = self._resolver({self.do_path: JAVA_17})
+        self.assertTrue(status.ok)
+        self.assertEqual(status.path, str(self.do_path))
+        self.assertEqual(status.source, "PATH")
+
+    def test_rejeita_java_11_com_instrucao_acionavel(self) -> None:
+        self.embarcado.unlink()
+        status = self._resolver({self.do_path: JAVA_11})
+        self.assertFalse(status.ok)
+        self.assertIn("Java 11", status.detail)
+        self.assertIn("17", status.detail)
+        # A instrução tem que dizer o que fazer, não só que falhou.
+        self.assertIn("setup-patcher-tools", status.detail)
+
+    def test_explicito_ganha_do_embarcado(self) -> None:
+        outro = Path(self._tmp.name) / "meu-jdk"
+        outro.write_text("fake", encoding="utf-8")
+        status = self._resolver({outro: JAVA_17, self.embarcado: JAVA_17}, explicit=outro)
+        self.assertTrue(status.ok)
+        self.assertEqual(status.path, str(outro))
+        self.assertEqual(status.source, "explícito")
+
+    def test_explicito_invalido_cai_para_o_embarcado(self) -> None:
+        status = self._resolver(
+            {self.embarcado: JAVA_17},
+            explicit=Path(self._tmp.name) / "nao-existe",
+        )
+        self.assertTrue(status.ok)
+        self.assertEqual(status.path, str(self.embarcado))
+
+    def test_variavel_de_ambiente_e_respeitada(self) -> None:
+        meu = Path(self._tmp.name) / "env-jdk"
+        meu.write_text("fake", encoding="utf-8")
+        status = self._resolver(
+            {meu: JAVA_17, self.embarcado: JAVA_17},
+            env={tc.JAVA_ENV_VAR: str(meu)},
+        )
+        self.assertTrue(status.ok)
+        self.assertEqual(status.path, str(meu))
+
+    def test_nenhum_java_utilizavel(self) -> None:
+        self.embarcado.unlink()
+        status = self._resolver({})
+        self.assertFalse(status.ok)
+        self.assertIsNone(status.path)
+
+
+class TestJarPinning(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _jar(self, conteudo: bytes) -> tuple[Path, str]:
+        jar = self.dir / "ferramenta.jar"
+        jar.write_bytes(conteudo)
+        return jar, tc.sha256_file(jar)
+
+    def test_hash_correto_passa(self) -> None:
+        jar, digest = self._jar(b"conteudo autentico")
+        status = tc._check_jar("apktool", jar, digest, "3.0.3")
+        self.assertTrue(status.ok)
+        self.assertEqual(status.version, "3.0.3")
+
+    def test_hash_divergente_bloqueia(self) -> None:
+        """Um apktool trocado reserializa diferente (DEAD-ENDS #8)."""
+        jar, _ = self._jar(b"binario adulterado")
+        status = tc._check_jar("apktool", jar, "0" * 64, "3.0.3")
+        self.assertFalse(status.ok)
+        self.assertIn("BLOQUEADO", status.detail)
+        self.assertIn("0" * 64, status.detail)
+        self.assertIn("Não substitua por outra versão", status.detail)
+
+    def test_jar_ausente_orienta_o_setup(self) -> None:
+        status = tc._check_jar("uber-apk-signer", self.dir / "sumido.jar", "0" * 64, "1.3.0")
+        self.assertFalse(status.ok)
+        self.assertIn("setup-patcher-tools", status.detail)
+
+    def test_sha256_file_bate_com_valor_conhecido(self) -> None:
+        vazio = self.dir / "vazio.bin"
+        vazio.write_bytes(b"")
+        self.assertEqual(
+            tc.sha256_file(vazio),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+
+    def test_hashes_pinados_tem_formato_sha256(self) -> None:
+        for digest in (tc.APKTOOL_SHA256, tc.SIGNER_SHA256):
+            self.assertEqual(len(digest), 64)
+            self.assertEqual(digest, digest.lower())
+            int(digest, 16)  # levanta se não for hex
+
+
+class TestChecagensDeAmbiente(unittest.TestCase):
+    def test_unitypy_versao_errada_e_recusada(self) -> None:
+        falso = mock.MagicMock()
+        falso.__version__ = "1.10.0"
+        falso.__file__ = "/fake/UnityPy/__init__.py"
+        with mock.patch.dict(sys.modules, {"UnityPy": falso}):
+            status = tc.check_unitypy()
+        self.assertFalse(status.ok)
+        self.assertIn("1.25.3", status.detail)
+        self.assertIn("DEAD-ENDS", status.detail)
+
+    def test_unitypy_versao_exata_passa(self) -> None:
+        falso = mock.MagicMock()
+        falso.__version__ = tc.UNITYPY_VERSION
+        falso.__file__ = "/fake/UnityPy/__init__.py"
+        with mock.patch.dict(sys.modules, {"UnityPy": falso}):
+            status = tc.check_unitypy()
+        self.assertTrue(status.ok)
+
+    def test_python_atual_atende_ao_minimo(self) -> None:
+        # O próprio interpretador que roda os testes precisa servir.
+        self.assertTrue(tc.check_python().ok)
+
+    def test_adb_e_opcional(self) -> None:
+        with mock.patch.object(tc.shutil, "which", lambda _: None):
+            status = tc.check_adb()
+        self.assertFalse(status.ok)
+        self.assertFalse(status.required, "adb não pode bloquear o patch")
+
+    def test_pillow_e_opcional(self) -> None:
+        self.assertFalse(tc.check_pillow().required)
+
+    def test_node_e_opcional_mas_checa_minimo(self) -> None:
+        with mock.patch.object(tc.shutil, "which", lambda _: "/usr/bin/node"), \
+             mock.patch.object(tc, "_run", lambda cmd, timeout=20.0: (0, "v20.11.0\n")):
+            status = tc.check_node()
+        self.assertFalse(status.ok)
+        self.assertFalse(status.required)
+        self.assertIn("22.5.0", status.detail)
+
+
+class TestRelatorioDaToolchain(unittest.TestCase):
+    def test_blocking_ignora_opcionais(self) -> None:
+        relatorio = tc.ToolchainReport(
+            tools=[
+                tc.ToolStatus(name="java", ok=True, required=True),
+                tc.ToolStatus(name="adb", ok=False, required=False),
+            ]
+        )
+        self.assertTrue(relatorio.ok)
+        self.assertEqual(relatorio.blocking, [])
+
+    def test_obrigatoria_faltando_bloqueia(self) -> None:
+        relatorio = tc.ToolchainReport(
+            tools=[tc.ToolStatus(name="java", ok=False, required=True)]
+        )
+        self.assertFalse(relatorio.ok)
+        self.assertEqual([t.name for t in relatorio.blocking], ["java"])
+
+    def test_get_e_serializacao(self) -> None:
+        relatorio = tc.ToolchainReport(tools=[tc.ToolStatus(name="java", ok=True)])
+        self.assertIsNotNone(relatorio.get("java"))
+        self.assertIsNone(relatorio.get("inexistente"))
+        self.assertIn("tools", relatorio.to_dict())
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
