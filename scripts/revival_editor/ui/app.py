@@ -125,6 +125,7 @@ class StudioApp:
         self.notebook.add(pagina_projeto, text="Projeto")
         pagina_projeto.columnconfigure(0, weight=1)
 
+        from .assets_tab import AssetsTab
         from .branding_tab import BrandingTab
         from .visuals_tab import VisualsTab
 
@@ -132,6 +133,8 @@ class StudioApp:
         self.notebook.add(self.visuals_tab, text="Visuais")
         self.branding_tab = BrandingTab(self.notebook, self)
         self.notebook.add(self.branding_tab, text="Branding")
+        self.assets_tab = AssetsTab(self.notebook, self)
+        self.notebook.add(self.assets_tab, text="Assets")
 
         # ---- formulário do projeto ----
         form = ttk.LabelFrame(pagina_projeto, text="Projeto")
@@ -794,6 +797,10 @@ class StudioApp:
     def act_branding_android(self) -> None:
         """Abre a aba Branding (fase 8): nome/ícone/cor com diff e bloqueios."""
         self.notebook.select(self.branding_tab)
+
+    def act_assets_catalog(self) -> None:
+        """Abre a aba Assets (fase 9): catálogo somente-leitura dos bundles."""
+        self.notebook.select(self.assets_tab)
 
     # ==================================================================
     # menus — Ferramentas

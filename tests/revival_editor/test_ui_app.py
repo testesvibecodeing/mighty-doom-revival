@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -487,6 +488,89 @@ class TestJanelaMinima(unittest.TestCase):
         self.assertEqual(len(dados["result"]["labels_alterados"]), 2)
         # o plano consumido sai da tela
         self.assertIsNone(aba.plano)
+
+    # -- Catálogo de assets (fase 9) -------------------------------------------
+
+    def test_aba_assets_existe_e_acao_abre(self) -> None:
+        abas = [self.app.notebook.tab(widget, "text") for widget in self.app.notebook.tabs()]
+        self.assertIn("Assets", abas)
+        self.app.act_assets_catalog()
+        self.assertEqual(self.app.notebook.select(), str(self.app.assets_tab))
+
+    def test_assets_sem_projeto_mostra_aviso(self) -> None:
+        with mock.patch("revival_editor.ui.assets_tab.messagebox") as caixa:
+            self.app.assets_tab.listar_bundles()
+        caixa.showwarning.assert_called_once()
+        self.assertFalse(self.app.assets_tab.membros)
+        self.assertTrue(self.app.assets_tab.btn_scan.instate(["disabled"]))
+
+    def test_assets_scan_popula_arvore_e_salva_relatorio(self) -> None:
+        """Fase 9: listar bundles do APK do projeto, escanear (domínio mockado),
+        árvore povoada, seletor visível e relatório no projeto."""
+        from revival_editor import assets_catalog as ac
+
+        apk = self.studio / "fake-apk.apk"
+        apk.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(apk, "w") as z:
+            z.writestr("assets/aa/Android/fake.bundle", b"bundle")
+            z.writestr("assets/aa/catalog.json", b"{}")
+        projeto, _ = new_project("assets1", studio_root=self.studio, input_apk=apk)
+        self.app._abrir_projeto_memoria(projeto)
+        self.app.refresh()
+
+        aba = self.app.assets_tab
+        aba.listar_bundles()
+        self.assertEqual(len(aba.membros), 1)
+        self.assertEqual(aba.combo_membro.current(), 0)
+
+        resultado = ac.ScanResult(
+            apk=str(apk), apk_sha256="ab" * 32,
+            member="assets/aa/Android/fake.bundle", bundle_sha256="cd" * 32,
+            object_count=2,
+            entries=[
+                ac.AssetEntry("assets/aa/Android/fake.bundle", 1, "Texture2D",
+                              "loading_background", width=2048, height=2048,
+                              obj_sha256="0" * 64, category=ac.EDITAVEL_VALIDADO),
+                ac.AssetEntry("assets/aa/Android/fake.bundle", 2, "AudioClip",
+                              "bgm_menu", duration=12.5,
+                              obj_sha256="1" * 64, category=ac.SOMENTE_LEITURA),
+            ],
+        )
+        with mock.patch("revival_editor.ui.assets_tab.messagebox") as caixa, \
+                mock.patch("revival_editor.ui.assets_tab.ac.scan_bundle",
+                           return_value=resultado):
+            caixa.askyesno.return_value = True
+            aba.escanear()
+            ok = _bombeiar(
+                self.root, lambda: len(aba.tree.get_children()) == 2
+            )
+            self.assertTrue(ok, self.app.var_status.get())
+        caixa.askyesno.assert_called_once()
+
+        linhas = [aba.tree.item(i, "values") for i in aba.tree.get_children()]
+        self.assertEqual(linhas[0][1], "Texture2D")
+        self.assertEqual(linhas[0][2], "loading_background")
+        self.assertEqual(linhas[0][4], ac.EDITAVEL_VALIDADO)
+        self.assertEqual(linhas[1][3], "12.5s")
+
+        # seleção mostra o seletor estável §16.2
+        aba.tree.selection_set(aba.tree.get_children()[0])
+        self.root.update()
+        self.assertIn("seletor estável", aba.lbl_info.cget("text"))
+        self.assertIn("loading_background", aba.lbl_info.cget("text"))
+
+        # relatório no projeto e no disco, sem conteúdo de asset
+        relatorio = Path(self.app.project.reports["assets_catalog"])
+        self.assertTrue(relatorio.is_file(), relatorio)
+        dados = json.loads(relatorio.read_text(encoding="utf-8"))
+        self.assertEqual(dados["object_count"], 2)
+        self.assertNotIn("image", json.dumps(dados))
+        self.assertIn("[assets] scan concluído", self.app.log.content)
+
+        # filtro por texto afunila a árvore
+        aba.var_busca.set("bgm")
+        aba.filtrar()
+        self.assertEqual(len(aba.tree.get_children()), 1)
 
     def test_fechar_durante_job_confirma_cancela_e_destroi(self) -> None:
         def dorme(ctx):

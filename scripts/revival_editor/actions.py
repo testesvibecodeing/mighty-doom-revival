@@ -102,6 +102,13 @@ ACTIONS: tuple[ActionSpec, ...] = (
         label="Importar base APK de um .xapk…",
         handler="act_importar_xapk",
     ),
+    ActionSpec(
+        action_id="apk.assets_catalogo",
+        menu="APK",
+        label="Catálogo de assets dos bundles (somente leitura)",
+        handler="act_assets_catalog",
+        needs_project=False,
+    ),
     # -- Servidor ----------------------------------------------------------
     ActionSpec(
         action_id="servidor.preflight",
