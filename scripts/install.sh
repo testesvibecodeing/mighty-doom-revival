@@ -27,6 +27,13 @@
 # Para desfazer só o que pertence a este projeto (sem afetar outros projetos
 # na mesma VPS), veja scripts/uninstall.sh.
 #
+# Super Admin do painel (/slayer): o instalador consulta o banco do servidor
+# e lista o(s) e-mail(is) já cadastrado(s) como admin (senha preservada); se
+# ainda não existe nenhum, cadastra o primeiro acesso (e-mail + senha gerados
+# e exibidos no resumo final). Sempre gera também um link temporário de 10
+# minutos, de uso único, para trocar e-mail e senha do Super Admin caso a
+# pessoa esqueça.
+#
 # Toda a execução é registrada em deploy/logs/install-<timestamp>.log, com
 # uma seção "OWNERSHIP" para cada decisão sobre o que pertence a este
 # projeto e o que foi preservado por já pertencer a outra coisa.
@@ -43,6 +50,7 @@ SERVER_DIR="$ROOT/server"
 DEPLOY_DIR="$ROOT/deploy"
 LOG_DIR="$DEPLOY_DIR/logs"
 STATE_FILE="$DEPLOY_DIR/.install-state"
+SERVICE_NAME="mighty-doom-revival"
 mkdir -p "$LOG_DIR"
 
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -53,10 +61,56 @@ LOG_FILE="$LOG_DIR/install-$TS.log"
 # os prompts (stdin não é redirecionado).
 exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$LOG_FILE" >&2)
 
-echo "============================================================"
-echo " Mighty DOOM Revival - instalador VPS"
-echo " Log desta execução: $LOG_FILE"
-echo "============================================================"
+rule() {
+  printf '%*s\n' 64 '' | tr ' ' "${1:-=}"
+}
+
+section() {
+  echo ""
+  rule '-'
+  echo " $1"
+  rule '-'
+}
+
+kv() {
+  printf '  %-25s %s\n' "$1:" "$2"
+}
+
+STEP="inicialização"
+on_error() {
+  local exit_code=$?
+  echo ""
+  rule '='
+  echo "[ERRO] Falha na etapa: $STEP"
+  echo "Comando que falhou: ${BASH_COMMAND}"
+  echo "Linha: ${BASH_LINENO[0]} em $0"
+  echo "Código de saída: $exit_code"
+  echo "Log completo desta execução: $LOG_FILE"
+  rule '='
+  exit "$exit_code"
+}
+trap on_error ERR
+
+STEP_COUNT=0
+step() {
+  STEP="$1"
+  STEP_COUNT=$((STEP_COUNT + 1))
+  echo ""
+  rule '='
+  printf ' [%02d] %s\n' "$STEP_COUNT" "$1"
+  rule '='
+}
+
+fail() {
+  echo "[ERRO] $1" >&2
+  echo "Log completo desta execução: $LOG_FILE" >&2
+  exit "${2:-1}"
+}
+
+rule '='
+echo " Mighty DOOM Revival — instalador VPS"
+rule '='
+kv "Log desta execução" "$LOG_FILE"
 echo ""
 echo "Este instalador é seguro para VPS compartilhada com outros projetos:"
 echo "  - Detecta o reverse proxy: se já existe um nginx servindo 80/443"
@@ -71,34 +125,6 @@ echo "    como 'não é deste projeto' e scripts/uninstall.sh nunca os remove."
 echo "  - Cada decisão de posse é registrada permanentemente em:"
 echo "      $STATE_FILE"
 echo "    e reaproveitada nas próximas execuções (git pull && install.sh)."
-echo "============================================================"
-
-STEP="inicialização"
-on_error() {
-  local exit_code=$?
-  echo ""
-  echo "============================================================"
-  echo "[ERRO] Falha na etapa: $STEP"
-  echo "Comando que falhou: ${BASH_COMMAND}"
-  echo "Linha: ${BASH_LINENO[0]} em $0"
-  echo "Código de saída: $exit_code"
-  echo "Log completo desta execução: $LOG_FILE"
-  echo "============================================================"
-  exit "$exit_code"
-}
-trap on_error ERR
-
-step() {
-  STEP="$1"
-  echo ""
-  echo "==== $1 ===="
-}
-
-fail() {
-  echo "[ERRO] $1" >&2
-  echo "Log completo desta execução: $LOG_FILE" >&2
-  exit "${2:-1}"
-}
 
 # Registro persistente de posse (deploy/.install-state): guarda, para sempre,
 # se cada dependência de sistema (Node.js, pacote Caddy, ...) foi instalada
@@ -431,6 +457,122 @@ step "Ajustando permissões"
 chown -R "$RUN_USER":"$RUN_USER" "$SERVER_DIR/runtime" "$SERVER_DIR/data" "$SERVER_DIR/config" "$ENV_FILE" "$DEPLOY_DIR" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
+step "Super Admin do painel (/slayer): e-mail cadastrado ou primeiro acesso"
+
+# O painel web precisa de um Super Admin. A regra deste passo:
+#   1. Consulta o banco do servidor (SQLite) pelos admins já existentes.
+#   2. Se JÁ EXISTE admin: apenas lista o(s) e-mail(is) cadastrado(s) e NADA
+#      é sobrescrito — a senha atual, mesmo que trocada pelo painel ou por
+#      um link de recuperação anterior, é preservada.
+#   3. Se NÃO existe admin: é o primeiro acesso — gera e-mail + senha, grava
+#      em runtime/admin-credentials.json e o servidor consome no boot
+#      (aplica uma vez e apaga o arquivo).
+#   4. Sempre gera também um link temporário de 10 minutos para trocar
+#      e-mail e senha do Super Admin (caso a pessoa esqueça), em
+#      runtime/admin-recover-token.json — lido a cada requisição, sem
+#      precisar reiniciar o serviço. Uso único: ao concluir a troca, o
+#      servidor revoga o link na hora.
+DB_PATH_REL="$(get_env_var DB_PATH)"
+if [[ -n "$DB_PATH_REL" ]]; then
+  if [[ "$DB_PATH_REL" == /* ]]; then
+    ADMIN_DB="$DB_PATH_REL"
+  else
+    ADMIN_DB="$SERVER_DIR/${DB_PATH_REL#./}"
+  fi
+else
+  ADMIN_DB="$SERVER_DIR/runtime/revival.sqlite3"
+fi
+
+ADMIN_EMAILS=""
+ADMIN_DB_READ_OK=1
+if [[ -f "$ADMIN_DB" ]]; then
+  # Saída: um e-mail por linha (vazio = nenhum admin). Exit 3 = banco
+  # ilegível (travado/corrompido): por segurança não mexemos em credenciais.
+  ADMIN_EMAILS="$(node - "$ADMIN_DB" <<'NODEEOF' 2>>"$LOG_FILE"
+const { DatabaseSync } = require('node:sqlite')
+try {
+  const db = new DatabaseSync(process.argv[2])
+  let emails = []
+  try {
+    emails = db.prepare('SELECT email FROM users WHERE is_admin = 1 ORDER BY id').all()
+      .map(r => (r.email && String(r.email).trim()) || '(sem e-mail)')
+  } catch (e) {
+    if (!/no such table/i.test(String(e.message))) throw e
+  }
+  db.close()
+  if (emails.length) console.log(emails.join('\n'))
+} catch (e) {
+  console.error(String((e && e.message) || e))
+  process.exit(3)
+}
+NODEEOF
+  )" || ADMIN_DB_READ_OK=0
+fi
+
+ADMIN_FIRST_ACCESS=0
+if [[ -f "$ADMIN_DB" && "$ADMIN_DB_READ_OK" != "1" ]]; then
+  echo "[AVISO] Não foi possível ler o banco ($ADMIN_DB) para conferir os"
+  echo "[AVISO] admins existentes. Por segurança NENHUMA senha foi alterada"
+  echo "[AVISO] agora; use o link de recuperação abaixo se precisar trocá-la."
+  ADMIN_EMAILS="(banco ilegível — nada foi alterado)"
+elif [[ -z "$ADMIN_EMAILS" ]]; then
+  ADMIN_FIRST_ACCESS=1
+fi
+
+if [[ "$ADMIN_FIRST_ACCESS" == "1" ]]; then
+  ADMIN_EMAIL="$(get_env_var REVIVAL_ADMIN_EMAIL || true)"
+  [[ -z "$ADMIN_EMAIL" ]] && ADMIN_EMAIL="admin@revival.local"
+  if [[ -t 0 ]]; then
+    read -rp "E-mail do Super Admin do painel (primeiro acesso) [$ADMIN_EMAIL]: " ADMIN_EMAIL_INPUT
+    [[ -n "${ADMIN_EMAIL_INPUT:-}" ]] && ADMIN_EMAIL="$ADMIN_EMAIL_INPUT"
+  fi
+  ADMIN_EMAIL="$(echo "$ADMIN_EMAIL" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  ADMIN_PASSWORD="$(openssl rand -hex 12)"
+  ADMIN_CREDENTIALS_FILE="$SERVER_DIR/runtime/admin-credentials.json"
+
+  mkdir -p "$SERVER_DIR/runtime"
+  printf '{\n  "email": "%s",\n  "password": "%s",\n  "created_at": %d\n}\n' \
+    "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$(date +%s)" > "$ADMIN_CREDENTIALS_FILE"
+  chown "$RUN_USER":"$RUN_USER" "$ADMIN_CREDENTIALS_FILE" 2>/dev/null || true
+  chmod 600 "$ADMIN_CREDENTIALS_FILE"
+  echo "Primeiro acesso: Super Admin '$ADMIN_EMAIL' criado (senha no resumo final)."
+
+  # Se o serviço já está rodando (reinstalação com banco novo), reinicia para
+  # aplicar as credenciais no boot; se nunca subiu, elas já são consumidas no
+  # primeiro boot lá na frente.
+  if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    if systemctl restart "$SERVICE_NAME" >>"$LOG_FILE" 2>&1; then
+      for _ in $(seq 1 30); do
+        curl -fsS --max-time 2 http://127.0.0.1:8080/revival/health -o /dev/null 2>>"$LOG_FILE" && break
+        sleep 1
+      done
+    else
+      echo "[AVISO] Não consegui reiniciar $SERVICE_NAME; o Super Admin nasce no próximo boot."
+    fi
+  fi
+else
+  echo "Super Admin já cadastrado neste servidor (senha preservada):"
+  while IFS= read -r admin_line; do
+    [[ -n "$admin_line" ]] && echo "  - $admin_line"
+  done <<< "$ADMIN_EMAILS"
+fi
+
+# Link temporário (10 minutos, uso único) para trocar e-mail e senha do
+# Super Admin — gerado sempre, caso a pessoa esqueça os dados de acesso.
+ADMIN_RECOVER_TOKEN="$(openssl rand -hex 32)"
+ADMIN_RECOVER_CREATED_AT="$(date +%s)"
+ADMIN_RECOVER_EXPIRES_AT="$(( ADMIN_RECOVER_CREATED_AT + 600 ))"
+ADMIN_RECOVER_TOKEN_FILE="$SERVER_DIR/runtime/admin-recover-token.json"
+
+mkdir -p "$SERVER_DIR/runtime"
+printf '{\n  "token": "%s",\n  "expires_at": %d,\n  "created_at": %d\n}\n' \
+  "$ADMIN_RECOVER_TOKEN" "$ADMIN_RECOVER_EXPIRES_AT" "$ADMIN_RECOVER_CREATED_AT" > "$ADMIN_RECOVER_TOKEN_FILE"
+chown "$RUN_USER":"$RUN_USER" "$ADMIN_RECOVER_TOKEN_FILE" 2>/dev/null || true
+chmod 600 "$ADMIN_RECOVER_TOKEN_FILE"
+ADMIN_RECOVER_EXPIRES_LABEL="$(date -d "@$ADMIN_RECOVER_EXPIRES_AT" '+%H:%M:%S' 2>/dev/null || echo "daqui a 10 minutos")"
+echo "Link de recuperação do Super Admin gerado (válido até $ADMIN_RECOVER_EXPIRES_LABEL; veja o resumo final)."
+
+# ---------------------------------------------------------------------------
 step "Rodando testes automatizados do servidor (gate de deploy)"
 
 if ! (cd "$SERVER_DIR" && npm test); then
@@ -441,7 +583,6 @@ fi
 step "Instalando serviço systemd do Revival Server"
 
 NODE_BIN="$(command -v node)"
-SERVICE_NAME="mighty-doom-revival"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 SERVER_LOG="$LOG_DIR/server.log"
 
@@ -794,135 +935,99 @@ if [[ -z "$UPLOAD_EXPIRES_LABEL" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-step "Gerando credenciais do Super Admin do painel (/slayer)"
-
-# O painel web precisa de um Super Admin. Geramos e-mail + senha aqui e
-# gravamos em runtime/admin-credentials.json; o servidor consome o arquivo
-# no próximo boot (aplica UMA vez e apaga, para nunca sobrescrever senhas
-# trocadas depois pelo próprio painel). Reexecutar o instalador gera
-# credenciais novas que voltam a valer.
-ADMIN_EMAIL="$(get_env_var REVIVAL_ADMIN_EMAIL || true)"
-[[ -z "$ADMIN_EMAIL" ]] && ADMIN_EMAIL="admin@revival.local"
-ADMIN_PASSWORD="$(openssl rand -hex 12)"
-ADMIN_CREDENTIALS_FILE="$SERVER_DIR/runtime/admin-credentials.json"
-
-# Link temporário de 10 minutos para trocar os dados de acesso do Super
-# Admin (caso a pessoa esqueça). Depois de usado uma vez, o link é
-# revogado na hora pelo servidor (o arquivo do token é apagado).
-ADMIN_RECOVER_TOKEN="$(openssl rand -hex 32)"
-ADMIN_RECOVER_CREATED_AT="$(date +%s)"
-ADMIN_RECOVER_EXPIRES_AT="$(( ADMIN_RECOVER_CREATED_AT + 600 ))"
-ADMIN_RECOVER_TOKEN_FILE="$SERVER_DIR/runtime/admin-recover-token.json"
-
-mkdir -p "$SERVER_DIR/runtime"
-printf '{\n  "email": "%s",\n  "password": "%s",\n  "created_at": %d\n}\n' \
-  "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_RECOVER_CREATED_AT" > "$ADMIN_CREDENTIALS_FILE"
-printf '{\n  "token": "%s",\n  "expires_at": %d,\n  "created_at": %d\n}\n' \
-  "$ADMIN_RECOVER_TOKEN" "$ADMIN_RECOVER_EXPIRES_AT" "$ADMIN_RECOVER_CREATED_AT" > "$ADMIN_RECOVER_TOKEN_FILE"
-chown "$RUN_USER":"$RUN_USER" "$ADMIN_CREDENTIALS_FILE" "$ADMIN_RECOVER_TOKEN_FILE" 2>/dev/null || true
-chmod 600 "$ADMIN_CREDENTIALS_FILE" "$ADMIN_RECOVER_TOKEN_FILE"
-
-# O arquivo de credenciais só é lido no boot do serviço: reinicia agora
-# para o Super Admin já nascer/ser atualizado com o que geramos acima.
-if systemctl restart "$SERVICE_NAME" >>"$LOG_FILE" 2>&1; then
-  for _ in $(seq 1 30); do
-    curl -fsS --max-time 2 http://127.0.0.1:8080/revival/health -o /dev/null 2>>"$LOG_FILE" && break
-    sleep 1
-  done
-else
-  echo "[AVISO] Não consegui reiniciar $SERVICE_NAME; o servidor aplica as credenciais do Super Admin no próximo boot."
-fi
-
-# ---------------------------------------------------------------------------
 # Mantém só os 20 logs de instalação mais recentes.
 ls -1t "$LOG_DIR"/install-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
 
 echo ""
-echo "============================================================"
-echo " CONCLUÍDO: Mighty DOOM Revival está 100% no ar"
-echo "============================================================"
-echo "Domínio:                 https://$DOMAIN"
-echo "Site (abre no domínio):   https://$DOMAIN/"
-echo "Health check:             https://$DOMAIN/revival/health"
-echo "Health local:              http://127.0.0.1:8080/revival/health"
-echo "Perfil de recursos:       $RAM_PROFILE (heap ${HEAP_MB}MB, MemoryMax $MEM_MAX, TasksMax $TASKS_MAX)"
-echo "Reverse proxy:            $PROXY_KIND"
+rule '='
+echo " CONCLUÍDO — Mighty DOOM Revival está 100% no ar"
+rule '='
+
+section "SERVIÇO"
+kv "Domínio"            "https://$DOMAIN"
+kv "Site"               "https://$DOMAIN/"
+kv "Health check"       "https://$DOMAIN/revival/health"
+kv "Health local"       "http://127.0.0.1:8080/revival/health"
+kv "Perfil de recursos" "$RAM_PROFILE (heap ${HEAP_MB}MB, MemoryMax $MEM_MAX, TasksMax $TASKS_MAX)"
+kv "Reverse proxy"      "$PROXY_KIND"
+
+section "UPLOAD DO APK PELO NAVEGADOR (opcional)"
+echo "  Para publicar o APK patcheado no botão de download do site, abra"
+echo "  este link TEMPORÁRIO e arraste o arquivo .apk:"
 echo ""
-echo "------------------------------------------------------------"
-echo " UPLOAD DO APK PELO NAVEGADOR (opcional)"
-echo "------------------------------------------------------------"
-echo "Para publicar o APK patcheado no botão de download do site,"
-echo "abra este link TEMPORÁRIO e arraste o arquivo .apk:"
+echo "    https://$DOMAIN/upload/$UPLOAD_TOKEN"
 echo ""
-echo "  https://$DOMAIN/upload/$UPLOAD_TOKEN"
+kv "Válido até" "$UPLOAD_EXPIRES_LABEL (24 horas)"
+echo "  Links gerados por instalações anteriores foram invalidados."
 echo ""
-echo "  Válido até: $UPLOAD_EXPIRES_LABEL (24 horas)"
-echo "  (links gerados por instalações anteriores foram invalidados)"
+echo "  Quer ELIMINAR este link de upload imediatamente, antes das 24h?"
+echo "  Basta abrir o link abaixo no navegador:"
 echo ""
-echo "Quer ELIMINAR este link de upload imediatamente, antes das 24h"
-echo "(uso opcional)? Basta abrir o link abaixo no navegador:"
+echo "    https://$DOMAIN/upload-cancel/$UPLOAD_TOKEN"
 echo ""
-echo "  https://$DOMAIN/upload-cancel/$UPLOAD_TOKEN"
+echo "  Depois de eliminado, ninguém consegue enviar ou substituir o APK"
+echo "  sem rodar este instalador de novo. O APK já publicado continua"
+echo "  no ar normalmente em:"
+echo "    https://$DOMAIN/download/mighty-doom-revival.apk"
+
+section "PAINEL DO SLAYER (conta, progresso e administração)"
+kv "Login / criar conta" "https://$DOMAIN/account"
+kv "Painel (após login)" "https://$DOMAIN/slayer"
 echo ""
-echo "  Depois de eliminado, ninguém consegue enviar ou substituir o"
-echo "  APK sem rodar este instalador de novo. O APK já publicado"
-echo "  continua no ar normalmente em:"
-echo "  https://$DOMAIN/download/mighty-doom-revival.apk"
+if [[ "$ADMIN_FIRST_ACCESS" == "1" ]]; then
+  echo "  Primeiro acesso criado por ESTA instalação (guarde bem):"
+  kv "e-mail do Super Admin" "$ADMIN_EMAIL"
+  kv "senha do Super Admin"  "$ADMIN_PASSWORD"
+else
+  echo "  Super Admin já cadastrado neste servidor (senha inalterada):"
+  while IFS= read -r admin_line; do
+    [[ -n "$admin_line" ]] && echo "    - $admin_line"
+  done <<< "$ADMIN_EMAILS"
+fi
 echo ""
-echo "------------------------------------------------------------"
-echo " PAINEL DO SLAYER (conta, progresso e administração)"
-echo "------------------------------------------------------------"
-echo "Login / criar conta:      https://$DOMAIN/account"
-echo "Painel (após login):      https://$DOMAIN/slayer"
+echo "  Esqueceu o e-mail/senha do Super Admin? Abra este link TEMPORÁRIO"
+echo "  para trocar os dois:"
 echo ""
-echo "Super Admin gerado por ESTA instalação:"
-echo "  e-mail: $ADMIN_EMAIL"
-echo "  senha:  $ADMIN_PASSWORD"
+echo "    https://$DOMAIN/admin-recover/$ADMIN_RECOVER_TOKEN"
 echo ""
-echo "Esqueceu os dados de acesso do Super Admin? Abra este link"
-echo "TEMPORÁRIO (10 minutos, uso único) para trocar e-mail e senha:"
-echo ""
-echo "  https://$DOMAIN/admin-recover/$ADMIN_RECOVER_TOKEN"
-echo ""
-echo "  Depois de concluir a troca, o link é revogado na hora. Se"
-echo "  expirar, rode este instalador de novo para gerar um novo."
-echo ""
-echo "REVIVAL_ADMIN_TOKEN atual: $(get_env_var REVIVAL_ADMIN_TOKEN)"
-echo "(guarde este token; ele autoriza POST /revival/reload)"
-echo ""
-echo "Serviços systemd:"
+kv "Validade do link" "até $ADMIN_RECOVER_EXPIRES_LABEL (10 minutos, uso único)"
+echo "  Depois de concluir a troca, o link é revogado na hora e todas as"
+echo "  sessões do painel são encerradas. Se expirar, rode este instalador"
+echo "  de novo para gerar um novo."
+
+section "TOKEN ADMIN DA API"
+echo "  $(get_env_var REVIVAL_ADMIN_TOKEN)"
+echo "  (guarde este token; ele autoriza POST /revival/reload)"
+
+section "OPERAÇÃO E LOGS"
 echo "  systemctl status $SERVICE_NAME"
 echo "  systemctl status $PROXY_KIND"
 echo "  journalctl -u $SERVICE_NAME -f"
-echo ""
-echo "Logs:"
-echo "  Instalação:  $LOG_FILE"
-echo "  Servidor:    $SERVER_LOG"
-echo ""
-echo "------------------------------------------------------------"
-echo "Resumo de propriedade (VPS compartilhada com outros projetos):"
-echo "  Node.js instalado por este instalador:        $(ownership_label NODE_INSTALLED_BY_SCRIPT)"
+kv "Log da instalação" "$LOG_FILE"
+kv "Log do servidor"   "$SERVER_LOG"
+
+section "PROPRIEDADE (VPS compartilhada com outros projetos)"
+kv "Node.js instalado por este instalador" "$(ownership_label NODE_INSTALLED_BY_SCRIPT)"
 if [[ "$PROXY_KIND" == "nginx" ]]; then
-echo "  Site nginx deste projeto ($NGINX_SITE_FILE): sempre nosso"
-echo "  Certificado Let's Encrypt de $DOMAIN:         sempre nosso (domínio do projeto)"
-echo "  Pacote 'certbot' instalado por este instalador: $(ownership_label CERTBOT_INSTALLED_BY_SCRIPT)"
-echo "  Cron de renovação /etc/cron.d/certbot-renew:  $(ownership_label CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT)"
+  kv "Site nginx deste projeto" "sempre nosso ($NGINX_SITE_FILE)"
+  kv "Certificado Let's Encrypt de $DOMAIN" "sempre nosso (domínio do projeto)"
+  kv "Pacote 'certbot' instalado por este instalador" "$(ownership_label CERTBOT_INSTALLED_BY_SCRIPT)"
+  kv "Cron de renovação (/etc/cron.d/certbot-renew)" "$(ownership_label CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT)"
 else
-echo "  Pacote 'caddy' instalado por este instalador:  $(ownership_label CADDY_PACKAGE_INSTALLED_BY_SCRIPT)"
-echo "  /etc/caddy/Caddyfile criado por este instalador: $(ownership_label CADDYFILE_CREATED_BY_SCRIPT)"
-echo "  Linha 'import' acrescentada por este instalador: $(ownership_label CADDY_IMPORT_LINE_ADDED_BY_SCRIPT)"
-echo "  Site do Caddy deste projeto ($CADDY_SITE_FILE): sempre nosso"
+  kv "Pacote 'caddy' instalado por este instalador" "$(ownership_label CADDY_PACKAGE_INSTALLED_BY_SCRIPT)"
+  kv "/etc/caddy/Caddyfile criado por este instalador" "$(ownership_label CADDYFILE_CREATED_BY_SCRIPT)"
+  kv "Linha 'import' acrescentada por este instalador" "$(ownership_label CADDY_IMPORT_LINE_ADDED_BY_SCRIPT)"
+  kv "Site do Caddy deste projeto" "sempre nosso ($CADDY_SITE_FILE)"
 fi
-echo "  Serviço systemd $SERVICE_NAME:              sempre nosso"
+kv "Serviço systemd $SERVICE_NAME" "sempre nosso"
 echo ""
-echo "  Registro completo salvo em: $STATE_FILE"
+kv "Registro de posse" "$STATE_FILE"
 echo "  Para remover só o que é deste projeto (sem afetar outros projetos"
 echo "  na mesma VPS): sudo ./scripts/uninstall.sh"
-echo "------------------------------------------------------------"
+
+section "PRÓXIMOS PASSOS"
+echo "  1. No Windows: rode scripts\\patch-apk.bat e informe '$DOMAIN'"
+echo "     quando ele perguntar o servidor."
+echo "  2. Para atualizar depois de mudanças no código:"
+echo "     git pull && sudo ./scripts/install.sh"
 echo ""
-echo "Próximo passo (no Windows): rode scripts\\patch-apk.bat e informe"
-echo "'$DOMAIN' quando ele perguntar o servidor."
-echo ""
-echo "Para atualizar depois de mudanças no código:"
-echo "  git pull && sudo ./scripts/install.sh"
-echo "============================================================"
