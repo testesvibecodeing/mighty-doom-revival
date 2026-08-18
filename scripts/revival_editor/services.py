@@ -397,7 +397,13 @@ def check_hostname_budget(apk: Path | str, host: str, *, log: Logger = _noop) ->
 
 @dataclass
 class ServerPreflightResult:
-    """Resultado de `check_revival_server.py`, sem segredo no relatório."""
+    """Resultado de `check_revival_server.py`, sem segredo no relatório.
+
+    `checks` separa DNS, TLS, health e prefixo Gear (exigência da fase 5:
+    *"mostrar DNS, TLS e health como checks separados"*). Um check ausente
+    significa "não avaliado" — a falha de DNS não deixa TLS ser provado, e o
+    resultado não inventa verde onde não mediu.
+    """
 
     host: str
     ok: bool
@@ -406,6 +412,7 @@ class ServerPreflightResult:
     client_version: str | None = None
     api_version: str | None = None
     game_data_loaded: bool | None = None
+    uts: str | None = None
     report_path: str | None = None
     failure: Failure | None = None
 
@@ -416,6 +423,36 @@ class ServerPreflightResult:
         if self.failure:
             data["failure"] = self.failure.to_dict()
         return mask_mapping(data)
+
+
+def _classificar_falha_de_rede(exc: Exception) -> tuple[str, str]:
+    """Classifica uma exceção do check em (check-falho, detalhe).
+
+    O CLI comunica falha por exceção; a classe da exceção **é** a classificação:
+
+    - `URLError` com `reason` `socket.gaierror` → DNS não resolveu;
+    - `ssl.SSLError` (direta ou como `reason` de URLError) → handshake/certificado;
+    - `TimeoutError`/`OSError` → rede/HTTPS (DNS não avaliado);
+    - `RuntimeError` → contrato/health (HTTPS respondeu; DNS e TLS provados).
+    """
+    import socket
+    import ssl
+    import urllib.error
+
+    if isinstance(exc, urllib.error.URLError) and exc.reason is not None:
+        motivo = exc.reason
+        if isinstance(motivo, socket.gaierror):
+            return "dns", f"não resolve: {motivo}"
+        if isinstance(motivo, ssl.SSLError):
+            return "tls", str(motivo)
+        return "rede", str(motivo)
+    if isinstance(exc, ssl.SSLError):
+        return "tls", str(exc)
+    if isinstance(exc, TimeoutError):
+        return "rede", f"timeout: {exc}"
+    if isinstance(exc, OSError):
+        return "rede", str(exc)
+    return "health", str(exc)
 
 
 def server_preflight(
@@ -447,36 +484,69 @@ def server_preflight(
         raise FileNotFoundError(f"CA não encontrada: {ca}")
 
     log(f"preflight HTTPS de {normalizado}…")
-    bruto = _check_server(normalizado, ca, timeout, require_game_data)
-
-    erros = [str(e) for e in (bruto.get("errors") or [])]
-    checks = dict(bruto.get("checks") or {})
-    saude = checks.get("health") if isinstance(checks.get("health"), dict) else {}
-    payload = saude.get("payload") if isinstance(saude, dict) else {}
-    payload = payload if isinstance(payload, dict) else {}
-
     resultado = ServerPreflightResult(
-        host=normalizado,
-        ok=bool(bruto.get("ok")) and not erros,
-        checks=checks,
-        errors=erros,
-        client_version=payload.get("client_version"),
-        api_version=payload.get("api_version"),
-        game_data_loaded=payload.get("game_data_loaded"),
-        report_path=str(report_path) if report_path else None,
+        host=normalizado, ok=False, report_path=str(report_path) if report_path else None
     )
-
-    if not resultado.ok:
+    try:
+        bruto = _check_server(normalizado, ca, timeout, require_game_data)
+    except Exception as exc:  # noqa: BLE001 - a classe da exceção classifica
+        alvo, detalhe = _classificar_falha_de_rede(exc)
+        resultado.errors.append(f"{alvo}: {detalhe}")
+        if alvo == "tls":
+            resultado.checks["dns"] = {"ok": True, "detail": "hostname resolveu"}
+        elif alvo == "health":
+            resultado.checks["dns"] = {"ok": True, "detail": "hostname resolveu"}
+            resultado.checks["tls"] = {
+                "ok": True,
+                "detail": "handshake HTTPS completo"
+                + (f" (CA local {ca.name})" if ca else " (certificado público)"),
+            }
+        resultado.checks[alvo] = {"ok": False, "detail": detalhe}
         resultado.failure = Failure(
             code="SERVER_PREFLIGHT",
             stage="preflight",
-            message="servidor Revival não passou no preflight",
-            details="\n".join(erros) or "sem detalhe",
+            message=f"preflight falhou em {alvo}: {detalhe}".splitlines()[0],
+            details=f"{type(exc).__name__}: {exc}",
             report_path=resultado.report_path,
         )
-        for erro in erros:
-            log(f"[erro] {erro}")
+        log(f"[erro] {resultado.failure.message}")
     else:
+        gear = dict(bruto.get("gear_prefix") or {})
+        resultado.ok = True
+        resultado.checks = {
+            "dns": {"ok": True, "detail": "hostname resolveu"},
+            "tls": {
+                "ok": True,
+                "detail": "handshake HTTPS completo"
+                + (f" (CA local {ca.name})" if ca else " (certificado público)"),
+            },
+            "health": {
+                "ok": True,
+                "detail": (
+                    f"/revival/health 200 · cliente {bruto.get('client_version')} · "
+                    f"API {bruto.get('api_version')} · game_data_loaded="
+                    f"{bruto.get('game_data_loaded')}"
+                ),
+                "payload": {
+                    "client_version": bruto.get("client_version"),
+                    "api_version": bruto.get("api_version"),
+                    "game_data_loaded": bruto.get("game_data_loaded"),
+                    "research_mode": bruto.get("research_mode"),
+                },
+            },
+            "gear_prefix": {
+                "ok": True,
+                "detail": (
+                    f"health {gear.get('health_status')} · auth probe "
+                    f"{gear.get('auth_probe_status')}/code {gear.get('auth_probe_code')} · "
+                    f"uts ISO-8601 válido"
+                ),
+            },
+        }
+        resultado.client_version = bruto.get("client_version")
+        resultado.api_version = bruto.get("api_version")
+        resultado.game_data_loaded = bruto.get("game_data_loaded")
+        resultado.uts = gear.get("auth_probe_uts")
         log(
             f"[OK] cliente {resultado.client_version} · API {resultado.api_version} · "
             f"game_data_loaded={resultado.game_data_loaded}"

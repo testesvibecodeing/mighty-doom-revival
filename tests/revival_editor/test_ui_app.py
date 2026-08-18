@@ -230,6 +230,55 @@ class TestJanelaMinima(unittest.TestCase):
 
         self.assertFalse(self.app.state.has(Stage.SERVIDOR_VALIDADO))
 
+    def test_validar_servidor_ok_mostra_checks_e_habilita_pipeline(self) -> None:
+        """Fase 5: sucesso marca SERVIDOR_VALIDADO, pinta os checks separados
+        e a ação pipeline.completo (fase 6) deixa de ficar cinza."""
+        projeto, _ = new_project("srv-ok", studio_root=self.studio, server_host="doom.exemplo.com")
+        self.app._abrir_projeto_memoria(projeto)
+        projeto.state.mark(Stage.APK_ANALISADO)
+        self.app.refresh()
+        self.assertEqual(self._estado_entrada("pipeline.completo"), "disabled")
+
+        resultado_bom = ServerPreflightResult(
+            host="doom.exemplo.com",
+            ok=True,
+            checks={
+                "dns": {"ok": True, "detail": "hostname resolveu"},
+                "tls": {"ok": True, "detail": "handshake HTTPS completo (certificado público)"},
+                "health": {"ok": True, "detail": "/revival/health 200 · cliente 1.13.1"},
+                "gear_prefix": {"ok": True, "detail": "health 200 · auth probe 400/code 2200"},
+            },
+            client_version="1.13.1",
+            api_version="24.0.0",
+            game_data_loaded=True,
+        )
+        with mock.patch("revival_editor.ui.app.server_preflight", return_value=resultado_bom):
+            self.app.act_validar_servidor()
+            ok = _bombeiar(self.root, lambda: self.app.state.has(Stage.SERVIDOR_VALIDADO))
+            self.assertTrue(ok, self.app.var_status.get())
+
+        self.assertTrue(self.app.state.has(Stage.SERVIDOR_VALIDADO))
+        self.assertTrue(self.app._lbl_checks["dns"].cget("text").startswith("✓"))
+        self.assertTrue(self.app._lbl_checks["health"].cget("text").startswith("✓"))
+        self.assertEqual(self._estado_entrada("pipeline.completo"), "normal")
+
+    def test_painel_de_checks_nao_inventa_verde(self) -> None:
+        """Falha de DNS: TLS/health continuam 'não avaliado' — sem verde inventado."""
+        resultado = ServerPreflightResult(
+            host="sumiu.exemplo.com",
+            ok=False,
+            checks={"dns": {"ok": False, "detail": "não resolve: Name or service not known"}},
+            errors=["dns: não resolve"],
+        )
+        self.app._mostrar_checks_servidor(resultado)
+        self.assertTrue(self.app._lbl_checks["dns"].cget("text").startswith("✗"))
+        for chave in ("tls", "health", "gear_prefix"):
+            self.assertEqual(
+                self.app._lbl_checks[chave].cget("text"),
+                "— não avaliado",
+                f"{chave} não pode ter verde sem ter sido medido",
+            )
+
     def test_fechar_durante_job_confirma_cancela_e_destroi(self) -> None:
         def dorme(ctx):
             for _ in range(300):

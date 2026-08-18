@@ -62,6 +62,7 @@ PYTHON_TESTS = [
     "tests/revival_editor/test_wrappers.py",
     "tests/revival_editor/test_axml.py",
     "tests/revival_editor/test_pipeline.py",
+    "tests/revival_editor/test_xapk.py",
 ]
 
 

@@ -115,7 +115,7 @@ class StudioApp:
 
     def _construir_corpo(self) -> None:
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(2, weight=1)
+        self.root.rowconfigure(3, weight=1)
 
         # ---- formulário do projeto ----
         form = ttk.LabelFrame(self.root, text="Projeto")
@@ -156,9 +156,22 @@ class StudioApp:
         self.cmb_estrategia.grid(row=4, column=1, sticky="w", padx=4, pady=(2, 6))
         self.cmb_estrategia.bind("<<ComboboxSelected>>", lambda _e: self._aplicar_estrategia())
 
+        # ---- checks do servidor (fase 5: DNS/TLS/health separados) ----
+        servidor = ttk.LabelFrame(self.root, text="Servidor — checks do último preflight")
+        servidor.grid(row=1, column=0, sticky="ew", padx=8, pady=4)
+        servidor.columnconfigure(1, weight=1)
+        self._lbl_checks: dict[str, ttk.Label] = {}
+        for linha, (chave, rotulo) in enumerate(
+            (("dns", "DNS"), ("tls", "TLS"), ("health", "Health"), ("gear_prefix", "Prefixo Gear"))
+        ):
+            ttk.Label(servidor, text=rotulo, padding=(8, 1)).grid(row=linha, column=0, sticky="w")
+            valor = ttk.Label(servidor, text="— não avaliado", padding=(0, 1))
+            valor.grid(row=linha, column=1, sticky="w")
+            self._lbl_checks[chave] = valor
+
         # ---- etapas ----
         etapas = ttk.LabelFrame(self.root, text="Etapas")
-        etapas.grid(row=1, column=0, sticky="ew", padx=8, pady=4)
+        etapas.grid(row=2, column=0, sticky="ew", padx=8, pady=4)
         self._lbl_etapas: dict[Stage, ttk.Label] = {}
         for coluna, stage in enumerate(STAGE_ORDER):
             rotulo = ttk.Label(etapas, text=f"○ {stage.value}", padding=(8, 2))
@@ -169,11 +182,11 @@ class StudioApp:
         from .log_panel import LogPanel
 
         self.log = LogPanel(self.root)
-        self.log.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
+        self.log.grid(row=3, column=0, sticky="nsew", padx=8, pady=4)
 
         # ---- barra de job ----
         barra = ttk.Frame(self.root)
-        barra.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
+        barra.grid(row=4, column=0, sticky="ew", padx=8, pady=(0, 8))
         barra.columnconfigure(0, weight=1)
         self.var_status = tk.StringVar(value="pronto")
         self.lbl_status = ttk.Label(barra, textvariable=self.var_status, anchor="w")
@@ -409,6 +422,7 @@ class StudioApp:
         logs = project_dir(projeto.project_id, studio_root=self.studio_root) / "logs"
         logs.mkdir(parents=True, exist_ok=True)
         self.runner = JobRunner(log_dir=logs)
+        self._limpar_checks_servidor()
 
     def _dialogo_escolher(self, titulo: str, texto: str, opcoes: list[str]) -> str | None:
         escolha: dict[str, str | None] = {"valor": None}
@@ -454,7 +468,7 @@ class StudioApp:
         caminho = filedialog.askopenfilename(
             parent=self.root,
             title="APK de entrada",
-            filetypes=[("APK", "*.apk"), ("XAPK", "*.xapk"), ("Todos", "*.*")],
+            filetypes=[("APK", "*.apk")],
         )
         if not caminho or self.project is None:
             return
@@ -499,7 +513,28 @@ class StudioApp:
             f"servidor: {host} (estados de build invalidados — selo verde antigo não vale mais)",
             "aviso",
         )
+        self._limpar_checks_servidor()
         self.refresh()
+
+    # -- checks do servidor (fase 5) ----------------------------------------
+
+    def _limpar_checks_servidor(self) -> None:
+        """Zera o painel: os checks pertencem ao host que os mediu."""
+        for rotulo in self._lbl_checks.values():
+            rotulo.configure(text="— não avaliado")
+
+    def _mostrar_checks_servidor(self, resultado: Any) -> None:
+        """Desenha DNS/TLS/health/Gear como linhas separadas.
+
+        Verde só onde mediu: check ausente continua "não avaliado" — a falha
+        de DNS não deixa o painel inventar um TLS verde (fase 5).
+        """
+        for chave, rotulo in self._lbl_checks.items():
+            check = (resultado.checks or {}).get(chave)
+            if not isinstance(check, dict):
+                continue
+            marca = "✓" if check.get("ok") else "✗"
+            rotulo.configure(text=f"{marca} {check.get('detail', '')}")
 
     def _aplicar_estrategia(self) -> None:
         if self.project is None:
@@ -594,6 +629,48 @@ class StudioApp:
         ]
         messagebox.showinfo("Resumo de hashes", "\n".join(linhas))
 
+    def act_importar_xapk(self) -> None:
+        """Fase 4: `.xapk` é importação separada — nunca entra no fluxo principal."""
+        if not (self._exige_projeto() and self._exige_livre()):
+            return
+        from tkinter import filedialog
+
+        caminho = filedialog.askopenfilename(
+            parent=self.root,
+            title="XAPK (importação separada — extrai só o base APK)",
+            filetypes=[("XAPK", "*.xapk")],
+        )
+        if not caminho or self.project is None:
+            return
+        diretorio = project_dir(self.project.project_id, studio_root=self.studio_root)
+        self._submit(
+            "importar-xapk",
+            lambda ctx: _trabalho_xapk(caminho, diretorio / "input", ctx),
+            ao_concluir=self._apos_importar_xapk,
+        )
+
+    def _apos_importar_xapk(self, evento: DoneEvent) -> None:
+        if self.project is None:
+            return
+        resultado = evento.result  # (XapkInfo, Path do base extraído)
+        info, base = resultado
+        self.project.set_input_apk(str(base))
+        save_project(self.project, studio_root=self.studio_root)
+        self.log.append(
+            f"[OK] base APK importado: {base} "
+            f"(pacote {info.package_name} {info.version_name or '?'})",
+            "info",
+        )
+        if info.has_splits:
+            messagebox.showwarning(
+                "XAPK com splits",
+                "A VERIFICAR: este XAPK tem splits além do base APK:\n  - "
+                + "\n  - ".join(info.splits)
+                + "\n\nOs splits NÃO foram mesclados — o pipeline trabalha com o base "
+                  "APK. Se a instalação exigir os splits, use adb install-multiple.",
+            )
+        self.refresh()
+
     def act_validar_servidor(self) -> None:
         if not (self._exige_projeto() and self._exige_livre()):
             return
@@ -611,17 +688,29 @@ class StudioApp:
         )
 
     def _apos_validar_servidor(self, evento: DoneEvent) -> None:
+        """Mostra os checks separados sempre; marca SERVIDOR_VALIDADO só no verde."""
         if self.project is None:
             return
-        self.project.reports["server_preflight"] = str(self._reports_dir() / "server-preflight.json")
-        self.project.state.mark(Stage.SERVIDOR_VALIDADO)
-        save_project(self.project, studio_root=self.studio_root)
         resultado = evento.result
-        self.log.append(
-            f"[OK] servidor validado: cliente {resultado.client_version} · "
-            f"API {resultado.api_version} · game_data_loaded={resultado.game_data_loaded}",
-            "info",
-        )
+        self._mostrar_checks_servidor(resultado)
+        self.project.reports["server_preflight"] = str(self._reports_dir() / "server-preflight.json")
+        if resultado.ok:
+            self.project.state.mark(Stage.SERVIDOR_VALIDADO)
+            save_project(self.project, studio_root=self.studio_root)
+            self.log.append(
+                f"[OK] servidor validado: cliente {resultado.client_version} · "
+                f"API {resultado.api_version} · game_data_loaded={resultado.game_data_loaded}",
+                "info",
+            )
+        else:
+            falha = getattr(resultado, "failure", None)
+            mensagem = falha.message if falha else "; ".join(resultado.errors) or "sem detalhe"
+            detalhe = mensagem
+            if falha and falha.details:
+                detalhe += f"\n{falha.details}"
+            self.log.append(f"[FALHOU] validar-servidor: {mensagem}", "erro")
+            self.var_status.set("validar-servidor: FALHOU")
+            messagebox.showerror("Validar servidor", detalhe)
         self.refresh()
 
     def act_pipeline_completo(self) -> None:
@@ -797,13 +886,14 @@ def _trabalho_precheck(apk: str, host: str, destino: Path, ctx: Any) -> Any:
 
 
 def _trabalho_servidor(host: str, ca: str | None, destino: Path, ctx: Any) -> Any:
+    """Preflight do servidor — devolve o resultado mesmo em falha.
+
+    A falha já vem estruturada (checks separados + Failure); é o callback da
+    UI que decide marcar etapa ou mostrar erro. Levantar aqui esconderia os
+    checks parciais (DNS ✓ TLS ✗) que a fase 5 exige exibir.
+    """
     ctx.progress("servidor", f"preflight HTTPS de {host}…", None)
-    resultado = server_preflight(host, ca_file=ca, report_path=destino, log=ctx.log)
-    if not resultado.ok:
-        raise RuntimeError(
-            "servidor não passou no preflight: " + "; ".join(resultado.errors)
-        )
-    return resultado
+    return server_preflight(host, ca_file=ca, report_path=destino, log=ctx.log)
 
 
 def _trabalho_pipeline(projeto: Project, diretorio: Path, ctx: Any) -> Any:
@@ -841,6 +931,27 @@ def _trabalho_pipeline(projeto: Project, diretorio: Path, ctx: Any) -> Any:
             partes.append(f"relatório: {falha.report_path}")
         raise RuntimeError("\n".join(partes))
     return resultado
+
+
+def _trabalho_xapk(caminho: str, destino_dir: Path, ctx: Any) -> Any:
+    """Inspeciona o XAPK e extrai o base APK — worker thread, sem widget."""
+    from ..xapk import extract_base_apk, inspect_xapk
+
+    ctx.progress("xapk", f"inspecionando {Path(caminho).name}…", None)
+    info = inspect_xapk(caminho)
+    ctx.log(
+        f"xapk: pacote {info.package_name} {info.version_name or '?'} · "
+        f"base {info.base_apk} · {len(info.splits)} split(s) · {len(info.obbs)} obb(s)"
+    )
+    if info.has_splits:
+        ctx.log(
+            f"[A VERIFICAR] splits não mesclados: {', '.join(info.splits)}",
+            stream="aviso",
+        )
+    ctx.progress("xapk", "extraindo o base APK…", 0.5)
+    base = extract_base_apk(info, destino_dir)
+    ctx.progress("xapk", "base APK extraído", 1.0)
+    return info, base
 
 
 def _trabalho_adb(ctx: Any) -> None:

@@ -94,6 +94,12 @@ ACTIONS: tuple[ActionSpec, ...] = (
         handler="act_pipeline_completo",
         requires=Stage.SERVIDOR_VALIDADO,
     ),
+    ActionSpec(
+        action_id="apk.importar_xapk",
+        menu="APK",
+        label="Importar base APK de um .xapk…",
+        handler="act_importar_xapk",
+    ),
     # -- Servidor ----------------------------------------------------------
     ActionSpec(
         action_id="servidor.preflight",

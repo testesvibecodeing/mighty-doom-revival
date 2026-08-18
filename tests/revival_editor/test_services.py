@@ -12,6 +12,8 @@ Execução: python tests/revival_editor/test_services.py
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import struct
 import sys
 import tempfile
@@ -25,6 +27,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from revival_editor.models import HostnameError  # noqa: E402
 from revival_editor.services import (  # noqa: E402
+    CaFileError,
     EXPECTED_ABI,
     EXPECTED_METADATA_VERSION,
     EXPECTED_UNITY,
@@ -33,6 +36,7 @@ from revival_editor.services import (  # noqa: E402
     analyze_apk,
     check_hostname_budget,
     read_metadata_version,
+    validate_ca_file,
 )
 
 METADATA_MEMBER = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
@@ -242,6 +246,220 @@ class TestCheckHostnameBudget(unittest.TestCase):
     def test_apk_inexistente(self) -> None:
         with self.assertRaises(FileNotFoundError):
             check_hostname_budget(self.dir / "nao-existe.apk", "doom.exemplo.com")
+
+
+def _saude_do_servador(**sobrepos) -> dict:
+    """Payload plano que o `check_server` real devolve no sucesso."""
+    bruto = {
+        "verified": True,
+        "url": "https://doom.exemplo.com/revival/health",
+        "http_status": 200,
+        "content_type": "application/json",
+        "server": "revival-node/1.0",
+        "client_version": "1.13.1",
+        "api_version": "24.0.0",
+        "game_data_loaded": True,
+        "research_mode": False,
+        "runtime": "node",
+        "gear_prefix": {
+            "collection": "doom",
+            "health_url": "https://doom.exemplo.com/collections/doom/revival/health",
+            "health_status": 200,
+            "auth_probe_url": "https://doom.exemplo.com/collections/doom/game/auth/register",
+            "auth_probe_status": 400,
+            "auth_probe_code": 2200,
+            "auth_probe_uts": "2026-08-18T12:00:00Z",
+            "auth_probe_content_type": "application/json",
+        },
+    }
+    bruto.update(sobrepos)
+    return bruto
+
+
+class TestServerPreflight(unittest.TestCase):
+    """Fase 5: DNS, TLS e health como checks separados — sem inventar verde.
+
+    O `check_server` real devolve dict PLANO e comunica falha por exceção;
+    estes testes travam esse contrato (o adaptador antigo lia `ok`/`checks`
+    que não existem — servidor saudável reportava falha).
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _preflight(self, efeito, **kw):
+        import check_revival_server as cli
+        import revival_editor.services as svc
+
+        with mock.patch.object(cli, "check_server", efeito):
+            return svc.server_preflight("https://doom.exemplo.com", **kw)
+
+    def test_servidor_saudavel_ok_com_checks_separados(self) -> None:
+        resultado = self._preflight(lambda *a, **kw: _saude_do_servador())
+        self.assertTrue(resultado.ok, str(resultado.errors))
+        self.assertEqual(resultado.client_version, "1.13.1")
+        self.assertEqual(resultado.api_version, "24.0.0")
+        self.assertTrue(resultado.game_data_loaded)
+        self.assertEqual(resultado.uts, "2026-08-18T12:00:00Z")
+        for check in ("dns", "tls", "health", "gear_prefix"):
+            self.assertIn(check, resultado.checks, f"check {check} ausente")
+            self.assertTrue(resultado.checks[check]["ok"], resultado.checks[check])
+        self.assertIsNone(resultado.failure)
+
+    def test_falha_de_dns_isolada(self) -> None:
+        import socket
+        import urllib.error
+
+        def explode(*a, **kw):
+            raise urllib.error.URLError(socket.gaierror(8, "Name or service not known"))
+
+        resultado = self._preflight(explode)
+        self.assertFalse(resultado.ok)
+        self.assertFalse(resultado.checks["dns"]["ok"])
+        self.assertIn("não resolve", resultado.checks["dns"]["detail"])
+        self.assertNotIn("tls", resultado.checks, "TLS não pode ser provado sem DNS")
+        self.assertNotIn("health", resultado.checks)
+        self.assertEqual(resultado.failure.code, "SERVER_PREFLIGHT")
+        self.assertIn("dns", resultado.failure.message)
+
+    def test_falha_de_tls_isolada(self) -> None:
+        import ssl
+        import urllib.error
+
+        def explode(*a, **kw):
+            raise urllib.error.URLError(
+                ssl.SSLCertVerificationError(
+                    1, "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed"
+                )
+            )
+
+        resultado = self._preflight(explode)
+        self.assertFalse(resultado.ok)
+        self.assertTrue(resultado.checks["dns"]["ok"], "resolveu — DNS não é o problema")
+        self.assertFalse(resultado.checks["tls"]["ok"])
+        self.assertIn("CERTIFICATE", resultado.checks["tls"]["detail"])
+        self.assertNotIn("health", resultado.checks, "health não rodou sem handshake")
+
+    def test_falha_de_contrato_marca_dns_e_tls_provos(self) -> None:
+        def explode(*a, **kw):
+            raise RuntimeError("servidor Revival incompatível: client_version='1.12.0'")
+
+        resultado = self._preflight(explode)
+        self.assertFalse(resultado.ok)
+        self.assertTrue(resultado.checks["dns"]["ok"], "HTTPS respondeu: DNS provado")
+        self.assertTrue(resultado.checks["tls"]["ok"], "handshake completo: TLS provado")
+        self.assertFalse(resultado.checks["health"]["ok"])
+
+    def test_ca_publica_e_ca_local_chegam_ao_cli_separadas(self) -> None:
+        """Gate da fase 5: os dois perfis passam pelo mesmo gate, sem ignorar TLS."""
+        import check_revival_server as cli
+        import revival_editor.services as svc
+
+        chamadas: list[tuple[str, Path | None]] = []
+
+        def registra(host, ca, timeout, require_game_data=True):
+            chamadas.append((host, ca))
+            return _saude_do_servador()
+
+        ca = self.dir / "ca-local.pem"
+        ca.write_text(
+            "-----BEGIN CERTIFICATE-----\nlocal\n-----END CERTIFICATE-----\n", encoding="utf-8"
+        )
+        with mock.patch.object(cli, "check_server", registra):
+            publica = svc.server_preflight("doom.exemplo.com")
+            local = svc.server_preflight("doom.exemplo.com", ca_file=ca)
+        self.assertIsNone(chamadas[0][1], "perfil público: sem CA")
+        self.assertEqual(chamadas[1][1], ca, "perfil local: CA informada")
+        self.assertTrue(publica.ok and local.ok)
+        self.assertIn("certificado público", publica.checks["tls"]["detail"])
+        self.assertIn("CA local", local.checks["tls"]["detail"])
+
+    def test_ca_ausente_e_erro_de_chamada(self) -> None:
+        import revival_editor.services as svc
+
+        with self.assertRaises(FileNotFoundError):
+            svc.server_preflight("doom.exemplo.com", ca_file=self.dir / "sumiu.pem")
+
+    def test_relatorio_sem_segredo_nem_chave_privada(self) -> None:
+        destino = self.dir / "server-preflight.json"
+        resultado = self._preflight(
+            lambda *a, **kw: _saude_do_servador(), report_path=destino
+        )
+        texto = destino.read_text(encoding="utf-8")
+        self.assertIn('"ok": true', texto)
+        self.assertNotIn("PRIVATE KEY", texto)
+        self.assertNotIn("-----BEGIN", texto)
+
+    def test_hostname_invalido_recusado_antes_da_rede(self) -> None:
+        import revival_editor.services as svc
+
+        with self.assertRaises(HostnameError):
+            svc.server_preflight("https://doom.exemplo.com/collections/doom")
+
+
+class TestValidateCaFile(unittest.TestCase):
+    """Gate da fase 5: CA validada sem copiar chave privada."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _ca(self, nome: str, conteudo: str) -> Path:
+        caminho = self.dir / nome
+        caminho.write_text(conteudo, encoding="utf-8")
+        return caminho
+
+    def test_certificado_publico_valido(self) -> None:
+        ca = self._ca(
+            "publica.pem", "-----BEGIN CERTIFICATE-----\nabc123\n-----END CERTIFICATE-----\n"
+        )
+        info = validate_ca_file(ca)
+        self.assertEqual(info.certificates, 1)
+        self.assertEqual(info.size_bytes, ca.stat().st_size)
+        self.assertEqual(info.sha256, hashlib.sha256(ca.read_bytes()).hexdigest())
+        self.assertNotIn("abc123", json.dumps(info.to_dict()), "corpo PEM não entra em relatório")
+
+    def test_bundle_com_varios_certificados(self) -> None:
+        ca = self._ca(
+            "bundle.pem",
+            "-----BEGIN CERTIFICATE-----\num\n-----END CERTIFICATE-----\n"
+            "-----BEGIN CERTIFICATE-----\ndois\n-----END CERTIFICATE-----\n",
+        )
+        self.assertEqual(validate_ca_file(ca).certificates, 2)
+
+    def test_chave_privada_recusada(self) -> None:
+        ca = self._ca(
+            "com-chave.pem",
+            "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n"
+            "-----BEGIN RSA PRIVATE KEY-----\nshh\n-----END RSA PRIVATE KEY-----\n",
+        )
+        with self.assertRaises(CaFileError) as cm:
+            validate_ca_file(ca)
+        self.assertIn("chave privada", str(cm.exception))
+
+    def test_chave_privada_ec_recusada(self) -> None:
+        ca = self._ca(
+            "ec.pem", "-----BEGIN EC PRIVATE KEY-----\nshh\n-----END EC PRIVATE KEY-----\n"
+        )
+        with self.assertRaises(CaFileError):
+            validate_ca_file(ca)
+
+    def test_sem_certificado_recusado(self) -> None:
+        ca = self._ca("csr.txt", "Certificate Request: xyz")
+        with self.assertRaises(CaFileError) as cm:
+            validate_ca_file(ca)
+        self.assertIn("CERTIFICATE", str(cm.exception))
+
+    def test_arquivo_ausente_recusado(self) -> None:
+        with self.assertRaises(CaFileError):
+            validate_ca_file(self.dir / "nao-existe.pem")
 
 
 if __name__ == "__main__":
