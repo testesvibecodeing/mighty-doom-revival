@@ -50,6 +50,7 @@ Documentação principal:
 - [`docs/ENDPOINT-MATRIX.md`](docs/ENDPOINT-MATRIX.md) — matriz de compatibilidade;
 - [`docs/APK-PATCH.md`](docs/APK-PATCH.md) — patcher;
 - [`docs/SERVER.md`](docs/SERVER.md) — servidor;
+- [`docs/REVIVAL-STUDIO.md`](docs/REVIVAL-STUDIO.md) — guia do usuário do editor desktop;
 - [`server/README.md`](server/README.md) — backend Revival.
 
 ## Cliente alvo
