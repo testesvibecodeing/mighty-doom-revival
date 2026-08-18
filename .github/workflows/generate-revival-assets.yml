@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/generate-revival-png-assets.py'
       - 'scripts/refine-revival-png-assets.py'
+      - 'scripts/fix-revival-icon-priority.py'
       - '.github/workflows/generate-revival-assets.yml'
   workflow_dispatch:
 
@@ -33,15 +34,18 @@ jobs:
       - name: Replace shared placeholders with dedicated artwork
         run: python scripts/refine-revival-png-assets.py
 
-      - name: Commit generated assets
+      - name: Prefer dedicated PNGs in the Slayer panel
+        run: python scripts/fix-revival-icon-priority.py
+
+      - name: Commit generated assets and panel integration
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f -A server/public/assets/img/revival server/public/assets/img/game server/src/assets.js
+          git add -f -A server/public/assets/img/revival server/public/assets/img/game server/src/assets.js server/public/assets/js/revival-items.js server/public/slayer.html
           if git diff --cached --quiet; then
             echo "No generated changes."
             exit 0
           fi
-          git commit -m "feat: replace generic artwork with dedicated Revival PNGs"
+          git commit -m "fix: use dedicated Revival PNGs in inventory and store"
           git push
