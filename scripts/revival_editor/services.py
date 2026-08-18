@@ -196,6 +196,7 @@ def analyze_apk(
 
     indicadores = dict(bruto.get("indicators") or {})
     pacote = dict(bruto.get("package") or {})
+    pacote = _completar_package_sem_aapt(caminho, pacote, log)
 
     resultado = AnalyzeResult(
         path=str(caminho),
@@ -234,6 +235,41 @@ def analyze_apk(
         log(f"relatório: {destino}")
 
     return resultado
+
+
+def _completar_package_sem_aapt(apk: Path, pacote: dict, log: Logger) -> dict:
+    """Fecha a lacuna do aapt lendo o manifest binário (AXML) do ZIP.
+
+    Sem `aapt` no PATH o CLI devolve `package: {}` e package/versão/build
+    ficariam "não medido" para sempre — o que pela regra da fase 4 mantém
+    `matches_target=False`. O parser AXML mede os mesmos campos da mesma
+    fonte (AndroidManifest.xml); se o binário não bater com o formato, segue
+    "não medido" — nada de chute.
+    """
+    faltando = [
+        campo
+        for campo in ("package", "versionName", "versionCode")
+        if not pacote.get(campo)
+    ]
+    if not faltando:
+        return pacote
+
+    from .axml import AxmlError, read_manifest_facts  # noqa: PLC0415
+
+    try:
+        fatos = read_manifest_facts(apk)
+    except AxmlError as exc:
+        log(f"[aviso] manifest binário ilegível: {exc}")
+        return pacote
+
+    medidos = []
+    for campo in faltando:
+        if fatos.get(campo):
+            pacote[campo] = fatos[campo]
+            medidos.append(campo)
+    if medidos:
+        log(f"manifest: {', '.join(medidos)} medidos via AXML (aapt indisponível)")
+    return pacote
 
 
 def _classificar(resultado: AnalyzeResult, log: Logger) -> None:
