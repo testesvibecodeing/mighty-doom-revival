@@ -115,11 +115,24 @@ class StudioApp:
 
     def _construir_corpo(self) -> None:
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(3, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=1)
+
+        # ---- notebook: aba Projeto (formulário/checks/etapas) + aba Visuais ----
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 0))
+        pagina_projeto = ttk.Frame(self.notebook, padding=0)
+        self.notebook.add(pagina_projeto, text="Projeto")
+        pagina_projeto.columnconfigure(0, weight=1)
+
+        from .visuals_tab import VisualsTab
+
+        self.visuals_tab = VisualsTab(self.notebook, self)
+        self.notebook.add(self.visuals_tab, text="Visuais")
 
         # ---- formulário do projeto ----
-        form = ttk.LabelFrame(self.root, text="Projeto")
-        form.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
+        form = ttk.LabelFrame(pagina_projeto, text="Projeto")
+        form.grid(row=0, column=0, sticky="ew", pady=(0, 4))
         form.columnconfigure(1, weight=1)
         form.columnconfigure(3, weight=1)
 
@@ -157,8 +170,8 @@ class StudioApp:
         self.cmb_estrategia.bind("<<ComboboxSelected>>", lambda _e: self._aplicar_estrategia())
 
         # ---- checks do servidor (fase 5: DNS/TLS/health separados) ----
-        servidor = ttk.LabelFrame(self.root, text="Servidor — checks do último preflight")
-        servidor.grid(row=1, column=0, sticky="ew", padx=8, pady=4)
+        servidor = ttk.LabelFrame(pagina_projeto, text="Servidor — checks do último preflight")
+        servidor.grid(row=1, column=0, sticky="ew", pady=4)
         servidor.columnconfigure(1, weight=1)
         self._lbl_checks: dict[str, ttk.Label] = {}
         for linha, (chave, rotulo) in enumerate(
@@ -170,8 +183,8 @@ class StudioApp:
             self._lbl_checks[chave] = valor
 
         # ---- etapas ----
-        etapas = ttk.LabelFrame(self.root, text="Etapas")
-        etapas.grid(row=2, column=0, sticky="ew", padx=8, pady=4)
+        etapas = ttk.LabelFrame(pagina_projeto, text="Etapas")
+        etapas.grid(row=2, column=0, sticky="ew", pady=4)
         self._lbl_etapas: dict[Stage, ttk.Label] = {}
         for coluna, stage in enumerate(STAGE_ORDER):
             rotulo = ttk.Label(etapas, text=f"○ {stage.value}", padding=(8, 2))
@@ -182,11 +195,11 @@ class StudioApp:
         from .log_panel import LogPanel
 
         self.log = LogPanel(self.root)
-        self.log.grid(row=3, column=0, sticky="nsew", padx=8, pady=4)
+        self.log.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
 
         # ---- barra de job ----
         barra = ttk.Frame(self.root)
-        barra.grid(row=4, column=0, sticky="ew", padx=8, pady=(0, 8))
+        barra.grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 8))
         barra.columnconfigure(0, weight=1)
         self.var_status = tk.StringVar(value="pronto")
         self.lbl_status = ttk.Label(barra, textvariable=self.var_status, anchor="w")
@@ -766,6 +779,14 @@ class StudioApp:
                 "info",
             )
         self.refresh()
+
+    # ==================================================================
+    # menus — Visuais
+    # ==================================================================
+
+    def act_visuals_loading(self) -> None:
+        """Abre a aba Visuais (fase 7) — alvo do wrapper loading-screen-editor."""
+        self.notebook.select(self.visuals_tab)
 
     # ==================================================================
     # menus — Ferramentas

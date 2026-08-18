@@ -19,7 +19,9 @@ __all__ = ["MENUS", "ActionSpec", "ACTIONS", "action_by_id", "menu_actions"]
 
 #: Menus da janela mínima (§30 item 6). A barra completa da §9.1 cresce a partir
 #: daqui — "Arquivo" e "Ajuda" entram quando ganharem ações de verdade.
-MENUS: tuple[str, ...] = ("Projeto", "APK", "Servidor", "Ferramentas", "Cliente", "Testes", "Log")
+MENUS: tuple[str, ...] = (
+    "Projeto", "APK", "Servidor", "Visuais", "Ferramentas", "Cliente", "Testes", "Log",
+)
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,14 @@ ACTIONS: tuple[ActionSpec, ...] = (
         label="Validar servidor (HTTPS + health + game data)",
         handler="act_validar_servidor",
         requires=Stage.APK_ANALISADO,
+    ),
+    # -- Visuais ------------------------------------------------------------
+    ActionSpec(
+        action_id="visuals.loading_screen",
+        menu="Visuais",
+        label="Editor de tela de loading (aba Visuais)",
+        handler="act_visuals_loading",
+        needs_project=False,
     ),
     # -- Ferramentas --------------------------------------------------------
     ActionSpec(

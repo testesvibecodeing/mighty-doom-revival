@@ -4,6 +4,17 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# studio-forward: sem argumentos e em sessão gráfica interativa, abre o
+# Revival Studio na aba Visuais (mesma composição e mesmo fluxo de injeção
+# validados). Com argumentos, segue para o editor standalone original.
+if [[ $# -eq 0 ]] && [[ -t 0 ]] && { [[ -n "${DISPLAY:-}" || [[ -n "${WAYLAND_DISPLAY:-}" ]] || [[ "$(uname -s)" == "Darwin" ]]; }; then
+  if command -v python3 >/dev/null 2>&1; then
+    exec python3 "$(dirname "${BASH_SOURCE[0]}")/revival_studio.py"
+  elif command -v python >/dev/null 2>&1; then
+    exec python "$(dirname "${BASH_SOURCE[0]}")/revival_studio.py"
+  fi
+fi
+
 if command -v python3 >/dev/null 2>&1; then
   PYTHON_BIN=python3
 elif command -v python >/dev/null 2>&1; then

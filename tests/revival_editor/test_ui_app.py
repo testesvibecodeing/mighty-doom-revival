@@ -354,6 +354,70 @@ class TestJanelaMinima(unittest.TestCase):
         _titulo, texto = caixa.showinfo.call_args[0]
         self.assertIn("java 17", texto)
 
+    # -- Visuais / loading screen (fase 7) -----------------------------------
+
+    def test_aba_visuais_existe_e_acao_abre(self) -> None:
+        abas = [self.app.notebook.tab(widget, "text") for widget in self.app.notebook.tabs()]
+        self.assertIn("Visuais", abas)
+        self.app.act_visuals_loading()
+        self.assertEqual(self.app.notebook.select(), str(self.app.visuals_tab))
+
+    def test_loading_modo_texto_compoe_e_modo_imagem_sem_fundo_bloqueia(self) -> None:
+        aba = self.app.visuals_tab
+        aba.var_mode.set("Só Texto")
+        aba.render()
+        self.assertIsNotNone(aba.preview)
+        self.assertEqual(aba.preview.size, (2048, 2048), "tamanho real da textura")
+
+        aba.var_mode.set("Imagem")
+        aba.render()
+        self.assertIsNone(aba.preview, "modo imagem sem fundo não compõe")
+        self.assertEqual(str(aba.btn_injetar.instate(["disabled"])), "True",
+                         "injetar sem arte fica desabilitado")
+
+    def test_injetar_invalida_assinatura_e_verificacao_anteriores(self) -> None:
+        """Fase 7: o APK mudou — APK_ASSINADO/APK_VERIFICADO caem e a
+        customização fica marcada."""
+        apk = apk_sintetico(self.studio.parent / "alvo-loading.apk",
+                            metadata=metadata_sintetico())
+        projeto, _ = new_project("visuais", studio_root=self.studio, input_apk=apk)
+        for etapa in Stage:
+            projeto.state.mark(etapa)
+        self.app._abrir_projeto_memoria(projeto)
+        self.app.refresh()
+
+        relatorio = {
+            "apk_out": str(self.studio / "visuais" / "output" / "revival.apk"),
+            "bundle_report": {"targets": [{"name": "loading_background"}]},
+            "report_path": str(self.studio / "visuais" / "reports" / "loading-inject.json"),
+        }
+        with (
+            mock.patch("revival_editor.ui.app.messagebox") as caixa,
+            mock.patch(
+                "revival_editor.ui.visuals_tab._trabalho_injetar", return_value=relatorio
+            ) as trabalho,
+        ):
+            caixa.askyesno.return_value = True
+            aba = self.app.visuals_tab
+            aba.var_mode.set("Só Texto")
+            aba.render()
+            self.assertIsNotNone(aba.preview)
+            aba.injetar()
+            ok = _bombeiar(
+                self.root,
+                lambda: self.app.project is not None
+                and self.app.project.state.has(Stage.CUSTOMIZACOES_APLICADAS)
+                and not self.app.project.state.has(Stage.APK_VERIFICADO),
+            )
+            self.assertTrue(ok, self.app.var_status.get())
+
+        trabalho.assert_called_once()
+        self.assertFalse(self.app.project.state.has(Stage.APK_ASSINADO))
+        self.assertFalse(self.app.project.state.has(Stage.APK_RECONSTRUIDO))
+        self.assertEqual(self.app.project.output_apk, relatorio["apk_out"])
+        self.assertIn("loading_inject", self.app.project.reports)
+        self.assertIn("etapas invalidadas", self.app.log.content)
+
     def test_fechar_durante_job_confirma_cancela_e_destroi(self) -> None:
         def dorme(ctx):
             for _ in range(300):

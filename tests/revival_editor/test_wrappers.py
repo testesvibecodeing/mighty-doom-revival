@@ -42,7 +42,7 @@ WRAPPER_INVENTORY: dict[str, tuple[str | None, str, tuple[str, ...]]] = {
     ),
     "loading-screen-editor": (
         "visuals.loading_screen",
-        PENDENTE,  # fase 7
+        PRONTO,  # fase 7: aba Visuais no Studio
         ("loading_screen_editor.py",),
     ),
     "analyze-official-apk": (
