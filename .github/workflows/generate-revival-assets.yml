@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/generate-revival-png-assets.py'
+      - 'scripts/refine-revival-png-assets.py'
   workflow_dispatch:
 
 permissions:
@@ -25,18 +26,21 @@ jobs:
       - name: Install Pillow
         run: python -m pip install Pillow
 
-      - name: Generate original Revival artwork
+      - name: Generate base Revival artwork
         run: python scripts/generate-revival-png-assets.py
+
+      - name: Replace shared placeholders with dedicated artwork
+        run: python scripts/refine-revival-png-assets.py
 
       - name: Commit generated assets
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f -A server/public/assets/img/revival server/public/assets/img/game
+          git add -f -A server/public/assets/img/revival server/public/assets/img/game server/src/assets.js
           if git diff --cached --quiet; then
             echo "No generated changes."
             exit 0
           fi
-          git commit -m "feat: generate and integrate Revival PNG artwork"
+          git commit -m "feat: replace generic artwork with dedicated Revival PNGs"
           git push
