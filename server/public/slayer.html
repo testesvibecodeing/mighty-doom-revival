@@ -117,6 +117,7 @@
           <button class="secondary-action" id="userSearchButton"><i class="fa-solid fa-magnifying-glass"></i></button>
         </div>
         <div class="user-list" id="userList"></div>
+        <div class="card admin-profile" id="userProfile" hidden></div>
       </div>
 
       <div class="admin-sub" id="admin-packs" hidden>
@@ -259,6 +260,10 @@
           <datalist id="resourceOptions"></datalist>
         </label>
         <label>Quantidade<input name="amount" type="number" min="1" step="1" value="1" required></label>
+        <label>Tipo do recurso<select name="kind">
+          <option value="currency">Dinheiro / moeda</option><option value="energy">Energia</option><option value="weapon">Arma</option><option value="equipment">Equipamento</option><option value="launcher">Launcher</option><option value="ultimate">Ultimate</option><option value="slayer">Slayer</option><option value="cosmetic">Cosmético</option><option value="entitlement">Benefício</option>
+        </select></label>
+        <div class="quota-row"><label>Nível<input name="level" type="number" min="1" step="1" placeholder="padrão"></label><label>Tier<input name="tier" type="number" min="0" step="1" placeholder="padrão"></label></div>
         <div class="modal-actions">
           <button class="secondary-action" type="button" id="grantCancel">Cancelar</button>
           <button class="primary-action" type="submit">Conceder</button>

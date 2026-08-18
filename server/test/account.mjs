@@ -97,6 +97,14 @@ try {
   const grant = await request(`/account/admin/users/${plainId}/grant`, { method: 'POST', headers: { cookie: adminCookie }, body: JSON.stringify({ resource: 7, amount: 5 }) })
   assert.equal(grant.body.ok, true)
 
+  // --- perfil administrativo completo do jogador ---
+  const profile = await request(`/account/admin/users/${plainId}/profile`, { headers: { cookie: adminCookie } })
+  assert.equal(profile.body.ok, true)
+  assert.equal(profile.body.profile.account.id, plainId)
+  assert.ok(Array.isArray(profile.body.profile.currencies))
+  assert.ok(Array.isArray(profile.body.profile.items))
+  assert.ok(Array.isArray(profile.body.profile.stats))
+
   // --- avisos: admin publica, jogador vê, admin remove ---
   const notice = await request('/account/admin/notifications', { method: 'POST', headers: { cookie: adminCookie }, body: JSON.stringify({ title: 'Novo APK disponível', body: 'Atualize o cliente', kind: 'update' }) }, 201)
   const playerNotices = await request('/account/notifications', { headers: { cookie: plainCookie } })

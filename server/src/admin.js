@@ -2,10 +2,11 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from '
 import { randomBytes } from 'node:crypto'
 import { dirname } from 'node:path'
 
-import { classifyResource, giveGameResource } from './game-data-model.js'
+import { classifyResource, giveGameResource, inventoryWire } from './game-data-model.js'
 import { resolveResource } from './config.js'
 import { panelResourceByRef, panelResourceInfo } from './assets.js'
 import { readSmtpConfig, smtpPublic, writeSmtpConfig } from './mail.js'
+import { playerStatsWire } from './stats.js'
 
 // Kinds aceitos numa concessão explícita de recurso (giveGameResource).
 const GRANT_KINDS = new Set(['currency', 'energy', 'cosmetic', 'entitlement', 'weapon', 'equipment', 'launcher', 'ultimate', 'slayer'])
@@ -258,6 +259,20 @@ function eventStatus (event, now) {
   return 'running'
 }
 
+function publicAdminUser (user) {
+  return { id: user.id, uuid: user.uuid, email: user.email || '', display_name: user.display_name || '', is_admin: Boolean(user.is_admin), password_set: user.password_set !== 0, level: user.level, chapter_progression: user.chapter_progression, attempt_count: user.attempt_count, created_at: user.created_at }
+}
+
+function adminUserProfile (repo, user, runtime) {
+  const items = repo.items(user.id).map(item => {
+    let metadata = {}
+    try { metadata = JSON.parse(item.metadata_json || '{}') } catch {}
+    const info = panelResourceInfo(item.rid, runtime, item.kind)
+    return { id: item.id, rid: item.rid, name: info.name, icon: info.icon, fallback: info.fallback, kind: info.kind, level: item.level, tier: item.tier, amount: item.amount, metadata }
+  })
+  return { account: publicAdminUser(user), currencies: repo.currencies(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'currency') })), energies: repo.energies(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'energy') })), items, equipped: repo.slots(user.id), cosmetics: repo.cosmetics(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'cosmetic') })), entitlements: repo.entitlements(user.id).map(row => ({ ...row, ...panelResourceInfo(row.rid, runtime, 'entitlement') })), wire_inventory: inventoryWire(repo, user.id, runtime), stats: playerStatsWire(repo, user.id) }
+}
+
 export function publicPack (pack, runtime) {
   // Preview por entrada: um recurso que ainda não resolve para rid (game-data
   // ausente nesta instância) continua exibindo nome/ícone via tag canônica,
@@ -436,6 +451,14 @@ export function handleAdminApi (req, res, path, body, { repo, runtime, reloadRun
   }
 
   // --- usuários: buscar, resetar senha, recovery, promover, conceder item ---
+  let profileMatch = /^users\/(\d+)\/profile$/.exec(route)
+  if (profileMatch) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'method-not-allowed' })
+    const target = repo.userById(Number(profileMatch[1]))
+    if (!target) return json(res, 404, { ok: false, error: 'user-not-found' })
+    return json(res, 200, { ok: true, profile: adminUserProfile(repo, target, runtime) })
+  }
+
   let match = /^users\/(\d+)\/([a-z-]+)$/.exec(route)
   if (match) {
     const userId = Number(match[1])

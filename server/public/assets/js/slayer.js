@@ -372,6 +372,7 @@ async function loadAdminUsers (query = '') {
         <span>${formatNumber(user.attempt_count)} runs · desde ${formatDate(user.created_at)}</span>
       </div>
       <div class="action-row">
+        <button class="mini-action" data-act="profile"><i class="fa-solid fa-id-card"></i> Ver perfil</button>
         <button class="mini-action" data-act="reset"><i class="fa-solid fa-key"></i> Nova senha</button>
         <button class="mini-action" data-act="recovery"><i class="fa-solid fa-rotate"></i> Recovery</button>
         <button class="mini-action" data-act="grant"><i class="fa-solid fa-gift"></i> Conceder</button>
@@ -379,6 +380,19 @@ async function loadAdminUsers (query = '') {
         <button class="mini-action danger" data-act="delete"><i class="fa-solid fa-trash"></i> Excluir</button>
       </div>
     </article>`).join('') : '<p class="empty">Nenhum usuário encontrado.</p>'
+}
+
+function profileResourceRows (rows, empty = 'Nenhum registro') {
+  return rows?.length ? rows.map(row => `<div class="profile-resource"><img class="game-icon inline thumb" src="${escapeHtml(row.icon || row.fallback || '/assets/img/kinds/pack.svg')}" alt=""><span>${escapeHtml(row.name || `Recurso ${row.rid}`)}</span><strong>${formatNumber(row.amount ?? row.rid ?? 0)}</strong></div>`).join('') : `<p class="empty">${empty}</p>`
+}
+
+async function loadAdminUserProfile (userId) {
+  const { profile } = await api(`/account/admin/users/${userId}/profile`)
+  const account = profile.account
+  const profileEl = $('#userProfile')
+  profileEl.innerHTML = `<div class="profile-head"><div><span class="eyebrow">// PLAYER PROFILE</span><h3>#${account.id} ${escapeHtml(account.display_name || 'Sem nome')}</h3><p class="hint">${escapeHtml(account.email || 'Sem e-mail')} · UUID ${escapeHtml(account.uuid)}</p></div><button class="secondary-action" data-close-profile>Fechar perfil</button></div><div class="metric-grid"><article class="metric-card"><small>NÍVEL</small><strong>${account.level}</strong><span>${account.chapter_progression} capítulos</span></article><article class="metric-card"><small>RUNS</small><strong>${formatNumber(account.attempt_count)}</strong><span>tentativas</span></article><article class="metric-card"><small>ITENS</small><strong>${profile.items.length}</strong><span>no inventário</span></article><article class="metric-card"><small>ADMIN</small><strong>${account.is_admin ? 'SIM' : 'NÃO'}</strong><span>${account.password_set ? 'senha definida' : 'sem senha'}</span></article></div><div class="profile-columns"><div><h4>Moedas e energia</h4><div class="profile-resource-list">${profileResourceRows([...(profile.currencies || []), ...(profile.energies || [])], 'Nenhuma moeda ou energia')}</div></div><div><h4>Itens</h4><div class="profile-resource-list">${profileResourceRows(profile.items, 'Inventário vazio')}</div></div></div><div class="profile-actions"><button class="primary-action" data-profile-grant="${account.id}"><i class="fa-solid fa-gift"></i> Dar item / dinheiro</button><button class="secondary-action" data-profile-refresh="${account.id}"><i class="fa-solid fa-rotate"></i> Atualizar perfil</button></div>`
+  profileEl.hidden = false
+  profileEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 $('#userSearchButton').addEventListener('click', () => loadAdminUsers($('#userSearch').value).catch(error => toast(error.message)))
@@ -392,6 +406,10 @@ $('#userList').addEventListener('click', async event => {
   const isAdmin = card.querySelector('.tag.admin') !== null
   const act = button.dataset.act
   try {
+    if (act === 'profile') {
+      await loadAdminUserProfile(userId)
+      return
+    }
     if (act === 'reset') {
       const result = await api(`/account/admin/users/${userId}/reset-password`, { method: 'POST', body: '{}' })
       showResult({ title: 'Senha redefinida', text: `Nova senha do usuário #${userId}. As sessões ativas dele foram encerradas.`, code: result.password, copyable: true })
@@ -418,6 +436,14 @@ $('#userList').addEventListener('click', async event => {
   } catch (error) { toast(error.message) }
 })
 
+$('#userProfile').addEventListener('click', event => {
+  if (event.target.closest('[data-close-profile]')) $('#userProfile').hidden = true
+  const grant = event.target.closest('[data-profile-grant]')
+  if (grant) openGrantModal(Number(grant.dataset.profileGrant))
+  const refresh = event.target.closest('[data-profile-refresh]')
+  if (refresh) loadAdminUserProfile(Number(refresh.dataset.profileRefresh)).catch(error => toast(error.message))
+})
+
 /* --- conceder recurso --- */
 let grantUserId = null
 function openGrantModal (userId) {
@@ -425,6 +451,7 @@ function openGrantModal (userId) {
   $('#grantTarget').textContent = `Para: jogador #${userId}`
   $('#grantStatus').textContent = ''
   $('#grantForm').reset()
+  $('#grantForm').querySelector('[name="kind"]').value = 'currency'
   $('#grantModal').hidden = false
   searchResources('')
 }
@@ -447,7 +474,10 @@ $('#grantForm').addEventListener('submit', async event => {
   const data = formData(event.target)
   status('grantStatus', 'Concedendo…')
   try {
-    await api(`/account/admin/users/${grantUserId}/grant`, { method: 'POST', body: JSON.stringify({ resource: data.resource, amount: Number(data.amount) }) })
+    const grant = { resource: data.resource, amount: Number(data.amount), kind: data.kind }
+    if (data.level) grant.level = Number(data.level)
+    if (data.tier) grant.tier = Number(data.tier)
+    await api(`/account/admin/users/${grantUserId}/grant`, { method: 'POST', body: JSON.stringify(grant) })
     status('grantStatus', 'Recurso concedido!', true)
     toast('Recurso concedido ao jogador.')
     setTimeout(() => { $('#grantModal').hidden = true }, 700)
