@@ -61,7 +61,7 @@ propósito. O detalhe operacional está nas skills (`.claude/skills/`) e em `doc
 | `scripts/inject_loading_screen.py` / `loading_screen_editor.py` | Loading screen custom (CLI + GUI Tkinter) |
 | `scripts/check_revival_server.py` | Preflight HTTPS do servidor (health + `uts`) |
 | `compatibility.json` | **Fonte de verdade dos 116 endpoints** — DoD por rota, evidências e fallbacks; gerada por script, não editada à mão |
-| `scripts/dump_il2cpp_metadata.py` | Extrator read-only do `global-metadata.dat` v29 (rotas `game/*`; teste com metadata sintético) |
+| `scripts/dump_il2cpp_metadata.py` | Extrator read-only do `global-metadata.dat` v29 — modos `--routes`/`--enums`/`--dtos`/`--wire-names`/`--response-codes`/`--all` com validação por fechamentos (layout derivado e provado contra o APK real; teste com metadata sintético) |
 | `scripts/generate_endpoint_matrix.py` | Sincroniza `compatibility.json` (campos derivados de `server/src`, `server/test`, fixtures) e regenera `docs/ENDPOINT-MATRIX.md`; `--check` é gate de CI |
 | `scripts/next_task.py` | Seleciona deterministicamente o próximo gap (módulo por prioridade → primeiro gate DoD falso) |
 | `scripts/verify_everything.py` | **Gate único de conclusão**: npm test + regressões Python + sync do registro + coerência + servidor vivo/APK opcionais |
