@@ -127,6 +127,7 @@ class StudioApp:
 
         from .assets_tab import AssetsTab
         from .branding_tab import BrandingTab
+        from .compat_tab import CompatTab
         from .visuals_tab import VisualsTab
 
         self.visuals_tab = VisualsTab(self.notebook, self)
@@ -135,6 +136,8 @@ class StudioApp:
         self.notebook.add(self.branding_tab, text="Branding")
         self.assets_tab = AssetsTab(self.notebook, self)
         self.notebook.add(self.assets_tab, text="Assets")
+        self.compat_tab = CompatTab(self.notebook, self)
+        self.notebook.add(self.compat_tab, text="Compatibilidade")
 
         # ---- formulário do projeto ----
         form = ttk.LabelFrame(pagina_projeto, text="Projeto")
@@ -801,6 +804,11 @@ class StudioApp:
     def act_assets_catalog(self) -> None:
         """Abre a aba Assets (fase 9): catálogo somente-leitura dos bundles."""
         self.notebook.select(self.assets_tab)
+
+    def act_compat_registro(self) -> None:
+        """Abre a aba Compatibilidade (fase 16): registro 116 rotas, somente
+        leitura — mutação de evidência apenas via generate_endpoint_matrix.py."""
+        self.notebook.select(self.compat_tab)
 
     # ==================================================================
     # menus — Ferramentas

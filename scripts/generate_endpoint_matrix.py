@@ -17,7 +17,8 @@ Campos DERIVADOS (recomputados, escrever à mão não tem efeito):
                    cliente (código legado; candidatas a remoção)
 
 Campos de EVIDÊNCIA (só mudam com prova, via --set ou edição consciente):
-  schema_extracted, client_validated, persistence_validated, uses_fallback
+  schema_extracted, client_validated, uses_fallback (true/false);
+  persistence_validated aceita true/false/null (null = não aplicável)
 
 Uso:
   python scripts/generate_endpoint_matrix.py                     # sync + doc
@@ -412,6 +413,10 @@ def render_matrix(compat: dict) -> str:
     return "\n".join(lines)
 
 
+BOOL_EVIDENCE_FIELDS = ("schema_extracted", "client_validated", "uses_fallback")
+TRISTATE_EVIDENCE_FIELDS = ("persistence_validated",)  # true/false/null (null = não aplicável)
+
+
 def apply_set(compat: dict, route: str, assignments: list[str], notes: dict[str, str]) -> None:
     endpoint = compat["endpoints"].get(route)
     if endpoint is None:
@@ -422,7 +427,15 @@ def apply_set(compat: dict, route: str, assignments: list[str], notes: dict[str,
             print(f"ERRO: --set espera campo=valor, veio {assignment!r}", file=sys.stderr)
             raise SystemExit(2)
         key, _, raw = assignment.partition("=")
-        if key not in ("schema_extracted", "client_validated", "uses_fallback"):
+        if key in TRISTATE_EVIDENCE_FIELDS:
+            # persistence_validated aceita null = rota puramente descritiva,
+            # sem efeito persistente (nota/evidência deve explicar o porquê).
+            if raw not in ("true", "false", "null"):
+                print(f"ERRO: {key} espera true/false/null, veio {raw!r}", file=sys.stderr)
+                raise SystemExit(2)
+            endpoint[key] = None if raw == "null" else raw == "true"
+            continue
+        if key not in BOOL_EVIDENCE_FIELDS:
             print(f"ERRO: campo {key!r} não é campo de evidência editável", file=sys.stderr)
             raise SystemExit(2)
         if raw not in ("true", "false"):
@@ -440,7 +453,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true",
                         help="não escreve nada; exit 1 se JSON/matriz estão desatualizados")
     parser.add_argument("--set", action="append", default=[], metavar="ROTA=campo=valor",
-                        help="ex.: --set game/talents/buy=schema_extracted=true (repetível)")
+                        help="ex.: --set game/talents/buy=schema_extracted=true; "
+                             "persistence_validated aceita true/false/null (repetível)")
     parser.add_argument("--note", action="append", default=[], metavar="ROTA=TEXTO",
                         help="anexa evidência à rota (repetível)")
     args = parser.parse_args()

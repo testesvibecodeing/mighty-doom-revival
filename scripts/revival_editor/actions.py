@@ -147,6 +147,13 @@ ACTIONS: tuple[ActionSpec, ...] = (
         handler="act_preparar_ferramentas",
         needs_project=False,
     ),
+    ActionSpec(
+        action_id="ferramentas.compatibilidade",
+        menu="Ferramentas",
+        label="Registro de compatibilidade (aba Compatibilidade)",
+        handler="act_compat_registro",
+        needs_project=False,
+    ),
     # -- Cliente -----------------------------------------------------------
     ActionSpec(
         action_id="cliente.detectar_dispositivos",

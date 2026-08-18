@@ -51,6 +51,7 @@ PYTHON_TESTS = [
     "scripts/test_verify_patched_apk.py",
     "tests/test_zero_catalog_crc.py",
     "tests/test_inject_loading_screen.py",
+    "tests/test_generate_endpoint_matrix.py",
     # Revival Studio (scripts/revival_editor/) — fundação do editor desktop.
     "tests/revival_editor/test_paths.py",
     "tests/revival_editor/test_models.py",

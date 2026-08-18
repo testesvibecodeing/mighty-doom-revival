@@ -593,5 +593,256 @@ class TestJanelaMinima(unittest.TestCase):
         self.assertTrue(destruiu, "janela deveria ter sido destruída após cancelamento")
 
 
+def _registro_fake() -> dict:
+    """Registro sintético de 2 rotas (identificadores Synthetic*)."""
+    return {
+        "_meta": {"route_count": 2},
+        "endpoints": {
+            "game/synthetic/complete": {
+                "module": "synthetic", "implemented": True, "schema_extracted": True,
+                "request_observed": True, "response_observed": True,
+                "client_validated": True, "persistence_validated": True,
+                "regression_test": True, "fixture": None, "fixture_provenance": None,
+                "uses_fallback": False, "evidence": "sintético completo",
+            },
+            "game/synthetic/pendente": {
+                "module": "synthetic", "implemented": True, "schema_extracted": False,
+                "request_observed": False, "response_observed": False,
+                "client_validated": False, "persistence_validated": None,
+                "regression_test": False, "fixture": None, "fixture_provenance": None,
+                "uses_fallback": False, "evidence": "",
+            },
+        },
+        "server_only_routes": [],
+    }
+
+
+@unittest.skipUnless(tk, "sem Tkinter nesta máquina")
+class TestCompatTab(unittest.TestCase):
+    """Aba Compatibilidade (fase 16): leitura pura + mutação só via script."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.studio = Path(self._tmp.name) / "studio"
+        self.root = tk.Tk()
+        self.root.withdraw()
+        from revival_editor.ui.app import StudioApp
+
+        with mock.patch("revival_editor.ui.app.messagebox"), \
+                mock.patch("revival_editor.ui.compat_tab.load_registry",
+                           return_value=_registro_fake()):
+            self.app = StudioApp(self.root, studio_root=self.studio)
+        self.tab = self.app.compat_tab
+
+    def tearDown(self) -> None:
+        try:
+            self.app._fechar()
+        except tk.TclError:
+            pass
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
+        self._tmp.cleanup()
+
+    def test_aba_existe_e_handler_seleciona(self) -> None:
+        abas = [self.app.notebook.tab(w, "text") for w in self.app.notebook.tabs()]
+        self.assertIn("Compatibilidade", abas)
+        self.app.act_compat_registro()
+        self.assertEqual(self.app.notebook.select(), str(self.tab))
+
+    def test_resumo_e_arvore_do_registro(self) -> None:
+        resumo = self.tab.var_resumo.get()
+        self.assertIn("Rotas: 2", resumo)
+        self.assertIn("DoD completo: 1", resumo)
+        self.assertIn("fallbacks: 0", resumo)
+        self.assertIn("persistência: 1 ok / 0 pendente / 1 n/a", resumo)
+        ids = list(self.tab.tree.get_children())
+        self.assertEqual(len(ids), 2)
+        valores = self.tab.tree.item("game/synthetic/pendente", "values")
+        self.assertEqual(valores[2], "schema_extracted")
+        self.assertEqual(self.tab.tree.item("game/synthetic/complete", "values")[2],
+                         "DoD completo")
+
+    def test_selecao_mostra_detalhe(self) -> None:
+        self.tab.tree.selection_set("game/synthetic/pendente")
+        self.root.update()
+        detalhe = self.tab.txt_detalhe.get("1.0", "end")
+        self.assertIn("game/synthetic/pendente", detalhe)
+        self.assertIn("schema_extracted", detalhe)
+
+    def test_nenhuma_checkbox_manual(self) -> None:
+        for widget in self.tab.winfo_children():
+            self.assertNotIsInstance(widget, tk.Checkbutton)
+
+    def test_proxima_tarefa_via_job(self) -> None:
+        payload = {
+            "status": "task",
+            "task": {
+                "module": "synthetic", "module_priority": 7,
+                "endpoint": "game/synthetic/pendente", "gate": "request_observed",
+                "action": "observar com client_harness", "evidence": "sintético",
+                "module_pending": [{"endpoint": "game/synthetic/pendente",
+                                    "gate": "request_observed"}],
+                "module_total": 2,
+            },
+        }
+        with mock.patch("revival_editor.ui.compat_tab.run_next_task",
+                        return_value=payload) as run:
+            self.tab.atualizar_proxima()
+            ok = _bombeiar(self.root, lambda: "game/synthetic/pendente"
+                           in self.tab.var_proxima.get())
+        self.assertTrue(ok, self.tab.var_proxima.get())
+        run.assert_called_once()
+        self.assertIn("request_observed", self.tab.var_proxima.get())
+
+    def test_aplicar_evidencia_passa_pelo_script_oficial(self) -> None:
+        self.tab.tree.selection_set("game/synthetic/pendente")
+        self.root.update()
+        self.tab.var_campo.set("persistence_validated")
+        self.tab._sync_valores()
+        self.tab.var_valor.set("true")
+        conteudo_antes = (self.app.repo_root / "compatibility.json").read_text(
+            encoding="utf-8"
+        ) if (self.app.repo_root / "compatibility.json").is_file() else ""
+        with mock.patch("revival_editor.ui.compat_tab.apply_evidence",
+                        return_value={"diff": "--- antes\n+++ depois\n+ persistence",
+                                      "changed": True}) as aplica, \
+                mock.patch("revival_editor.ui.compat_tab.messagebox") as caixa:
+            caixa.askyesno.return_value = True
+            self.tab.aplicar_evidencia()
+            ok = _bombeiar(self.root, lambda: "generate_endpoint_matrix.py"
+                           in self.tab.txt_detalhe.get("1.0", "end"))
+        self.assertTrue(ok, self.tab.txt_detalhe.get("1.0", "end"))
+        aplica.assert_called_once()
+        args = aplica.call_args[0]
+        self.assertEqual(args[1], "game/synthetic/pendente")
+        self.assertEqual(args[2], "persistence_validated")
+        self.assertEqual(args[3], "true")
+        # a aba em si não escreveu no registro (só o script oficial escreve;
+        # aqui ele foi mockado — logo o arquivo real está intocado)
+        if conteudo_antes:
+            self.assertEqual(
+                (self.app.repo_root / "compatibility.json").read_text(encoding="utf-8"),
+                conteudo_antes,
+            )
+        self.assertIn("persistence", self.tab.txt_detalhe.get("1.0", "end"))
+
+    def test_consultar_research_avisa_modo_final(self) -> None:
+        self.tab.var_url.set("https://synthetic.local")
+        com_research = {
+            "research_mode": True, "fallback_total": 2,
+            "fallback_endpoints": [{"path": "game/x", "count": 2}],
+        }
+        with mock.patch("revival_editor.ui.compat_tab.fetch_research",
+                        return_value=com_research):
+            self.tab.consultar_research()
+            ok = _bombeiar(self.root, lambda: "research_mode" in
+                           self.tab.lbl_research.cget("text"))
+        self.assertTrue(ok, self.tab.lbl_research.cget("text"))
+        self.assertIn("RESEARCH_MODE=false", self.app.log.content)
+        self.assertIn("zero", self.app.log.content)
+
+    def test_consultar_research_sem_avisos(self) -> None:
+        self.tab.var_url.set("https://synthetic.local")
+        with mock.patch("revival_editor.ui.compat_tab.fetch_research",
+                        return_value={"research_mode": False, "fallback_total": 0,
+                                      "fallback_endpoints": []}):
+            self.tab.consultar_research()
+            ok = _bombeiar(self.root, lambda: "fallback_total=0" in
+                           self.tab.lbl_research.cget("text"))
+        self.assertTrue(ok, self.tab.lbl_research.cget("text"))
+        self.assertIn("sem research e sem fallbacks", self.app.log.content)
+
+
+class _CtxFake:
+    """JobContext de mentira: captura argv e simula o script oficial."""
+
+    def __init__(self, repo: Path) -> None:
+        self.repo = repo
+        self.argv: list[str] | None = None
+
+    def run_process(self, argv, **_kw) -> int:  # noqa: ANN001, ANN003
+        self.argv = [str(a) for a in argv]
+        item = next(a for a in self.argv if a.startswith("game/"))
+        rota, _, resto = item.partition("=")
+        campo, _, valor = resto.partition("=")
+        caminho = self.repo / "compatibility.json"
+        reg = json.loads(caminho.read_text(encoding="utf-8"))
+        reg["endpoints"][rota][campo] = None if valor == "null" else valor == "true"
+        caminho.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
+        return 0
+
+
+class TestCompatLogica(unittest.TestCase):
+    """Funções da aba sem Tk: resumo, próxima tarefa e evidência auditável."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        (self.repo / "scripts").mkdir(parents=True)
+        (self.repo / "scripts" / "generate_endpoint_matrix.py").write_text(
+            "# placeholder — o teste injeta o comportamento via _CtxFake\n",
+            encoding="utf-8",
+        )
+        (self.repo / "compatibility.json").write_text(
+            json.dumps(_registro_fake(), indent=2) + "\n", encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_first_open_gate_pula_none(self) -> None:
+        from revival_editor.ui.compat_tab import first_open_gate
+
+        ep = _registro_fake()["endpoints"]["game/synthetic/pendente"]
+        self.assertEqual(first_open_gate(ep), "schema_extracted")
+        ep["schema_extracted"] = True
+        ep["implemented"] = True
+        ep["request_observed"] = True
+        ep["response_observed"] = True
+        ep["client_validated"] = True
+        ep["regression_test"] = True
+        # persistence_validated=None não é gate — DoD completa mesmo assim
+        self.assertIsNone(first_open_gate(ep))
+        ep["uses_fallback"] = True
+        self.assertEqual(first_open_gate(ep), "uses_fallback")
+
+    def test_render_proxima_sem_tarefa(self) -> None:
+        from revival_editor.ui.compat_tab import render_proxima
+
+        texto = render_proxima({"status": "done", "task": None})
+        self.assertIn("nenhuma tarefa", texto)
+
+    def test_apply_evidence_diff_auditavel(self) -> None:
+        from revival_editor.ui.compat_tab import apply_evidence
+
+        ctx = _CtxFake(self.repo)
+        resultado = apply_evidence(self.repo, "game/synthetic/pendente",
+                                   "persistence_validated", "true", ctx)
+        self.assertTrue(resultado["changed"])
+        self.assertIn("persistence_validated", resultado["diff"])
+        self.assertIn("--set", ctx.argv)
+        self.assertTrue(ctx.argv[1].endswith("generate_endpoint_matrix.py"))
+        # o registro foi mutado pelo "script oficial" (simulado), não pela aba
+        reg = json.loads((self.repo / "compatibility.json").read_text(encoding="utf-8"))
+        self.assertIs(reg["endpoints"]["game/synthetic/pendente"]["persistence_validated"], True)
+
+    def test_apply_evidence_rejeita_null_fora_persistence(self) -> None:
+        from revival_editor.ui.compat_tab import CompatError, apply_evidence
+
+        ctx = _CtxFake(self.repo)
+        with self.assertRaises(CompatError):
+            apply_evidence(self.repo, "game/synthetic/pendente",
+                           "schema_extracted", "null", ctx)
+
+    def test_apply_evidence_rejeita_campo_livre(self) -> None:
+        from revival_editor.ui.compat_tab import CompatError, apply_evidence
+
+        with self.assertRaises(CompatError):
+            apply_evidence(self.repo, "game/synthetic/pendente",
+                           "implemented", "true", _CtxFake(self.repo))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
