@@ -56,6 +56,7 @@ PYTHON_TESTS = [
     "tests/revival_editor/test_models.py",
     "tests/revival_editor/test_toolchain.py",
     "tests/revival_editor/test_runner.py",
+    "tests/revival_editor/test_services.py",
 ]
 
 
