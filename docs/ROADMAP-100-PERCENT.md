@@ -58,3 +58,21 @@ A loja do servidor não processará cartão, Google Play Billing, dinheiro real 
 4. Implementar cada endpoint com o schema real observado.
 5. Importar as definições preservadas de eventos/battle passes sem colocar APK/assets no Git.
 6. Criar testes de regressão para cada tela/fluxo antes de desligar `RESEARCH_MODE`.
+
+## Administração do servidor e do painel web
+
+Esta seção não altera a meta de compatibilidade do APK: ela cobre a operação do
+servidor Revival e a administração do site/painel para que os recursos já
+implementados possam ser geridos sem editar arquivos runtime manualmente.
+
+- [x] painel web Admin com visão geral, usuários, concessões, loja, eventos,
+      avisos, personalização do site e SMTP;
+- [x] correção da navegação das subseções Admin (atributo HTML `hidden` sincronizado);
+- [x] credenciais iniciais e link de recuperação do Super Admin emitidos pelo
+      `scripts/install.sh`, com token `REVIVAL_ADMIN_TOKEN` para operações do servidor;
+- [x] `scripts/revival_admin.py` como CLI sem dependências para health, overview,
+      reload, usuários, concessões, loja, eventos, avisos, site e SMTP;
+- [ ] adicionar auditoria persistente de ações administrativas e rotação do
+      token da API;
+- [ ] completar no painel apenas as operações que forem confirmadas pelo
+      contrato extraído do APK; não inventar DTOs, rotas ou capacidades.

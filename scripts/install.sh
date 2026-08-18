@@ -997,7 +997,8 @@ echo "  de novo para gerar um novo."
 
 section "TOKEN ADMIN DA API"
 echo "  $(get_env_var REVIVAL_ADMIN_TOKEN)"
-echo "  (guarde este token; ele autoriza POST /revival/reload)"
+echo "  (guarde este token; ele autoriza as operações técnicas do servidor)"
+echo "  CLI local: REVIVAL_ADMIN_TOKEN='este-token' python3 scripts/revival_admin.py overview"
 
 section "OPERAÇÃO E LOGS"
 echo "  systemctl status $SERVICE_NAME"

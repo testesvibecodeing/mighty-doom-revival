@@ -231,7 +231,11 @@ async function loadStore () {
 /* ============ abas ============ */
 $$('.tab').forEach(tab => tab.addEventListener('click', () => {
   $$('.tab').forEach(x => x.classList.toggle('active', x === tab))
-  $$('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${tab.dataset.tab}`))
+  $$('.tab-panel').forEach(panel => {
+    const active = panel.id === `panel-${tab.dataset.tab}`
+    panel.classList.toggle('active', active)
+    panel.hidden = !active
+  })
   window.scrollTo({ top: 0 })
   if (tab.dataset.tab === 'admin') loadAdminSection('overview')
 }))
@@ -302,7 +306,14 @@ $('#resultConfirm')?.addEventListener('click', () => {
 /* ============ admin ============ */
 $$('#adminSubnav .chip').forEach(chip => chip.addEventListener('click', () => {
   $$('#adminSubnav .chip').forEach(x => x.classList.toggle('active', x === chip))
-  $$('.admin-sub').forEach(sub => sub.classList.toggle('active', sub.id === `admin-${chip.dataset.sub}`))
+  $$('.admin-sub').forEach(sub => {
+    const active = sub.id === `admin-${chip.dataset.sub}`
+    sub.classList.toggle('active', active)
+    // [hidden] has precedence over .admin-sub.active in the stylesheet.
+    // Keep the attribute in sync so the panel is actually visible after a
+    // navigation click, including browsers with native hidden handling.
+    sub.hidden = !active
+  })
   loadAdminSection(chip.dataset.sub)
 }))
 
@@ -631,7 +642,11 @@ $('#noticeForm').addEventListener('submit', async event => {
 
 $('#notifyApk').addEventListener('click', () => {
   $$('#adminSubnav .chip').forEach(x => x.classList.toggle('active', x.dataset.sub === 'notices'))
-  $$('.admin-sub').forEach(sub => sub.classList.toggle('active', sub.id === 'admin-notices'))
+  $$('.admin-sub').forEach(sub => {
+    const active = sub.id === 'admin-notices'
+    sub.classList.toggle('active', active)
+    sub.hidden = !active
+  })
   $('#noticeForm').querySelector('[name="title"]').value = 'Novo APK disponível para download'
   $('#noticeForm').querySelector('[name="kind"]').value = 'update'
   $('#noticeForm').querySelector('[name="body"]').focus()

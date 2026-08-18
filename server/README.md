@@ -37,6 +37,21 @@ npm start
 
 O servidor abre em `0.0.0.0:8080`.
 
+## Administração por terminal
+
+O painel web em `/slayer` é a interface principal. Para operação local ou
+automação, use o CLI sem dependências externas, sempre com o token exibido pelo
+`scripts/install.sh`:
+
+```bash
+REVIVAL_ADMIN_TOKEN='seu-token' python3 scripts/revival_admin.py overview
+REVIVAL_ADMIN_TOKEN='seu-token' python3 scripts/revival_admin.py users --query nome
+REVIVAL_ADMIN_TOKEN='seu-token' python3 scripts/revival_admin.py reload
+```
+
+O CLI chama somente as rotas administrativas existentes; mudanças de loja e
+eventos continuam gravadas nos arquivos runtime ignorados pelo Git.
+
 ## game-data.json
 
 O cliente pede os dados do jogo ao servidor através de `/game/player/game-data-token` e depois `/data`. Por isso `server/data/game-data.json` é obrigatório para compatibilidade completa.
