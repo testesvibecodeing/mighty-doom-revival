@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-17T15:54:14Z",
+    "updated": "2026-08-18T00:21:58Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -1377,7 +1377,7 @@
       "response_observed": true,
       "client_validated": true,
       "persistence_validated": null,
-      "regression_test": false,
+      "regression_test": true,
       "fixture": "tests/fixtures/protocol/server-replay/session/game__session__refresh.json",
       "fixture_provenance": "server-replay",
       "uses_fallback": false,

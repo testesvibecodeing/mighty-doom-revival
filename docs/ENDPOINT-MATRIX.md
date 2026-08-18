@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-17T15:54:14Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-18T00:21:58Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -207,7 +207,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/session/heartbeat` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
-| `game/session/refresh` | ✅ | · | ✅ | ✅ | ✅ | — | · | ✅ | — | RELATORIO-STATUS 2026-08-16: session/refresh contínuo durante o combate (keepalive). |
+| `game/session/refresh` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: session/refresh contínuo durante o combate (keepalive). |
 | `game/session/update-legal` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SessionApi.UpdateLegal CONFIRMADO; envelope puro; persiste versões tos/pp/eula + flags em session/legal; nomes de campos A VERIFICAR |
 
 ### auth
