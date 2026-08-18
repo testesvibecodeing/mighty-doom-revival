@@ -519,7 +519,9 @@ export function handleAdminApi (req, res, path, body, { repo, runtime, reloadRun
       const tag = typeof definition.tag === 'string' ? definition.tag : ''
       const name = String(definition.display_name || definition.name || definition.key || '')
       if (query && !tag.toLowerCase().includes(query) && !name.toLowerCase().includes(query) && String(rid) !== query) continue
-      results.push({ rid, tag, name, kind: classifyResource(rid, runtime) })
+      const kind = classifyResource(rid, runtime)
+      const info = panelResourceInfo(rid, runtime, kind)
+      results.push({ rid, tag, name: info.name || name, kind, icon: info.icon, fallback: info.fallback })
       if (results.length >= 60) break
     }
     results.sort((a, b) => a.rid - b.rid)

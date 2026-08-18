@@ -467,6 +467,9 @@ function openGrantModal (userId) {
   $('#grantStatus').textContent = ''
   $('#grantForm').reset()
   $('#grantForm').querySelector('[name="kind"]').value = 'currency'
+  grantSelected = null
+  $('#grantSelectedLabel').textContent = 'Nenhum item selecionado'
+  $('#resourcePicker').innerHTML = '<p class="empty">Carregando catálogo…</p>'
   $('#grantModal').hidden = false
   searchResources('')
 }
@@ -474,19 +477,29 @@ $('#grantCancel').addEventListener('click', () => { $('#grantModal').hidden = tr
 $('#grantModal').addEventListener('click', event => { if (event.target === $('#grantModal')) $('#grantModal').hidden = true })
 
 let resourceSearchTimer = null
-$('#grantResource').addEventListener('input', () => {
+let grantSelected = null
+$('#grantResourceSearch').addEventListener('input', () => {
   clearTimeout(resourceSearchTimer)
-  resourceSearchTimer = setTimeout(() => searchResources($('#grantResource').value), 300)
+  resourceSearchTimer = setTimeout(() => searchResources($('#grantResourceSearch').value), 250)
 })
 async function searchResources (query) {
   try {
     const { resources } = await api(`/account/admin/resources?query=${encodeURIComponent(query)}`)
-    $('#resourceOptions').innerHTML = resources.map(row => `<option value="${escapeHtml(row.tag || row.rid)}">${escapeHtml(row.name)} (${row.kind})</option>`).join('')
-  } catch {}
+    $('#resourcePicker').innerHTML = resources.length ? resources.map(row => `<button type="button" class="resource-choice ${grantSelected?.rid === row.rid ? 'selected' : ''}" data-resource-rid="${row.rid}" data-resource="${escapeHtml(row.tag || row.rid)}" data-resource-name="${escapeHtml(row.name)}" data-resource-kind="${escapeHtml(row.kind)}"><img src="${escapeHtml(row.icon || row.fallback || '/assets/img/kinds/pack.svg')}" alt=""><span><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.kind)} · #${row.rid}</small></span></button>`).join('') : '<p class="empty">Nenhum item encontrado. Verifique se o game-data está carregado.</p>'
+  } catch { $('#resourcePicker').innerHTML = '<p class="empty">Não foi possível carregar o catálogo.</p>' }
 }
+$('#resourcePicker').addEventListener('click', event => {
+  const choice = event.target.closest('[data-resource-rid]')
+  if (!choice) return
+  grantSelected = { rid: Number(choice.dataset.resourceRid), resource: choice.dataset.resource, name: choice.dataset.resourceName, kind: choice.dataset.resourceKind }
+  $('#grantResource').value = grantSelected.resource
+  $('#grantSelectedLabel').textContent = `${grantSelected.name} · ${grantSelected.kind}`
+  $$('#resourcePicker .resource-choice').forEach(row => row.classList.toggle('selected', row === choice))
+})
 $('#grantForm').addEventListener('submit', async event => {
   event.preventDefault()
   const data = formData(event.target)
+  if (!grantSelected) { status('grantStatus', 'Selecione um item no catálogo antes de conceder.'); return }
   status('grantStatus', 'Concedendo…')
   try {
     const grant = { resource: data.resource, amount: Number(data.amount), kind: data.kind }

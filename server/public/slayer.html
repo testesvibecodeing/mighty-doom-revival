@@ -255,9 +255,10 @@
       <h3><i class="fa-solid fa-gift"></i> Conceder item / moeda</h3>
       <p class="modal-text" id="grantTarget">Para: --</p>
       <form class="stack-form" id="grantForm">
-        <label>Recurso (tag ou ID)<input name="resource" id="grantResource" list="resourceOptions" required placeholder="ex.: gems, weapon_shotgun…">
-          <datalist id="resourceOptions"></datalist>
-        </label>
+        <div class="resource-picker-head"><label for="grantResource">Escolha o item</label><span id="grantSelectedLabel">Nenhum item selecionado</span></div>
+        <input name="resource" id="grantResource" type="hidden" required>
+        <input id="grantResourceSearch" class="resource-search" placeholder="Buscar por nome, categoria ou ID…" autocomplete="off">
+        <div class="resource-picker" id="resourcePicker"><p class="empty">Carregando catálogo…</p></div>
         <label>Quantidade<input name="amount" type="number" min="1" step="1" value="1" required></label>
         <label>Tipo do recurso<select name="kind">
           <option value="currency">Dinheiro / moeda</option><option value="energy">Energia</option><option value="weapon">Arma</option><option value="equipment">Equipamento</option><option value="launcher">Launcher</option><option value="ultimate">Ultimate</option><option value="slayer">Slayer</option><option value="cosmetic">Cosmético</option><option value="entitlement">Benefício</option>
