@@ -107,9 +107,9 @@ alias(['keys', 'key', 'equipment_crate_key', 'equipment_key', 'key_equipment_cra
 alias(['weapon_crate_key', 'weapon_key', 'key_weapon_crate'], 'Chave de caixa de arma', 'store_weaponcrate_key_single_01', 'currency')
 alias(['special_crate_key', 'special_key', 'key_special_crate'], 'Chave de caixa especial', 'store_specialcrate_key_single_01', 'currency')
 alias(['tokens', 'token', 'weapon_tokens'], 'Tokens de arma', 'store_token_allrandom_tier_01', 'currency')
-alias(['skin_shards', 'shards', 'skin_unlock_shards'], 'Shards de skin', null, 'currency')
+alias(['skin_shards', 'shards', 'skin_unlock_shards'], 'Shards de skin', 'store_skinshards_01', 'currency')
 alias(['xp_player', 'xp'], 'XP', 'icon_ability_xp_up_major', 'currency')
-alias(['argent_energy', 'argent', 'token_slayer_argent-energy'], 'Argent Energy', null, 'energy')
+alias(['argent_energy', 'argent', 'token_slayer_argent-energy'], 'Argent Energy', 'store_argentenergy_01', 'energy')
 
 // Tokens por peça de gear / launcher / ultimate (tags reais do game-data).
 alias(['token_helmet'], 'Tokens de capacete', 'store_tokensingle_helmet_01', 'currency')
@@ -182,7 +182,7 @@ for (const [tag, [display, icon]] of Object.entries(SLAYERS)) {
   alias(keys, display, `slay_icon_events_${icon}_01`, 'slayer')
   // shards de skin de slayer (tags reais shard_<slayer>): mesmo nome, sem
   // arte própria na extração — cai no ícone da categoria.
-  alias([`shard_${tag}`, `shard_${tag.replace(/_?slayer$/, '')}`], `Shards ${display}`, null, 'currency')
+  alias([`shard_${tag}`, `shard_${tag.replace(/_?slayer$/, '')}`], `Shards ${display}`, `store_shard_${icon}_01`, 'currency')
 }
 
 // Tokens por arma (tags reais token_<arma>): store_tokensingle_<arma>_01.
@@ -190,7 +190,7 @@ const WEAPON_TOKENS = {
   heavy_cannon: 'heavycannon', combat_shotgun: 'combatshotgun', shotgun: 'combatshotgun',
   super_shotgun: 'supershotgun', plasma_rifle: 'plasmarifle', chaingun: 'chaingun',
   rocket_launcher: 'rocketlauncher', ballista: 'ballista', gauss_cannon: 'gausscannon',
-  burst_rifle: null, sentinel_hammer: null
+  burst_rifle: 'burstrifle', sentinel_hammer: 'sentinelhammer'
 }
 for (const [tag, tight] of Object.entries(WEAPON_TOKENS)) {
   alias([`token_${tag}`], `Tokens ${tag.replace(/_/g, ' ')}`, tight ? `store_tokensingle_${tight}_01` : 'store_token_allrandom_tier_01', 'currency')

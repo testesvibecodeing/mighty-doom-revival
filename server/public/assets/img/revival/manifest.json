@@ -1,147 +1,696 @@
 {
-  "version": 1,
-  "license_note": "Original Revival artwork. No official game assets included.",
-  "base_url": "/assets/img/revival",
-  "assets": {
-    "revival_crystal": {
-      "file": "resources/revival_crystal.png",
-      "category": "resource",
-      "label": "Revival Crystal"
+  "origin": "100% original Revival artwork",
+  "count": 138,
+  "files": {
+    "store_crystalsingle_01": {
+      "file": "store_crystalsingle_01.png",
+      "source": "resources/store_crystalsingle_01.png",
+      "category": "resources"
     },
-    "slayer_coin": {
-      "file": "resources/slayer_coin.png",
-      "category": "resource",
-      "label": "Slayer Coin"
+    "store_coinssingle_01": {
+      "file": "store_coinssingle_01.png",
+      "source": "resources/store_coinssingle_01.png",
+      "category": "resources"
     },
-    "energy_cell": {
-      "file": "resources/energy_cell.png",
-      "category": "resource",
-      "label": "Energy Cell"
+    "store_slayerorbssingle_01": {
+      "file": "store_slayerorbssingle_01.png",
+      "source": "resources/store_slayerorbssingle_01.png",
+      "category": "resources"
     },
-    "void_token": {
-      "file": "resources/void_token.png",
-      "category": "resource",
-      "label": "Void Token"
+    "store_tech_single_01": {
+      "file": "store_tech_single_01.png",
+      "source": "resources/store_tech_single_01.png",
+      "category": "resources"
     },
-    "ember_key": {
-      "file": "resources/ember_key.png",
-      "category": "resource",
-      "label": "Ember Key"
+    "store_equipmentcrate_key_single_01": {
+      "file": "store_equipmentcrate_key_single_01.png",
+      "source": "resources/store_equipmentcrate_key_single_01.png",
+      "category": "resources"
     },
-    "standard_crate": {
-      "file": "crates/standard_crate.png",
-      "category": "crate",
-      "label": "Standard Crate"
+    "store_weaponcrate_key_single_01": {
+      "file": "store_weaponcrate_key_single_01.png",
+      "source": "resources/store_weaponcrate_key_single_01.png",
+      "category": "resources"
     },
-    "epic_crate": {
-      "file": "crates/epic_crate.png",
-      "category": "crate",
-      "label": "Epic Crate"
+    "store_specialcrate_key_single_01": {
+      "file": "store_specialcrate_key_single_01.png",
+      "source": "resources/store_specialcrate_key_single_01.png",
+      "category": "resources"
     },
-    "legendary_crate": {
-      "file": "crates/legendary_crate.png",
-      "category": "crate",
-      "label": "Legendary Crate"
+    "icon_ability_xp_up_major": {
+      "file": "icon_ability_xp_up_major.png",
+      "source": "resources/icon_ability_xp_up_major.png",
+      "category": "resources"
     },
-    "weapon_hellfire_mg": {
-      "file": "weapons/weapon_hellfire_mg.png",
-      "category": "weapon",
-      "label": "Hellfire MG"
+    "store_skinshards_01": {
+      "file": "store_skinshards_01.png",
+      "source": "resources/store_skinshards_01.png",
+      "category": "resources"
     },
-    "weapon_bone_crusher": {
-      "file": "weapons/weapon_bone_crusher.png",
-      "category": "weapon",
-      "label": "Bone Crusher"
+    "store_argentenergy_01": {
+      "file": "store_argentenergy_01.png",
+      "source": "resources/store_argentenergy_01.png",
+      "category": "resources"
     },
-    "weapon_void_plasma": {
-      "file": "weapons/weapon_void_plasma.png",
-      "category": "weapon",
-      "label": "Void Plasma"
+    "wpn_icon_ballista_01": {
+      "file": "wpn_icon_ballista_01.png",
+      "source": "weapons/wpn_icon_ballista_01.png",
+      "category": "weapons"
     },
-    "weapon_inferno_launcher": {
-      "file": "weapons/weapon_inferno_launcher.png",
-      "category": "weapon",
-      "label": "Inferno Launcher"
+    "store_tokensingle_ballista_01": {
+      "file": "store_tokensingle_ballista_01.png",
+      "source": "tokens/store_tokensingle_ballista_01.png",
+      "category": "tokens"
     },
-    "weapon_soul_piercer": {
-      "file": "weapons/weapon_soul_piercer.png",
-      "category": "weapon",
-      "label": "Soul Piercer"
+    "wpn_icon_burstrifle_01": {
+      "file": "wpn_icon_burstrifle_01.png",
+      "source": "weapons/wpn_icon_burstrifle_01.png",
+      "category": "weapons"
     },
-    "weapon_doom_cannon": {
-      "file": "weapons/weapon_doom_cannon.png",
-      "category": "weapon",
-      "label": "Revival Heavy Cannon"
+    "store_tokensingle_burstrifle_01": {
+      "file": "store_tokensingle_burstrifle_01.png",
+      "source": "tokens/store_tokensingle_burstrifle_01.png",
+      "category": "tokens"
     },
-    "launcher_frag_grenade": {
-      "file": "weapons/launcher_frag_grenade.png",
-      "category": "launcher",
-      "label": "Frag Grenade"
+    "wpn_icon_chaingun_01": {
+      "file": "wpn_icon_chaingun_01.png",
+      "source": "weapons/wpn_icon_chaingun_01.png",
+      "category": "weapons"
     },
-    "ultimate_crucible": {
-      "file": "weapons/ultimate_crucible.png",
-      "category": "ultimate",
-      "label": "Energy Blade"
+    "store_tokensingle_chaingun_01": {
+      "file": "store_tokensingle_chaingun_01.png",
+      "source": "tokens/store_tokensingle_chaingun_01.png",
+      "category": "tokens"
     },
-    "slayer_helm": {
-      "file": "gear/slayer_helm.png",
-      "category": "equipment",
-      "label": "Slayer Helm"
+    "wpn_icon_combatshotgun_01": {
+      "file": "wpn_icon_combatshotgun_01.png",
+      "source": "weapons/wpn_icon_combatshotgun_01.png",
+      "category": "weapons"
     },
-    "slayer_armor": {
-      "file": "gear/slayer_armor.png",
-      "category": "equipment",
-      "label": "Slayer Armor"
+    "store_tokensingle_combatshotgun_01": {
+      "file": "store_tokensingle_combatshotgun_01.png",
+      "source": "tokens/store_tokensingle_combatshotgun_01.png",
+      "category": "tokens"
     },
-    "rage_gauntlet": {
-      "file": "gear/rage_gauntlet.png",
-      "category": "equipment",
-      "label": "Rage Gauntlet"
+    "wpn_icon_gausscannon_01": {
+      "file": "wpn_icon_gausscannon_01.png",
+      "source": "weapons/wpn_icon_gausscannon_01.png",
+      "category": "weapons"
     },
-    "hell_boot": {
-      "file": "gear/hell_boot.png",
-      "category": "equipment",
-      "label": "Hell Boot"
+    "store_tokensingle_gausscannon_01": {
+      "file": "store_tokensingle_gausscannon_01.png",
+      "source": "tokens/store_tokensingle_gausscannon_01.png",
+      "category": "tokens"
     },
-    "skin_infernal_slayer": {
-      "file": "cosmetics/skin_infernal_slayer.png",
-      "category": "cosmetic",
-      "label": "Infernal Slayer Skin"
+    "wpn_icon_heavycannon_01": {
+      "file": "wpn_icon_heavycannon_01.png",
+      "source": "weapons/wpn_icon_heavycannon_01.png",
+      "category": "weapons"
     },
-    "entitlement_benefit": {
-      "file": "cosmetics/entitlement_benefit.png",
-      "category": "entitlement",
-      "label": "Benefit"
+    "store_tokensingle_heavycannon_01": {
+      "file": "store_tokensingle_heavycannon_01.png",
+      "source": "tokens/store_tokensingle_heavycannon_01.png",
+      "category": "tokens"
     },
-    "frame_common": {
-      "file": "frames/frame_common.png",
-      "category": "frame",
-      "label": "Common"
+    "wpn_icon_plasmarifle_01": {
+      "file": "wpn_icon_plasmarifle_01.png",
+      "source": "weapons/wpn_icon_plasmarifle_01.png",
+      "category": "weapons"
     },
-    "frame_uncommon": {
-      "file": "frames/frame_uncommon.png",
-      "category": "frame",
-      "label": "Uncommon"
+    "store_tokensingle_plasmarifle_01": {
+      "file": "store_tokensingle_plasmarifle_01.png",
+      "source": "tokens/store_tokensingle_plasmarifle_01.png",
+      "category": "tokens"
     },
-    "frame_rare": {
-      "file": "frames/frame_rare.png",
-      "category": "frame",
-      "label": "Rare"
+    "wpn_icon_rocketlauncher_01": {
+      "file": "wpn_icon_rocketlauncher_01.png",
+      "source": "weapons/wpn_icon_rocketlauncher_01.png",
+      "category": "weapons"
     },
-    "frame_epic": {
-      "file": "frames/frame_epic.png",
-      "category": "frame",
-      "label": "Epic"
+    "store_tokensingle_rocketlauncher_01": {
+      "file": "store_tokensingle_rocketlauncher_01.png",
+      "source": "tokens/store_tokensingle_rocketlauncher_01.png",
+      "category": "tokens"
     },
-    "frame_legendary": {
-      "file": "frames/frame_legendary.png",
-      "category": "frame",
-      "label": "Legendary"
+    "wpn_icon_sentinelhammer_01": {
+      "file": "wpn_icon_sentinelhammer_01.png",
+      "source": "weapons/wpn_icon_sentinelhammer_01.png",
+      "category": "weapons"
     },
-    "frame_mythic": {
-      "file": "frames/frame_mythic.png",
-      "category": "frame",
-      "label": "Mythic"
+    "store_tokensingle_sentinelhammer_01": {
+      "file": "store_tokensingle_sentinelhammer_01.png",
+      "source": "tokens/store_tokensingle_sentinelhammer_01.png",
+      "category": "tokens"
+    },
+    "wpn_icon_supershotgun_01": {
+      "file": "wpn_icon_supershotgun_01.png",
+      "source": "weapons/wpn_icon_supershotgun_01.png",
+      "category": "weapons"
+    },
+    "store_tokensingle_supershotgun_01": {
+      "file": "store_tokensingle_supershotgun_01.png",
+      "source": "tokens/store_tokensingle_supershotgun_01.png",
+      "category": "tokens"
+    },
+    "store_tokensingle_helmet_01": {
+      "file": "store_tokensingle_helmet_01.png",
+      "source": "tokens/store_tokensingle_helmet_01.png",
+      "category": "tokens"
+    },
+    "store_tokensingle_chestplate_01": {
+      "file": "store_tokensingle_chestplate_01.png",
+      "source": "tokens/store_tokensingle_chestplate_01.png",
+      "category": "tokens"
+    },
+    "store_tokensingle_boots_01": {
+      "file": "store_tokensingle_boots_01.png",
+      "source": "tokens/store_tokensingle_boots_01.png",
+      "category": "tokens"
+    },
+    "store_tokensingle_gloves_01": {
+      "file": "store_tokensingle_gloves_01.png",
+      "source": "tokens/store_tokensingle_gloves_01.png",
+      "category": "tokens"
+    },
+    "store_tokensingle_launcher_01": {
+      "file": "store_tokensingle_launcher_01.png",
+      "source": "tokens/store_tokensingle_launcher_01.png",
+      "category": "tokens"
+    },
+    "store_tokensingle_ultimate_01": {
+      "file": "store_tokensingle_ultimate_01.png",
+      "source": "tokens/store_tokensingle_ultimate_01.png",
+      "category": "tokens"
+    },
+    "store_token_allrandom_tier_01": {
+      "file": "store_token_allrandom_tier_01.png",
+      "source": "tokens/store_token_allrandom_tier_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerdefault_01": {
+      "file": "slay_icon_events_slayerdefault_01.png",
+      "source": "slayers/slay_icon_events_slayerdefault_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerdefault_01": {
+      "file": "store_shard_slayerdefault_01.png",
+      "source": "tokens/store_shard_slayerdefault_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayergold_01": {
+      "file": "slay_icon_events_slayergold_01.png",
+      "source": "slayers/slay_icon_events_slayergold_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayergold_01": {
+      "file": "store_shard_slayergold_01.png",
+      "source": "tokens/store_shard_slayergold_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayercrimson_01": {
+      "file": "slay_icon_events_slayercrimson_01.png",
+      "source": "slayers/slay_icon_events_slayercrimson_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayercrimson_01": {
+      "file": "store_shard_slayercrimson_01.png",
+      "source": "tokens/store_shard_slayercrimson_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerclassicmarine_01": {
+      "file": "slay_icon_events_slayerclassicmarine_01.png",
+      "source": "slayers/slay_icon_events_slayerclassicmarine_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerclassicmarine_01": {
+      "file": "store_shard_slayerclassicmarine_01.png",
+      "source": "tokens/store_shard_slayerclassicmarine_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerzombie_01": {
+      "file": "slay_icon_events_slayerzombie_01.png",
+      "source": "slayers/slay_icon_events_slayerzombie_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerzombie_01": {
+      "file": "store_shard_slayerzombie_01.png",
+      "source": "tokens/store_shard_slayerzombie_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerhailfire_01": {
+      "file": "slay_icon_events_slayerhailfire_01.png",
+      "source": "slayers/slay_icon_events_slayerhailfire_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerhailfire_01": {
+      "file": "store_shard_slayerhailfire_01.png",
+      "source": "tokens/store_shard_slayerhailfire_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerdoomicorn_01": {
+      "file": "slay_icon_events_slayerdoomicorn_01.png",
+      "source": "slayers/slay_icon_events_slayerdoomicorn_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerdoomicorn_01": {
+      "file": "store_shard_slayerdoomicorn_01.png",
+      "source": "tokens/store_shard_slayerdoomicorn_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerronin_01": {
+      "file": "slay_icon_events_slayerronin_01.png",
+      "source": "slayers/slay_icon_events_slayerronin_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerronin_01": {
+      "file": "store_shard_slayerronin_01.png",
+      "source": "tokens/store_shard_slayerronin_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerhoppingmad_01": {
+      "file": "slay_icon_events_slayerhoppingmad_01.png",
+      "source": "slayers/slay_icon_events_slayerhoppingmad_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerhoppingmad_01": {
+      "file": "store_shard_slayerhoppingmad_01.png",
+      "source": "tokens/store_shard_slayerhoppingmad_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerslaytriot_01": {
+      "file": "slay_icon_events_slayerslaytriot_01.png",
+      "source": "slayers/slay_icon_events_slayerslaytriot_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerslaytriot_01": {
+      "file": "store_shard_slayerslaytriot_01.png",
+      "source": "tokens/store_shard_slayerslaytriot_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayermarauder_01": {
+      "file": "slay_icon_events_slayermarauder_01.png",
+      "source": "slayers/slay_icon_events_slayermarauder_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayermarauder_01": {
+      "file": "store_shard_slayermarauder_01.png",
+      "source": "tokens/store_shard_slayermarauder_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayergibbo_01": {
+      "file": "slay_icon_events_slayergibbo_01.png",
+      "source": "slayers/slay_icon_events_slayergibbo_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayergibbo_01": {
+      "file": "store_shard_slayergibbo_01.png",
+      "source": "tokens/store_shard_slayergibbo_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerdemonic_01": {
+      "file": "slay_icon_events_slayerdemonic_01.png",
+      "source": "slayers/slay_icon_events_slayerdemonic_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerdemonic_01": {
+      "file": "store_shard_slayerdemonic_01.png",
+      "source": "tokens/store_shard_slayerdemonic_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerjackoslayer_01": {
+      "file": "slay_icon_events_slayerjackoslayer_01.png",
+      "source": "slayers/slay_icon_events_slayerjackoslayer_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerjackoslayer_01": {
+      "file": "store_shard_slayerjackoslayer_01.png",
+      "source": "tokens/store_shard_slayerjackoslayer_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerpioneer_01": {
+      "file": "slay_icon_events_slayerpioneer_01.png",
+      "source": "slayers/slay_icon_events_slayerpioneer_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerpioneer_01": {
+      "file": "store_shard_slayerpioneer_01.png",
+      "source": "tokens/store_shard_slayerpioneer_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayersanta_01": {
+      "file": "slay_icon_events_slayersanta_01.png",
+      "source": "slayers/slay_icon_events_slayersanta_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayersanta_01": {
+      "file": "store_shard_slayersanta_01.png",
+      "source": "tokens/store_shard_slayersanta_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayersurvivalist_01": {
+      "file": "slay_icon_events_slayersurvivalist_01.png",
+      "source": "slayers/slay_icon_events_slayersurvivalist_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayersurvivalist_01": {
+      "file": "store_shard_slayersurvivalist_01.png",
+      "source": "tokens/store_shard_slayersurvivalist_01.png",
+      "category": "tokens"
+    },
+    "slay_icon_events_slayerwintherin_01": {
+      "file": "slay_icon_events_slayerwintherin_01.png",
+      "source": "slayers/slay_icon_events_slayerwintherin_01.png",
+      "category": "slayers"
+    },
+    "store_shard_slayerwintherin_01": {
+      "file": "store_shard_slayerwintherin_01.png",
+      "source": "tokens/store_shard_slayerwintherin_01.png",
+      "category": "tokens"
+    },
+    "gear_icon_cultist_helmet_01": {
+      "file": "gear_icon_cultist_helmet_01.png",
+      "source": "gear/gear_icon_cultist_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cultist_torso_01": {
+      "file": "gear_icon_cultist_torso_01.png",
+      "source": "gear/gear_icon_cultist_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cultist_boots_01": {
+      "file": "gear_icon_cultist_boots_01.png",
+      "source": "gear/gear_icon_cultist_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cultist_gloves_01": {
+      "file": "gear_icon_cultist_gloves_01.png",
+      "source": "gear/gear_icon_cultist_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_uac_helmet_01": {
+      "file": "gear_icon_uac_helmet_01.png",
+      "source": "gear/gear_icon_uac_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_uac_torso_01": {
+      "file": "gear_icon_uac_torso_01.png",
+      "source": "gear/gear_icon_uac_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_uac_boots_01": {
+      "file": "gear_icon_uac_boots_01.png",
+      "source": "gear/gear_icon_uac_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_uac_gloves_01": {
+      "file": "gear_icon_uac_gloves_01.png",
+      "source": "gear/gear_icon_uac_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_demonic_helmet_01": {
+      "file": "gear_icon_demonic_helmet_01.png",
+      "source": "gear/gear_icon_demonic_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_demonic_torso_01": {
+      "file": "gear_icon_demonic_torso_01.png",
+      "source": "gear/gear_icon_demonic_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_demonic_boots_01": {
+      "file": "gear_icon_demonic_boots_01.png",
+      "source": "gear/gear_icon_demonic_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_demonic_gloves_01": {
+      "file": "gear_icon_demonic_gloves_01.png",
+      "source": "gear/gear_icon_demonic_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_exultian_helmet_01": {
+      "file": "gear_icon_exultian_helmet_01.png",
+      "source": "gear/gear_icon_exultian_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_exultian_torso_01": {
+      "file": "gear_icon_exultian_torso_01.png",
+      "source": "gear/gear_icon_exultian_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_exultian_boots_01": {
+      "file": "gear_icon_exultian_boots_01.png",
+      "source": "gear/gear_icon_exultian_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_exultian_gloves_01": {
+      "file": "gear_icon_exultian_gloves_01.png",
+      "source": "gear/gear_icon_exultian_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_hellfire_helmet_01": {
+      "file": "gear_icon_hellfire_helmet_01.png",
+      "source": "gear/gear_icon_hellfire_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_hellfire_torso_01": {
+      "file": "gear_icon_hellfire_torso_01.png",
+      "source": "gear/gear_icon_hellfire_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_hellfire_boots_01": {
+      "file": "gear_icon_hellfire_boots_01.png",
+      "source": "gear/gear_icon_hellfire_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_hellfire_gloves_01": {
+      "file": "gear_icon_hellfire_gloves_01.png",
+      "source": "gear/gear_icon_hellfire_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cryo_helmet_01": {
+      "file": "gear_icon_cryo_helmet_01.png",
+      "source": "gear/gear_icon_cryo_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cryo_torso_01": {
+      "file": "gear_icon_cryo_torso_01.png",
+      "source": "gear/gear_icon_cryo_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cryo_boots_01": {
+      "file": "gear_icon_cryo_boots_01.png",
+      "source": "gear/gear_icon_cryo_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cryo_gloves_01": {
+      "file": "gear_icon_cryo_gloves_01.png",
+      "source": "gear/gear_icon_cryo_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cyro_helmet_01": {
+      "file": "gear_icon_cyro_helmet_01.png",
+      "source": "gear/gear_icon_cyro_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cyro_torso_01": {
+      "file": "gear_icon_cyro_torso_01.png",
+      "source": "gear/gear_icon_cyro_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cyro_boots_01": {
+      "file": "gear_icon_cyro_boots_01.png",
+      "source": "gear/gear_icon_cyro_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_cyro_gloves_01": {
+      "file": "gear_icon_cyro_gloves_01.png",
+      "source": "gear/gear_icon_cyro_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_barrage_helmet_01": {
+      "file": "gear_icon_barrage_helmet_01.png",
+      "source": "gear/gear_icon_barrage_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_barrage_torso_01": {
+      "file": "gear_icon_barrage_torso_01.png",
+      "source": "gear/gear_icon_barrage_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_barrage_boots_01": {
+      "file": "gear_icon_barrage_boots_01.png",
+      "source": "gear/gear_icon_barrage_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_barrage_gloves_01": {
+      "file": "gear_icon_barrage_gloves_01.png",
+      "source": "gear/gear_icon_barrage_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_charged_helmet_01": {
+      "file": "gear_icon_charged_helmet_01.png",
+      "source": "gear/gear_icon_charged_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_charged_torso_01": {
+      "file": "gear_icon_charged_torso_01.png",
+      "source": "gear/gear_icon_charged_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_charged_boots_01": {
+      "file": "gear_icon_charged_boots_01.png",
+      "source": "gear/gear_icon_charged_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_charged_gloves_01": {
+      "file": "gear_icon_charged_gloves_01.png",
+      "source": "gear/gear_icon_charged_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_radioactive_helmet_01": {
+      "file": "gear_icon_radioactive_helmet_01.png",
+      "source": "gear/gear_icon_radioactive_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_radioactive_torso_01": {
+      "file": "gear_icon_radioactive_torso_01.png",
+      "source": "gear/gear_icon_radioactive_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_radioactive_boots_01": {
+      "file": "gear_icon_radioactive_boots_01.png",
+      "source": "gear/gear_icon_radioactive_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_radioactive_gloves_01": {
+      "file": "gear_icon_radioactive_gloves_01.png",
+      "source": "gear/gear_icon_radioactive_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_arc_helmet_01": {
+      "file": "gear_icon_arc_helmet_01.png",
+      "source": "gear/gear_icon_arc_helmet_01.png",
+      "category": "gear"
+    },
+    "gear_icon_arc_torso_01": {
+      "file": "gear_icon_arc_torso_01.png",
+      "source": "gear/gear_icon_arc_torso_01.png",
+      "category": "gear"
+    },
+    "gear_icon_arc_boots_01": {
+      "file": "gear_icon_arc_boots_01.png",
+      "source": "gear/gear_icon_arc_boots_01.png",
+      "category": "gear"
+    },
+    "gear_icon_arc_gloves_01": {
+      "file": "gear_icon_arc_gloves_01.png",
+      "source": "gear/gear_icon_arc_gloves_01.png",
+      "category": "gear"
+    },
+    "gear_icon_allresist_gloves_01": {
+      "file": "gear_icon_allresist_gloves_01.png",
+      "source": "gear/gear_icon_allresist_gloves_01.png",
+      "category": "gear"
+    },
+    "lch_icon_explosive_fraggrenade_01": {
+      "file": "lch_icon_explosive_fraggrenade_01.png",
+      "source": "launchers/lch_icon_explosive_fraggrenade_01.png",
+      "category": "launchers"
+    },
+    "lch_icon_fire_flamebelch_01": {
+      "file": "lch_icon_fire_flamebelch_01.png",
+      "source": "launchers/lch_icon_fire_flamebelch_01.png",
+      "category": "launchers"
+    },
+    "lch_icon_ice_icebomb_01": {
+      "file": "lch_icon_ice_icebomb_01.png",
+      "source": "launchers/lch_icon_ice_icebomb_01.png",
+      "category": "launchers"
+    },
+    "lch_icon_plasma_arcgrenade_01": {
+      "file": "lch_icon_plasma_arcgrenade_01.png",
+      "source": "launchers/lch_icon_plasma_arcgrenade_01.png",
+      "category": "launchers"
+    },
+    "lch_icon_toxic_acidspit_01": {
+      "file": "lch_icon_toxic_acidspit_01.png",
+      "source": "launchers/lch_icon_toxic_acidspit_01.png",
+      "category": "launchers"
+    },
+    "ult_icon_bfg_01": {
+      "file": "ult_icon_bfg_01.png",
+      "source": "ultimates/ult_icon_bfg_01.png",
+      "category": "ultimates"
+    },
+    "ult_icon_chainsaw_01": {
+      "file": "ult_icon_chainsaw_01.png",
+      "source": "ultimates/ult_icon_chainsaw_01.png",
+      "category": "ultimates"
+    },
+    "ult_icon_crucible_01": {
+      "file": "ult_icon_crucible_01.png",
+      "source": "ultimates/ult_icon_crucible_01.png",
+      "category": "ultimates"
+    },
+    "ult_icon_unmaykr_01": {
+      "file": "ult_icon_unmaykr_01.png",
+      "source": "ultimates/ult_icon_unmaykr_01.png",
+      "category": "ultimates"
+    },
+    "ult_icon_samuraisword_01": {
+      "file": "ult_icon_samuraisword_01.png",
+      "source": "ultimates/ult_icon_samuraisword_01.png",
+      "category": "ultimates"
+    },
+    "crt_icon_weaponcrate_01": {
+      "file": "crt_icon_weaponcrate_01.png",
+      "source": "crates/crt_icon_weaponcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_equipmentcrate_01": {
+      "file": "crt_icon_equipmentcrate_01.png",
+      "source": "crates/crt_icon_equipmentcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_specialcrate_01": {
+      "file": "crt_icon_specialcrate_01.png",
+      "source": "crates/crt_icon_specialcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_prizetrackcrate_01": {
+      "file": "crt_icon_prizetrackcrate_01.png",
+      "source": "crates/crt_icon_prizetrackcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_fireelementalcrate_01": {
+      "file": "crt_icon_fireelementalcrate_01.png",
+      "source": "crates/crt_icon_fireelementalcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_iceelementalcrate_01": {
+      "file": "crt_icon_iceelementalcrate_01.png",
+      "source": "crates/crt_icon_iceelementalcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_toxicelementalcrate_01": {
+      "file": "crt_icon_toxicelementalcrate_01.png",
+      "source": "crates/crt_icon_toxicelementalcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_plasmaelementalcrate_01": {
+      "file": "crt_icon_plasmaelementalcrate_01.png",
+      "source": "crates/crt_icon_plasmaelementalcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_explosiveelementalcrate_01": {
+      "file": "crt_icon_explosiveelementalcrate_01.png",
+      "source": "crates/crt_icon_explosiveelementalcrate_01.png",
+      "category": "crates"
+    },
+    "crt_icon_adcrate_01": {
+      "file": "crt_icon_adcrate_01.png",
+      "source": "crates/crt_icon_adcrate_01.png",
+      "category": "crates"
     }
   }
 }
