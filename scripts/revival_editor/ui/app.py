@@ -55,6 +55,7 @@ from ..runner import (
 )
 from ..server import prepare_server, server_status, start_server, stop_server
 from ..services import analyze_apk, check_hostname_budget, server_preflight
+from .theme import aplicar_tema
 
 __all__ = ["StudioApp", "main"]
 
@@ -91,6 +92,9 @@ class StudioApp:
 
         root.title(f"Revival Studio {__version__} — mighty-doom-revival")
         root.protocol("WM_DELETE_WINDOW", self._ao_fechar)
+
+        # Paleta DOOM do site (slayer.css) antes de qualquer widget nascer.
+        aplicar_tema(root)
 
         self._construir_menus()
         self._construir_corpo()
@@ -1075,6 +1079,25 @@ class StudioApp:
         pasta = project_dir(self.project.project_id, studio_root=self.studio_root) / "logs"
         pasta.mkdir(parents=True, exist_ok=True)
         _abrir_no_sistema(pasta)
+
+    # ==================================================================
+    # Ajuda — sobre, preservação de jogos e base legal
+    # ==================================================================
+
+    def act_sobre(self) -> None:
+        from .about import mostrar_sobre
+
+        mostrar_sobre(self.root)
+
+    def act_preservacao(self) -> None:
+        from .about import mostrar_preservacao
+
+        mostrar_preservacao(self.root)
+
+    def act_lei(self) -> None:
+        from .about import mostrar_lei
+
+        mostrar_lei(self.root)
 
     # ==================================================================
     # fechamento

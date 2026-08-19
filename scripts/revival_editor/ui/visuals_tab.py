@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from .. import visuals
 from ..models import Stage
 from ..project import save_project
+from .theme import BG
 
 if TYPE_CHECKING:  # só para anotações; evita ciclo de import em runtime
     from .app import StudioApp
@@ -135,7 +136,7 @@ class VisualsTab(ttk.Frame):
         painel.grid(row=0, column=0, sticky="nsew")
         painel.rowconfigure(0, weight=1)
         painel.columnconfigure(0, weight=1)
-        self.canvas = tk.Canvas(painel, background="#111", highlightthickness=0)
+        self.canvas = tk.Canvas(painel, background=BG, highlightthickness=0)
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.canvas.bind("<Configure>", lambda _e: self._mostrar_preview())
 

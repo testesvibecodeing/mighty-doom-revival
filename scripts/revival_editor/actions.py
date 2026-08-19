@@ -18,9 +18,10 @@ __all__ = ["MENUS", "ActionSpec", "ACTIONS", "action_by_id", "menu_actions"]
 
 
 #: Menus da janela mínima (§30 item 6). A barra completa da §9.1 cresce a partir
-#: daqui — "Arquivo" e "Ajuda" entram quando ganharem ações de verdade.
+#: daqui — "Arquivo" entra quando ganhar ações de verdade.
 MENUS: tuple[str, ...] = (
     "Projeto", "APK", "Servidor", "Visuais", "Ferramentas", "Cliente", "Testes", "Log",
+    "Ajuda",
 )
 
 
@@ -227,6 +228,31 @@ ACTIONS: tuple[ActionSpec, ...] = (
         menu="Log",
         label="Abrir pasta de logs do projeto",
         handler="ui_abrir_pasta_logs",
+    ),
+    # -- Ajuda ---------------------------------------------------------------
+    ActionSpec(
+        action_id="ajuda.sobre",
+        menu="Ajuda",
+        label="Sobre o Revival Studio…",
+        handler="act_sobre",
+        needs_project=False,
+        busy_safe=True,
+    ),
+    ActionSpec(
+        action_id="ajuda.preservacao",
+        menu="Ajuda",
+        label="Preservação de jogos…",
+        handler="act_preservacao",
+        needs_project=False,
+        busy_safe=True,
+    ),
+    ActionSpec(
+        action_id="ajuda.base_legal",
+        menu="Ajuda",
+        label="Base legal da preservação (leis, DMCA, EULA)…",
+        handler="act_lei",
+        needs_project=False,
+        busy_safe=True,
     ),
 )
 

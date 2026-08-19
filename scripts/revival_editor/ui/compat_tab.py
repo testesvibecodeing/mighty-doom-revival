@@ -24,6 +24,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from tkinter import messagebox, ttk
+
+from .theme import CARD_DARK, MUTED, TEXT
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # só para anotações; evita ciclo de import em runtime
@@ -254,7 +256,7 @@ class CompatTab(ttk.Frame):
         ttk.Label(
             painel_resumo,
             text="Somente leitura — nada aqui edita o JSON.",
-            wraplength=320, foreground="#666",
+            wraplength=320, foreground=MUTED,
         ).grid(row=2, column=0, sticky="w", pady=(2, 0))
 
         # ---- próxima tarefa
@@ -297,7 +299,7 @@ class CompatTab(ttk.Frame):
             painel_set,
             text=("O diff antes/depois aparece no painel de detalhe.\n"
                   "Nenhuma mudança acontece sem o script oficial."),
-            wraplength=320, foreground="#666",
+            wraplength=320, foreground=MUTED,
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         # ---- servidor vivo
@@ -335,7 +337,9 @@ class CompatTab(ttk.Frame):
         self.tree.configure(yscrollcommand=barra.set)
         barra.grid(row=0, column=1, sticky="ns")
 
-        self.txt_detalhe = tk.Text(area, wrap="none", state="disabled", height=10)
+        self.txt_detalhe = tk.Text(area, wrap="none", state="disabled", height=10,
+                                  background=CARD_DARK, foreground=TEXT,
+                                  insertbackground=TEXT)
         self.txt_detalhe.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(6, 0))
 
     def _sync_valores(self) -> None:

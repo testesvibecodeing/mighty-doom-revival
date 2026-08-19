@@ -22,6 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Any
 
 from .. import branding
+from .theme import CARD_DARK, TEXT
 from ..models import Stage
 from ..project import save_project
 
@@ -115,7 +116,9 @@ class BrandingTab(ttk.Frame):
         area.grid(row=0, column=1, sticky="nsew")
         area.columnconfigure(0, weight=1)
         area.rowconfigure(0, weight=1)
-        self.txt_diff = tk.Text(area, wrap="none", state="disabled", height=18)
+        self.txt_diff = tk.Text(area, wrap="none", state="disabled", height=18,
+                                 background=CARD_DARK, foreground=TEXT,
+                                 insertbackground=TEXT)
         self.txt_diff.grid(row=0, column=0, sticky="nsew")
 
         barra = ttk.Frame(area)
@@ -253,7 +256,9 @@ class BrandingTab(ttk.Frame):
         janela = tk.Toplevel(self)
         janela.title("Modo avançado — somente leitura")
         janela.transient(self.winfo_toplevel())
-        texto = tk.Text(janela, wrap="none", state="disabled", width=100, height=32)
+        texto = tk.Text(janela, wrap="none", state="disabled", width=100, height=32,
+                    background=CARD_DARK, foreground=TEXT,
+                    insertbackground=TEXT)
         texto.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         conteudo = (
             f"== recursos: {snap['resource_total']} arquivo(s) "

@@ -15,16 +15,19 @@ import tkinter as tk
 from tkinter import ttk
 from pathlib import Path
 
+from .theme import CARD, CARD_DARK, GOLD, MUTED, RED, TEXT
+
 __all__ = ["LogPanel"]
 
 #: Cores por fluxo de origem do evento (LogEvent.stream). As de leitura humana
 #: (hashes, rotas, exit codes) ficam na cor padrão — diagnóstico depende delas.
+#: Paleta: tokens DOOM do tema (muted/ouro/vermelho do slayer.css).
 _STREAM_STYLE: dict[str, dict[str, str]] = {
     "info": {},
-    "cmd": {"foreground": "#7a7a7a"},
+    "cmd": {"foreground": MUTED},
     "proc": {},
-    "aviso": {"foreground": "#a05a00"},
-    "erro": {"foreground": "#c62828"},
+    "aviso": {"foreground": GOLD},
+    "erro": {"foreground": RED},
 }
 
 
@@ -54,6 +57,10 @@ class LogPanel(ttk.Frame):
             state="disabled",
             height=12,
             font=("Consolas", 9),
+            background=CARD_DARK,
+            foreground=TEXT,
+            insertbackground=TEXT,
+            selectbackground=CARD,
         )
         for stream, estilo in _STREAM_STYLE.items():
             self.text.tag_configure(stream, **estilo)

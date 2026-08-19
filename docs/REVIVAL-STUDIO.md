@@ -5,6 +5,10 @@ extras de GUI) que reúne em uma janela o fluxo completo de preparação do
 cliente Mighty DOOM 1.13.1 para o servidor Revival: análise, patch,
 visuais, branding, catálogo de assets e o registro de compatibilidade.
 
+A interface usa a mesma paleta escura DOOM do site (`slayer.css`):
+`revival_editor/ui/theme.py` traduz os tokens do `:root` para ttk/Tk, e
+`tests/revival_editor/test_theme.py` impede que os dois lados divirjam.
+
 Este documento cobre **uso**. O desenho interno e as regras de segurança
 estão em [`docs/PLANO-REVIVAL-STUDIO-100-POR-CENTO.md`](PLANO-REVIVAL-STUDIO-100-POR-CENTO.md)
 e no código em `scripts/revival_editor/`.
@@ -137,6 +141,22 @@ Painel do registro `compatibility.json` (116 rotas do cliente):
 - **Testes → Testes Python do editor**: suíte de regressão do Studio.
 - **Testes → verify_everything.py**: o mesmo gate do repositório (npm,
   Python, registro, coerência).
+
+## Ajuda — Sobre, preservação e base legal
+
+- **Ajuda → Sobre o Revival Studio**: o que é o projeto, os quatro pilares
+  da posição de conformidade e o aviso de não afiliação.
+- **Ajuda → Preservação de jogos**: o contexto factual do
+  jogo-como-serviço (servidores oficiais desligados em 07/08/2024, sem
+  modo offline) e por que a resposta técnica é interoperabilidade, não
+  redistribuição.
+- **Ajuda → Base legal da preservação**: o quadro jurídico completo — Lei
+  nº 9.609/1998 (arts. 6º, I e IV), Lei nº 9.610/1998, Lei nº 9.279/1996,
+  17 U.S.C. § 117, DMCA § 1201(f) e 37 C.F.R. § 201.40, Diretiva
+  2009/24/CE e o risco contratual do EULA.
+- Todo o texto vem de `docs/LEGAL-PRESERVATION.md` (a fonte continua
+  sendo o documento); `tests/revival_editor/test_about.py` ancora os
+  fatos e proíbe as afirmações vetadas pela política do projeto.
 
 ## Regras que o Studio segue (e você pode confiar)
 
