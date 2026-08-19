@@ -47,7 +47,9 @@ def compatible_sequence(**health_changes):
     return [
         FakeResponse(payload),
         FakeResponse(payload),
-        FakeResponse({"uts": "2026-08-16T17:04:46.000Z", "code": 2200}, status=400),
+        # formato exato do contrato do cliente (bisseção no emulador):
+        # yyyy-MM-ddTHH:mm:ss UTC — sem offset, sem fração.
+        FakeResponse({"uts": "2026-08-16T17:04:46", "code": 2200}, status=400),
     ]
 
 
@@ -64,7 +66,7 @@ class CheckRevivalServerTests(unittest.TestCase):
         self.assertEqual(result["gear_prefix"]["auth_probe_code"], 2200)
         self.assertEqual(
             result["gear_prefix"]["auth_probe_uts"],
-            "2026-08-16T17:04:46.000Z",
+            "2026-08-16T17:04:46",
         )
 
         calls = [call.args[0] for call in urlopen.call_args_list]
@@ -131,13 +133,38 @@ class CheckRevivalServerTests(unittest.TestCase):
             preflight.check_server("doom.example.com", None, 2.0)
 
     @patch("urllib.request.urlopen")
-    def test_rejects_timezone_less_auth_wire_timestamp(self, urlopen):
+    def test_rejects_wire_timestamp_outside_validated_contract(self, urlopen):
+        """Offset, ``Z`` e fração nunca foram validados no cliente: rejeitar.
+
+        O contrato confirmado por bisseção no emulador é EXATAMENTE
+        ``yyyy-MM-ddTHH:mm:ss`` UTC (o que o ``wire()`` do servidor emite).
+        O preflight é gate de contrato — formato fora dele não passa.
+        """
+        fora_do_contrato = [
+            "2026-08-16T17:04:46.000",      # fração
+            "2026-08-16T17:04:46Z",         # sufixo Z
+            "2026-08-16T17:04:46+00:00",    # offset explícito
+            "2026-08-16 17:04:46",          # espaço (crasha o parse do cliente)
+            "2026-08-16T17:04",             # sem segundos
+        ]
+        for uts in fora_do_contrato:
+            with self.subTest(uts=uts):
+                urlopen.side_effect = [
+                    FakeResponse(health()),
+                    FakeResponse(health()),
+                    FakeResponse({"uts": uts, "code": 2200}, status=400),
+                ]
+                with self.assertRaisesRegex(RuntimeError, "contrato exige exatamente"):
+                    preflight.check_server("doom.example.com", None, 2.0)
+
+    @patch("urllib.request.urlopen")
+    def test_rejects_impossible_calendar_dates(self, urlopen):
         urlopen.side_effect = [
             FakeResponse(health()),
             FakeResponse(health()),
-            FakeResponse({"uts": "2026-08-16T17:04:46.000", "code": 2200}, status=400),
+            FakeResponse({"uts": "2026-13-99T25:61:61", "code": 2200}, status=400),
         ]
-        with self.assertRaisesRegex(RuntimeError, "offset UTC explícito"):
+        with self.assertRaisesRegex(RuntimeError, "ISO 8601 inválido"):
             preflight.check_server("doom.example.com", None, 2.0)
 
 

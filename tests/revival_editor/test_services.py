@@ -268,7 +268,7 @@ def _saude_do_servador(**sobrepos) -> dict:
             "auth_probe_url": "https://doom.exemplo.com/collections/doom/game/auth/register",
             "auth_probe_status": 400,
             "auth_probe_code": 2200,
-            "auth_probe_uts": "2026-08-18T12:00:00Z",
+            "auth_probe_uts": "2026-08-18T12:00:00",
             "auth_probe_content_type": "application/json",
         },
     }
@@ -304,7 +304,7 @@ class TestServerPreflight(unittest.TestCase):
         self.assertEqual(resultado.client_version, "1.13.1")
         self.assertEqual(resultado.api_version, "24.0.0")
         self.assertTrue(resultado.game_data_loaded)
-        self.assertEqual(resultado.uts, "2026-08-18T12:00:00Z")
+        self.assertEqual(resultado.uts, "2026-08-18T12:00:00")
         for check in ("dns", "tls", "health", "gear_prefix"):
             self.assertIn(check, resultado.checks, f"check {check} ausente")
             self.assertTrue(resultado.checks[check]["ok"], resultado.checks[check])

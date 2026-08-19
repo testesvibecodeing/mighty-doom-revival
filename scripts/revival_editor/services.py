@@ -539,7 +539,8 @@ def server_preflight(
                 "detail": (
                     f"health {gear.get('health_status')} · auth probe "
                     f"{gear.get('auth_probe_status')}/code {gear.get('auth_probe_code')} · "
-                    f"uts ISO-8601 válido"
+                    f"uts {gear.get('auth_probe_uts')} no contrato do cliente "
+                    "(yyyy-MM-ddTHH:mm:ss UTC)"
                 ),
             },
         }

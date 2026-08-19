@@ -14,8 +14,9 @@ contract probe. This catches reverse-proxy configurations that serve
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
+import re
 import ssl
 import sys
 import urllib.error
@@ -107,14 +108,19 @@ def validate_health(payload: dict[str, object], require_game_data: bool) -> list
     return errors
 
 
-def validate_wire_timestamp(payload: dict[str, object], label: str) -> str:
-    """Require the wire timestamp shape consumed by client 1.13.1.
+_uts_contrato = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
 
-    ``Ubu.GameController.ParseServerTimestamp`` ultimately feeds ``uts`` to
-    ``DateTime.Parse``. A numeric unix epoch reaches the correct auth handler
-    but crashes the client callback with ``FormatException``. The preflight
-    therefore treats a parseable, timezone-aware UTC ISO-8601 string as part
-    of the compatibility contract, not merely an implementation detail.
+
+def validate_wire_timestamp(payload: dict[str, object], label: str) -> str:
+    """Exige o formato exato de ``uts`` que o cliente 1.13.1 consome.
+
+    ``Ubu.GameController.ParseServerTimestamp`` alimenta ``uts`` a um parse
+    estrito: epoch numérico e ``yyyy-MM-dd HH:mm:ss`` (com espaço) crasham o
+    callback com ``FormatException``. O formato validado por bisseção no
+    emulador — e o que o ``wire()`` do servidor emite — é EXATAMENTE
+    ``yyyy-MM-ddTHH:mm:ss`` UTC: sem offset e sem fração (skill
+    revival-server; RELATORIO-STATUS §2). Offset/``Z``/fração ficam fora do
+    contrato validado: o preflight rejeita em vez de "tentar aceitar".
     """
     value = payload.get("uts")
     if not isinstance(value, str) or not value.strip():
@@ -123,18 +129,18 @@ def validate_wire_timestamp(payload: dict[str, object], label: str) -> str:
         )
 
     normalized = value.strip()
-    parse_value = normalized[:-1] + "+00:00" if normalized.endswith("Z") else normalized
+    if not _uts_contrato.match(normalized):
+        raise RuntimeError(
+            f"{label} retornou uts={value!r}; contrato exige exatamente "
+            "yyyy-MM-ddTHH:mm:ss UTC (sem offset, sem fração — confirmado "
+            "por bisseção no emulador)"
+        )
     try:
-        parsed = datetime.fromisoformat(parse_value)
+        datetime.strptime(normalized, "%Y-%m-%dT%H:%M:%S")
     except ValueError as exc:
         raise RuntimeError(
             f"{label} retornou uts={value!r}; timestamp ISO 8601 inválido"
         ) from exc
-
-    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
-        raise RuntimeError(
-            f"{label} retornou uts={value!r}; timestamp deve possuir offset UTC explícito"
-        )
     return normalized
 
 
