@@ -1,5 +1,5 @@
 import { activeBattlePassStates } from './battle-pass.js'
-import { archiveMode, storyBattlePasses } from './game-data-schema.js'
+import { storyBattlePasses } from './game-data-schema.js'
 import { giveGameResource } from './game-data-model.js'
 import { consumeAdRewardToken, findAdRewardToken } from './ad-tokens.js'
 
@@ -92,6 +92,9 @@ function wireEvent (event, archive = false) {
     availability: event.availability ?? 1,
     args: Buffer.from(JSON.stringify(event.args || {}), 'utf8').toString('base64')
   }
+  // event_type NÃO existe no DTO do cliente: emitir esse campo derruba o
+  // schedule inteiro com "Malformed response payload" (bisseção no emulador
+  // 2026-08-19: com o campo, boot aborta em 3 tentativas; sem, parseia).
   if (event.min_api_version != null) wire.min_api_version = event.min_api_version
   if (event.max_api_version != null) wire.max_api_version = event.max_api_version
   return wire
@@ -108,15 +111,15 @@ export function eventSchedule (runtime) {
     ids.add(String(wire.id))
   }
 
-  const archive = archiveMode(runtime.gameData)
-  for (const pass of storyBattlePasses(runtime.gameData)) {
-    if (Number(pass?.availability ?? 1) < 1) continue
-    if (!archive && !active(pass, now)) continue
-    if (ids.has(String(pass.id))) continue
-    schedule.push(wireEvent(pass, archive))
-    ids.add(String(pass.id))
-  }
-
+  // Battle passes de história NÃO entram no schedule: o cliente 1.13.1
+  // processa todo evento agendado no EventModeController como game-mode e
+  // NRE em InternalUpdateEventData com o FTUE_BattlePass na lista (provado
+  // no emulador 2026-08-19: com o evento -> NRE e load eterno em
+  // CARREGANDO; sem o evento -> boot segue e o próprio cliente chama
+  // /battle-pass/start-season do FTUE, que é interno dele). O season em si
+  // continua disponível via start-season/get-progress (availability no
+  // game-data controla). A VERIFICAR: com game-data completo, o conversor
+  // do cliente talvez classifique o evento por args e tolere a entrada.
   return schedule
 }
 

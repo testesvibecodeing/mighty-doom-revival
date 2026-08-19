@@ -276,8 +276,15 @@ function activeSeasonState (repo, userId, runtime, seasonId) {
   const pass = battlePassById(runtime, seasonId)
   if (!pass) return { error: [400, 2200, { reason: 'season-not-found' }] }
   if (!available(runtime, pass)) return { error: [400, 2300, { reason: 'season-unavailable' }] }
-  const state = battlePassState(repo, userId, runtime, seasonId)
-  if (!state) return { error: [400, 2300, { reason: 'season-not-started' }] }
+  let state = battlePassState(repo, userId, runtime, seasonId)
+  if (!state) {
+    // O preview de archive do get-progress não persiste estado; o cliente
+    // do FTUE chama end-season direto, sem start-season (provado no
+    // emulador 2026-08-19: end-season -> 400 season-not-started em loop e
+    // diálogo de ERRO). Materializa o estado default aqui e segue.
+    state = battlePassDefaultState(runtime, pass)
+    repo.setState(userId, NS, stateKey(seasonId), state)
+  }
   if (state.active_state === 2) return { error: [400, 2300, { reason: 'season-ended' }] }
   return { pass, state }
 }

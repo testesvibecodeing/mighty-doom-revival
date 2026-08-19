@@ -130,15 +130,13 @@ try {
   const UID = user.id
   const H = (path, body, rt = runtime) => handleBattlePassRequest(path, body, UID, repo, rt)
 
+  // Battle passes de história ficam FORA do schedule: o cliente 1.13.1
+  // processa todo evento agendado como game-mode no EventModeController e
+  // NRE com o FTUE_BattlePass na lista (provado no emulador 2026-08-19).
+  // O season segue visível via get-progress (preview de archive abaixo) e
+  // operável via start/end-season.
   const schedule = eventSchedule(runtime)
-  assert.equal(schedule.length, 2)
-  assert.equal(schedule[0].id, season.id)
-  assert.equal(schedule[0].start_time, null)
-  assert.equal(schedule[0].end_time, null)
-  assert.deepEqual(
-    JSON.parse(Buffer.from(schedule[0].args, 'base64').toString('utf8')),
-    season.args
-  )
+  assert.equal(schedule.length, 0)
 
   // Archive mode must advertise preserved seasons before the client explicitly
   // starts one, but the preview must not persist and block /start-season.

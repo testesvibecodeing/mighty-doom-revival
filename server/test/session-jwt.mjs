@@ -73,7 +73,11 @@ try {
   assert.equal(payload.ubu_session_id, 1)
   assert.equal(payload.session_id, 1)
   assert.equal(payload.iss, payload.issuer)
-  assert.equal(payload.aud, payload.audience)
+  // aud/audience como ARRAY: o cliente tipa audience como String[] — string
+  // crua derruba o UpdateSessionToken com "Could not cast or convert from
+  // System.String to System.String[]" (provado no emulador 2026-08-19).
+  assert.deepEqual(payload.aud, ['mighty-doom'])
+  assert.deepEqual(payload.audience, ['mighty-doom'])
   assert.ok(Number.isInteger(payload.iat))
   assert.ok(payload.exp > Math.floor(Date.now() / 1000), 'exp deve estar no futuro')
   assert.ok(typeof payload.sessionNonce === 'string' && payload.sessionNonce.length > 0)

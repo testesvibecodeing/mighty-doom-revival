@@ -40,8 +40,13 @@ export function createSessionToken (userId, options = {}) {
   const payload = {
     issuer: 'revival',
     iss: 'revival',
-    audience: 'mighty-doom',
-    aud: 'mighty-doom',
+    // JWT canônico: "aud" aceita string OU array, mas o cliente tipa
+    // audience como String[] — string crua aqui derruba o parse do
+    // UpdateSessionToken com "Could not cast or convert from System.String
+    // to System.String[]" (provado no emulador 2026-08-19: com aud string o
+    // cliente crashou em register/login/refresh; com array, não).
+    audience: ['mighty-doom'],
+    aud: ['mighty-doom'],
     subject: String(userId),
     sub: String(userId),
     issuedTimestamp: now,
