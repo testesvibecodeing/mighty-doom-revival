@@ -70,7 +70,7 @@ propósito. O detalhe operacional está nas skills (`.claude/skills/`) e em `doc
 | `scripts/capture_protocol_fixtures.mjs` | Captura fixtures `server-replay` de req/res sanitizados |
 | `tests/fixtures/protocol/` | Pares req/res reais sanitizados; provenance `client` (harness) liga `request/response_observed` no registro |
 | `research/DEAD-ENDS.md` | Hipóteses refutadas com evidência — **consulte antes de tentar consertar qualquer coisa** |
-| `scripts/patch-apk.{bat,sh}` | Orquestração fim-a-fim em 8 passos |
+| `scripts/revival_editor/pipeline.py` | Orquestração fim-a-fim do patch (decode → patch → build → sign → verify) como serviço do Studio — os wrappers orquestradores `.bat/.sh` foram aposentados em 2026-08-18; em scripts/ restam só `install.sh`/`uninstall.sh` (par de deploy, regra 1.8) e o launcher `revival-studio.{bat,sh}` (cópias antigas em `tmp/` local e no histórico do Git) |
 | `server/src/index.js` | HTTP builtin, roteamento `/game/*`, `/revival/*`, `/data`; **envelope vivo `wire()`/`ok()`/`fail()` nas linhas 52/84/88** |
 | `server/src/protocol.js` + `baseline.js` | **Código legado/morto** — nada os importa (só `baseline.js` importa `protocol.js`). Não os use em código novo; o envelope real é o local do `index.js` |
 | `server/src/db.js` | SQLite, usuários, token de sessão |

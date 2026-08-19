@@ -715,25 +715,17 @@ git --version</code></pre>
             <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
             <button class="copy-btn" type="button">Copiar</button>
           </div>
-          <pre class="win-only"><code>scripts\analyze-official-apk.bat</code></pre>
-          <pre class="unix-only"><code>./scripts/analyze-official-apk.sh</code></pre>
+          <pre class="win-only"><code>python scripts\analyze_apk.py input\mighty-doom.apk</code></pre>
+          <pre class="unix-only"><code>python scripts/analyze_apk.py input/mighty-doom.apk</code></pre>
         </div>
 
         <div class="callout warn">
           <span class="tag">Se a Uptodown bloquear o download automático</span>
-          <p>O desafio Cloudflare às vezes impede o script de raspar a página sozinho. Solução manual:
-          na aba que você abriu, depois de clicar em Download, copie a URL final que começa com
+          <p>O desafio Cloudflare às vezes impede o download direto. Solução manual: na aba que
+          você abriu, depois de clicar em Download, copie a URL final que começa com
           <code class="inline">https://dw.uptodown.com/dwn/...</code> (aba <em>Rede</em> do DevTools do navegador,
-          ou o gerenciador de downloads) e rode de novo passando essa URL:</p>
-          <div class="cmd">
-            <div class="cmd-head">
-              <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
-              <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
-              <button class="copy-btn" type="button">Copiar</button>
-            </div>
-            <pre class="win-only"><code>scripts\analyze-official-apk.bat "https://dw.uptodown.com/dwn/..."</code></pre>
-            <pre class="unix-only"><code>./scripts/analyze-official-apk.sh "https://dw.uptodown.com/dwn/..."</code></pre>
-          </div>
+          ou o gerenciador de downloads), baixe o arquivo no navegador e salve como
+          <code class="inline">input/mighty-doom.apk</code> — depois rode o comando de análise acima.</p>
         </div>
 
         <h3>O que fica pronto</h3>
@@ -760,7 +752,7 @@ git --version</code></pre>
       <div class="step-body">
         <p class="lead">Baixa o <strong>apktool 3.0.3</strong> e o <strong>uber-apk-signer 1.3.0</strong> para a pasta
         <code class="inline">.tools/</code> (fora do Git), conferindo o SHA-256 de cada um antes de aceitar o
-        arquivo.</p>
+        arquivo. No Revival Studio, menu <em>Ferramentas → Preparar ferramentas</em>:</p>
 
         <div class="cmd">
           <div class="cmd-head">
@@ -768,13 +760,13 @@ git --version</code></pre>
             <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
             <button class="copy-btn" type="button">Copiar</button>
           </div>
-          <pre class="win-only"><code>scripts\setup-patcher-tools.bat</code></pre>
-          <pre class="unix-only"><code>./scripts/setup-patcher-tools.sh</code></pre>
+          <pre class="win-only"><code>scripts\revival-studio.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/revival-studio.sh</code></pre>
         </div>
 
         <div class="callout">
           <span class="tag">Opcional</span>
-          <p>O patcher da etapa 05 chama este script sozinho se as ferramentas ainda não existirem. Rodar aqui
+          <p>O pipeline da etapa 05 avisa se as ferramentas faltarem. Rodar aqui
           antes só adianta o download e confirma que Java está corretamente instalado.</p>
         </div>
       </div>
@@ -795,15 +787,16 @@ git --version</code></pre>
         <h3>Preparar</h3>
         <p>Copia <code class="inline">server/.env</code> e os <code class="inline">config/*.json</code> a partir dos
         <code class="inline">.example</code>, confere se o Node instalado tem <code class="inline">node:sqlite</code>
-        funcional e roda um teste real end-to-end.</p>
+        funcional e roda um teste real end-to-end. Pelo Revival Studio, é o menu
+        <em>Servidor → Preparar servidor local</em>:</p>
         <div class="cmd">
           <div class="cmd-head">
             <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
             <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
             <button class="copy-btn" type="button">Copiar</button>
           </div>
-          <pre class="win-only"><code>scripts\setup-server.bat</code></pre>
-          <pre class="unix-only"><code>./scripts/setup-server.sh</code></pre>
+          <pre class="win-only"><code>scripts\revival-studio.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/revival-studio.sh</code></pre>
         </div>
 
         <div class="callout warn">
@@ -813,14 +806,15 @@ git --version</code></pre>
         </div>
 
         <h3>Iniciar</h3>
+        <p>No Studio, menu <em>Servidor → Iniciar servidor local</em> (sobe em segundo plano com PID
+        e health check, e continua rodando após fechar o Studio). Ou direto:</p>
         <div class="cmd">
           <div class="cmd-head">
             <span class="cmd-os win-only">C:\mighty-doom-revival&gt;</span>
             <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
             <button class="copy-btn" type="button">Copiar</button>
           </div>
-          <pre class="win-only"><code>scripts\start-server.bat</code></pre>
-          <pre class="unix-only"><code>./scripts/start-server.sh</code></pre>
+          <pre><code>cd server &amp;&amp; npm start</code></pre>
         </div>
         <p>Health check local: <code class="inline">http://127.0.0.1:8080/revival/health</code></p>
 
@@ -993,7 +987,8 @@ sudo ./scripts/uninstall.sh --purge-data      # apaga server/.env, config, data/
       </div>
       <div class="step-body">
         <p class="lead">Agora, de volta ao seu PC: esta etapa injeta o domínio do seu servidor (etapa 04) dentro do
-        APK validado (etapa 01), reconstrói e assina uma cópia local.</p>
+        APK validado (etapa 01), reconstrói e assina uma cópia local. Abra o Revival Studio,
+        crie o projeto (<em>Projeto → Novo projeto</em>) e use <em>APK → Aplicar endpoint</em>:</p>
 
         <div class="cmd">
           <div class="cmd-head">
@@ -1001,15 +996,15 @@ sudo ./scripts/uninstall.sh --purge-data      # apaga server/.env, config, data/
             <span class="cmd-os unix-only">~/mighty-doom-revival$</span>
             <button class="copy-btn" type="button">Copiar</button>
           </div>
-          <pre class="win-only"><code>scripts\patch-apk.bat</code></pre>
-          <pre class="unix-only"><code>./scripts/patch-apk.sh</code></pre>
+          <pre class="win-only"><code>scripts\revival-studio.bat</code></pre>
+          <pre class="unix-only"><code>./scripts/revival-studio.sh</code></pre>
         </div>
 
-        <h3>O assistente pergunta três coisas</h3>
+        <h3>O projeto pede três coisas</h3>
         <div class="table-wrap">
           <table>
             <tbody>
-              <tr><td><strong>Caminho do APK</strong></td><td>Enter aceita o padrão <code class="inline">input/mighty-doom.apk</code></td></tr>
+              <tr><td><strong>Caminho do APK</strong></td><td>o padrão é <code class="inline">input/mighty-doom.apk</code></td></tr>
               <tr><td><strong>Hostname HTTPS do servidor</strong></td><td>o domínio configurado na etapa 04, ex.: <code class="inline">d.seudominio.com.br</code></td></tr>
               <tr><td><strong>CA PEM/CRT local</strong></td><td>deixe vazio — o caso normal, com certificado público Let's Encrypt do deploy em VPS</td></tr>
             </tbody>

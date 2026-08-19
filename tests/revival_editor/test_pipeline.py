@@ -268,7 +268,7 @@ class BasePipeline(unittest.TestCase):
 
 
 # ----------------------------------------------------------------------
-# registro da ação (o que liga o pipeline à UI e ao wrapper patch-apk.*)
+# registro da ação (o que liga o pipeline à UI do Studio)
 # ----------------------------------------------------------------------
 
 

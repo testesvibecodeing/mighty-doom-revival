@@ -37,6 +37,7 @@ from ..models import (
     StageProgress,
 )
 from ..paths import REPO_ROOT, STUDIO_ROOT, project_dir
+from ..toolchain import ToolchainReport, prepare_tools
 from ..project import (
     Project,
     ProjectError,
@@ -286,12 +287,21 @@ class StudioApp:
     def _bombear(self) -> None:
         if self._fechando:
             return
+        # Reagendar ANTES de processar: se aplicar um evento levantar qualquer
+        # exceção (TclError de janela morrendo incluída), a cadeia de drenagem
+        # já está garantida para o próximo tick — sem isso, um único erro
+        # mata o ciclo e a UI para de receber eventos do runner para sempre
+        # (visto em prática: job conclui, status não muda, diálogo não abre).
+        proximo = self.root.after(POLL_MS, self._bombear)
         try:
             for evento in self.runner.poll():
                 self._aplicar(evento)
         except tk.TclError:
-            return  # janela já destruída
-        self.root.after(POLL_MS, self._bombear)
+            try:
+                self.root.after_cancel(proximo)  # janela já destruída
+            except tk.TclError:
+                pass  # interp já foi: o after morre com ele
+            return
 
     def _aplicar(self, evento: Any) -> None:
         if isinstance(evento, LogEvent):
@@ -878,7 +888,7 @@ class StudioApp:
         self.refresh()
 
     def act_pipeline_completo(self) -> None:
-        """Fase 6: o pipeline inteiro como serviço — o mesmo do patch-apk.*."""
+        """Fase 6: o pipeline inteiro como serviço (revival_editor.pipeline)."""
         if not (self._exige_projeto() and self._exige_livre()):
             return
         assert self.project is not None
@@ -936,7 +946,7 @@ class StudioApp:
     # ==================================================================
 
     def act_visuals_loading(self) -> None:
-        """Abre a aba Visuais (fase 7) — alvo do wrapper loading-screen-editor."""
+        """Abre a aba Visuais (fase 7) — editor de tela de loading."""
         self.notebook.select(self.visuals_tab)
 
     def act_branding_android(self) -> None:
@@ -986,8 +996,8 @@ class StudioApp:
         messagebox.showinfo("Verificar ferramentas", "\n".join(linhas))
 
     def act_preparar_ferramentas(self) -> None:
-        """Fase 3: usa os scripts existentes — nunca uma segunda implementação
-        de download — e pede confirmação antes de baixar qualquer coisa."""
+        """Fase 3: serviço `toolchain.prepare_tools` (fonte única dos pins)
+        — pede confirmação antes de baixar qualquer coisa."""
         if not self._exige_livre():
             return
         confirmado = messagebox.askyesno(
@@ -1002,11 +1012,10 @@ class StudioApp:
         )
         if not confirmado:
             return
-        comando = _comando_preparar_ferramentas(self.repo_root)
-        self.log.append("== preparar ferramentas: " + " ".join(comando), "info")
+        self.log.append("== preparar ferramentas: download com hashes pinados", "info")
         self._submit(
             "preparar-ferramentas",
-            lambda ctx: _trabalho_preparar_ferramentas(comando, ctx),
+            _trabalho_preparar_ferramentas,
             ao_concluir=self._reverificar_pos_preparo,
         )
 
@@ -1248,27 +1257,12 @@ def _trabalho_testes(comando: list[str], ctx: Any) -> int:
     return codigo
 
 
-def _comando_preparar_ferramentas(repo_root: Path) -> list[str]:
-    """Linha de comando headless do preparador oficial (fase 3 do plano).
-
-    O botão usa os scripts existentes — nunca uma segunda implementação de
-    download. `--headless` é obrigatório: sem ele o wrapper encaminhador
-    abriria o Studio de novo (recursão §9.2), e o teste de wrappers falha se
-    esta chamada perder a flag.
-    """
-    if sys.platform.startswith("win"):
-        return ["cmd", "/c", str(repo_root / "scripts" / "setup-patcher-tools.bat"), "--headless"]
-    return ["bash", str(repo_root / "scripts" / "setup-patcher-tools.sh"), "--headless"]
-
-
-def _trabalho_preparar_ferramentas(comando: list[str], ctx: Any) -> int:
+def _trabalho_preparar_ferramentas(ctx: Any) -> ToolchainReport:
+    """Preparo das ferramentas pelo serviço — download pinado em toolchain."""
     ctx.progress("ferramentas", "baixando/validando JARs (hashes pinados)…", None)
-    codigo = ctx.run_process(comando, cwd=REPO_ROOT, stage="ferramentas", timeout=1800)
-    ctx.log(f"exit {codigo}")
-    if codigo != 0:
-        raise RuntimeError(f"preparo de ferramentas falhou com exit {codigo} (veja o log acima)")
+    relatorio = prepare_tools(ctx)
     ctx.progress("ferramentas", "JARs prontos", 1.0)
-    return codigo
+    return relatorio
 
 
 def _trabalho_ferramentas_status(destino: Path, ctx: Any):

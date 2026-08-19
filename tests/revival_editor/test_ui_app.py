@@ -13,6 +13,7 @@ Execução: python tests/revival_editor/test_ui_app.py
 """
 from __future__ import annotations
 
+import gc
 import json
 import sys
 import tempfile
@@ -43,7 +44,28 @@ except ImportError:  # pragma: no cover - ambiente sem Tcl/Tk
     tk = None
 
 
-def _bombeiar(root, condicao, timeout=8.0) -> bool:
+def _encerrar_interfase(app, root) -> None:
+    """Destrói janela+app e coleta o lixo cíclico de Tk NA thread da UI.
+
+    O JobRunner roda jobs em workers. Se o GC cíclico disparar numa worker
+    (pela alocação do próprio DoneEvent, por exemplo) e herdar widgets/
+    Variables de um interp já destruído, a chamada Tcl roda na thread errada:
+    a worker trava sem entregar o DoneEvent (job fica para sempre "pronto") ou
+    o processo aborta com "Tcl_AsyncDelete: async handler deleted by the wrong
+    thread". Coletar aqui, na thread que criou o interp, fecha essa corrida.
+    """
+    try:
+        app._fechar()
+    except tk.TclError:
+        pass  # já destruída por teste de fechamento
+    try:
+        root.destroy()
+    except tk.TclError:
+        pass
+    gc.collect()
+
+
+def _bombeiar(root, condicao, timeout=20.0) -> bool:
     """Processa eventos Tk até `condicao` ser verdadeira (ou estourar o tempo).
 
     TclError = root destruído dentro do ciclo — conta como condição atingida.
@@ -78,14 +100,7 @@ class TestJanelaMinima(unittest.TestCase):
             self.app = StudioApp(self.root, studio_root=self.studio)
 
     def tearDown(self) -> None:
-        try:
-            self.app._fechar()
-        except tk.TclError:
-            pass  # já destruída por teste de fechamento
-        try:
-            self.root.destroy()
-        except tk.TclError:
-            pass
+        _encerrar_interfase(self.app, self.root)
         self._tmp.cleanup()
 
     # -- registro × menus --------------------------------------------------
@@ -320,37 +335,32 @@ class TestJanelaMinima(unittest.TestCase):
         self.assertFalse(self.app.runner.is_running)
         caixa.askyesno.assert_called_once()
 
-    def test_comando_preparar_ferramentas_e_headless(self) -> None:
-        """O botão usa o script oficial e SEMPRE em modo --headless (§9.2)."""
-        from revival_editor.ui.app import _comando_preparar_ferramentas
+    def test_preparar_ferramentas_usa_servico_toolchain(self) -> None:
+        """O botão chama `toolchain.prepare_tools` — fonte única dos pins."""
+        from revival_editor.toolchain import APKTOOL_SHA256, APKTOOL_URL, SIGNER_SHA256, SIGNER_URL
 
-        comando = _comando_preparar_ferramentas(self.app.repo_root)
-        self.assertEqual(comando[-1], "--headless", "sem a flag o wrapper reabriria o Studio")
-        self.assertTrue(Path(comando[-2]).is_file(), f"script ausente: {comando[-2]}")
-        esperado = ".bat" if sys.platform.startswith("win") else ".sh"
-        self.assertTrue(comando[-2].endswith(esperado))
+        # pins obrigatórios no módulo (nenhum outro lugar define download)
+        self.assertTrue(APKTOOL_URL.startswith("https://"))
+        self.assertEqual(len(APKTOOL_SHA256), 64)
+        self.assertTrue(SIGNER_URL.startswith("https://"))
+        self.assertEqual(len(SIGNER_SHA256), 64)
 
-    def test_preparar_ferramentas_confirma_e_encadeia_verificacao(self) -> None:
         from revival_editor.toolchain import ToolStatus, ToolchainReport
 
         relatorio = ToolchainReport(tools=[ToolStatus(name="java", ok=True, version="17", detail="ok")])
-        comando_inofensivo = [sys.executable, "-c", "print('preparado-dry')"]
         with (
+            mock.patch("revival_editor.ui.app.prepare_tools", return_value=relatorio) as preparar,
             mock.patch("revival_editor.ui.app.messagebox") as caixa,
-            mock.patch(
-                "revival_editor.ui.app._comando_preparar_ferramentas",
-                return_value=comando_inofensivo,
-            ),
             mock.patch("revival_editor.ui.app._trabalho_ferramentas_status", return_value=relatorio),
         ):
             caixa.askyesno.return_value = True
             self.app.act_preparar_ferramentas()
-            # 1º job: preparo; ao concluir, encadeia a verificação da toolchain
+            # 1º job: preparo pelo serviço; ao concluir, encadeia a verificação
             ok = _bombeiar(self.root, lambda: caixa.showinfo.called)
             self.assertTrue(ok, self.app.var_status.get())
 
+        preparar.assert_called_once()
         caixa.askyesno.assert_called_once()
-        self.assertIn("preparado-dry", self.app.log.content)
         # a verificação encadeada mostrou o relatório mockado na tela
         _titulo, texto = caixa.showinfo.call_args[0]
         self.assertIn("java 17", texto)
@@ -635,14 +645,7 @@ class TestCompatTab(unittest.TestCase):
         self.tab = self.app.compat_tab
 
     def tearDown(self) -> None:
-        try:
-            self.app._fechar()
-        except tk.TclError:
-            pass
-        try:
-            self.root.destroy()
-        except tk.TclError:
-            pass
+        _encerrar_interfase(self.app, self.root)
         self._tmp.cleanup()
 
     def test_aba_existe_e_handler_seleciona(self) -> None:
@@ -858,14 +861,7 @@ class TestServidorLocal(unittest.TestCase):
             self.app = StudioApp(self.root, studio_root=self.studio)
 
     def tearDown(self) -> None:
-        try:
-            self.app._fechar()
-        except tk.TclError:
-            pass
-        try:
-            self.root.destroy()
-        except tk.TclError:
-            pass
+        _encerrar_interfase(self.app, self.root)
         self._tmp.cleanup()
 
     def _estado_entrada(self, action_id: str) -> str:

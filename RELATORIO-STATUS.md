@@ -90,7 +90,7 @@ possíveis, em ordem de probabilidade:
    - VPS `doom.sualoja.app.br`: já está fixada, nada a fazer.
    - Servidor local: `git pull` até `d855299`+ e reiniciar (`cd server && npm start`).
 2. **APK antigo** (gerado antes do zero de CRC) — o load de cena falha com
-   `CRC Mismatch`. Regere com `scripts\patch-apk.bat` e reinstale.
+   `CRC Mismatch`. Regere pelo Studio (menu *APK → Aplicar endpoint*) e reinstale.
 3. **Host errado no APK** — confira para qual hostname o APK aponta.
 
 Diagnóstico em 30s:
@@ -133,8 +133,9 @@ curl -s https://SEU-HOST/revival/health
 
 ### Limpeza pendente (decisão do usuário)
 
-- `scripts/loading-screen-editor.*` + `scripts/loading_screen_editor.py` —
-  não rastreados no git (commitar ou descartar).
+- `scripts/loading-screen-editor.{bat,sh}` — aposentados para `tmp/` junto com os
+  demais wrappers (2026-08-18); o editor segue no Studio (aba Visuais) e via
+  `scripts/loading_screen_editor.py`.
 - Arquivos soltos de npm na raiz da VPS (`node`, `npm`, `12.0.2`,
   `mighty-doom-revival-server@0.7.0`) — lixo de um comando npm rodado no
   diretório errado; seguros de remover.

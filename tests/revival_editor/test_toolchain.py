@@ -251,8 +251,10 @@ class TestRelatorioDaToolchain(unittest.TestCase):
 
 
 class TestCliResolveJava(unittest.TestCase):
-    """Contrato do `scripts/resolve_java.py` — a ponte dos orquestradores
-    headless (patch-apk.*, setup-patcher-tools.*) para este mesmo resolvedor.
+    """Contrato do `scripts/resolve_java.py` — a sonda de terminal deste
+    mesmo resolvedor (os orquestradores shell que a chamavam foram
+    aposentados em 2026-08-18; a sonda manual segue documentada em
+    docs/APK-PATCH.md).
 
     stdout = caminho + exit 0; stderr = instrução + exit 3. O caminho impresso
     nunca é um Java < 17: o resolvedor recusa antes de chegar aqui.
@@ -289,6 +291,138 @@ class TestCliResolveJava(unittest.TestCase):
         self.assertEqual(codigo, 3)
         self.assertIn("Java 17+", erro.getvalue())
         self.assertIn("JRE embarcado", erro.getvalue())
+
+
+class TestDownloadTool(unittest.TestCase):
+    """`download_tool`: pin, atomicidade e recusa em hash divergente."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self.logs: list[str] = []
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _jar_fake(self, conteudo: bytes = b"jar-sintetico") -> Path:
+        origem = self.dir / "remoto.jar"
+        origem.write_bytes(conteudo)
+        return origem
+
+    def test_baixa_verifica_e_promove(self) -> None:
+        import hashlib
+
+        origem = self._jar_fake()
+        destino = self.dir / "outro" / "apktool.jar"
+        sha = hashlib.sha256(origem.read_bytes()).hexdigest()
+        ok = tc.download_tool(destino, origem.as_uri(), sha, "Jar sintético",
+                              log=self.logs.append)
+        self.assertTrue(ok)
+        self.assertEqual(destino.read_bytes(), origem.read_bytes())
+        self.assertFalse((destino.parent / (destino.name + ".part")).exists(),
+                         ".part não pode sobrar após promoção")
+        self.assertTrue(any("validado" in l for l in self.logs))
+
+    def test_existente_valido_nao_baixa_de_novo(self) -> None:
+        import hashlib
+
+        destino = self.dir / "ferramenta.jar"
+        destino.write_bytes(b"ja-esta-aqui")
+        sha = hashlib.sha256(destino.read_bytes()).hexdigest()
+        ok = tc.download_tool(destino, "https://invalido.exemplo/x.jar", sha, "Ferramenta",
+                              log=self.logs.append)
+        self.assertTrue(ok)
+        self.assertTrue(any("já existe" in l for l in self.logs))
+
+    def test_hash_divergente_remove_arquivo(self) -> None:
+        origem = self._jar_fake()
+        destino = self.dir / "ferramenta.jar"
+        ok = tc.download_tool(destino, origem.as_uri(), "0" * 64, "Jar sintético",
+                              log=self.logs.append)
+        self.assertFalse(ok)
+        self.assertFalse(destino.exists(), "JAR com hash errado deve ser removido")
+        self.assertTrue(any("não confere" in l for l in self.logs))
+
+    def test_url_morta_limpa_e_devolve_false(self) -> None:
+        destino = self.dir / "ferramenta.jar"
+        ok = tc.download_tool(destino, (self.dir / "nao-existe.jar").as_uri(), "0" * 64,
+                              "Jar sintético", log=self.logs.append)
+        self.assertFalse(ok)
+        self.assertFalse(destino.exists())
+        self.assertFalse((destino.parent / (destino.name + ".part")).exists())
+
+
+class _CtxFake:
+    """JobContext mínimo para prepare_tools (log + run_process + progress)."""
+
+    def __init__(self, rc: int = 0) -> None:
+        self.rc = rc
+        self.comandos: list[list[str]] = []
+        self.logs: list[str] = []
+
+    def log(self, mensagem: str) -> None:
+        self.logs.append(mensagem)
+
+    def progress(self, *args) -> None:
+        return None
+
+    def run_process(self, command, **kwargs) -> int:
+        self.comandos.append([str(c) for c in command])
+        return self.rc
+
+
+class TestPrepareTools(unittest.TestCase):
+    def test_java_ausente_levanta_antes_de_baixar(self) -> None:
+        ruim = tc.ToolStatus(name="java", ok=False, detail="nenhum Java 17+ utilizável")
+        with (
+            mock.patch.object(tc, "resolve_java", return_value=ruim),
+            mock.patch.object(tc, "download_tool") as baixar,
+        ):
+            with self.assertRaises(tc.ToolchainError) as cm:
+                tc.prepare_tools(_CtxFake())
+        self.assertIn("Java", str(cm.exception))
+        baixar.assert_not_called()
+
+    def test_baixa_dois_jars_e_valida_com_java(self) -> None:
+        bom = tc.ToolStatus(name="java", ok=True, path="C:/jre17/bin/java.exe", version="17",
+                            detail="ok")
+        ctx = _CtxFake()
+        relatorio_falso = tc.ToolchainReport(tools=[])
+        with (
+            mock.patch.object(tc, "resolve_java", return_value=bom),
+            mock.patch.object(tc, "download_tool", return_value=True) as baixar,
+            mock.patch.object(tc, "detect_toolchain", return_value=relatorio_falso),
+        ):
+            relatorio = tc.prepare_tools(ctx)
+        self.assertIs(relatorio, relatorio_falso)
+        self.assertEqual(baixar.call_count, 2, "apktool + signer")
+        urls = [c.args[1] for c in baixar.call_args_list]
+        self.assertEqual(urls, [tc.APKTOOL_URL, tc.SIGNER_URL])
+        # prova final: java -jar <jar> --version para cada ferramenta
+        validacoes = [c for c in ctx.comandos if "--version" in c]
+        self.assertEqual(len(validacoes), 2)
+        self.assertTrue(all(c[0] == "C:/jre17/bin/java.exe" for c in validacoes))
+
+    def test_download_falho_levanta_erro_claro(self) -> None:
+        bom = tc.ToolStatus(name="java", ok=True, path="java", version="17", detail="ok")
+        with (
+            mock.patch.object(tc, "resolve_java", return_value=bom),
+            mock.patch.object(tc, "download_tool", return_value=False),
+        ):
+            with self.assertRaises(tc.ToolchainError) as cm:
+                tc.prepare_tools(_CtxFake())
+        self.assertIn("não foi possível obter", str(cm.exception))
+
+    def test_jar_que_nao_executa_levanta_erro(self) -> None:
+        bom = tc.ToolStatus(name="java", ok=True, path="java", version="17", detail="ok")
+        ctx = _CtxFake(rc=1)
+        with (
+            mock.patch.object(tc, "resolve_java", return_value=bom),
+            mock.patch.object(tc, "download_tool", return_value=True),
+        ):
+            with self.assertRaises(tc.ToolchainError) as cm:
+                tc.prepare_tools(ctx)
+        self.assertIn("não executou", str(cm.exception))
 
 
 if __name__ == "__main__":

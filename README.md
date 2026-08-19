@@ -75,15 +75,14 @@ mighty-doom-revival/
 │   └── ROADMAP-100-PERCENT.md
 ├── input/                  # arquivo local do usuário; ignorado pelo Git
 ├── output/                 # saída local; ignorada pelo Git
+├── run_tests.py            # suíte Python direto: python run_tests.py
 ├── scripts/
+│   ├── revival-studio.bat / .sh  # abre o Revival Studio (Win / Linux-Mac)
+│   ├── revival_studio.py    # launcher do Revival Studio (Python/Tkinter)
+│   ├── revival_editor/      # serviços e UI do Studio
 │   ├── analyze_apk.py
-│   ├── analyze-official-apk.bat / .sh
 │   ├── patch_apk.py
-│   ├── patch-apk.bat / .sh
-│   ├── setup-patcher-tools.bat / .sh
-│   ├── setup-server.bat / .sh
-│   ├── start-server.bat / .sh
-│   ├── install.sh
+│   ├── install.sh           # deploy VPS (par canônico — regra 1.8)
 │   └── uninstall.sh
 └── server/
     ├── src/
@@ -108,19 +107,7 @@ Arquivos `*.apk`, `*.xapk`, `*.apks` e diretórios de extração são bloqueados
 
 ## 2. Analisar uma cópia local
 
-Windows:
-
-```bat
-scripts\analyze-official-apk.bat
-```
-
-Linux/Mac:
-
-```bash
-./scripts/analyze-official-apk.sh
-```
-
-Ou diretamente:
+Direto pelo Python:
 
 ```bash
 python scripts/analyze_apk.py input/mighty-doom.apk \
@@ -128,25 +115,19 @@ python scripts/analyze_apk.py input/mighty-doom.apk \
   --md-out reports/apk-1.13.1.md
 ```
 
+Ou pelo Revival Studio (menu *Projeto → Analisar APK*).
+
 O relatório deve conter apenas metadados úteis à interoperabilidade. Não commite assets ou código proprietário extraído.
 
 ## 3. Servidor Revival
 
 A implementação principal está em `server/`.
 
-### Windows
+Pelo Revival Studio (menu *Servidor*):
 
-```bat
-scripts\setup-server.bat
-scripts\start-server.bat
-```
-
-### Linux/Mac
-
-```bash
-./scripts/setup-server.sh
-./scripts/start-server.sh
-```
+- **Preparar servidor local** — copia os `*.example.json` que faltarem e valida os 8 módulos + smoke test;
+- **Iniciar servidor local** — sobe o servidor em segundo plano (PID + health check) e continua rodando após fechar o Studio;
+- **Encerrar servidor local** / **Status do servidor local**.
 
 ### Manual
 
@@ -286,16 +267,10 @@ Tudo deve permanecer independente de serviços oficiais e sem exploração comer
 
 ## 8. Patch local do APK
 
-### Windows
-
-```bat
-scripts\patch-apk.bat
-```
-
-### Linux/Mac
+Pelo Revival Studio (menu *APK → Aplicar endpoint*, que roda decode → patch → build → sign → verify) ou pela ferramenta Python:
 
 ```bash
-./scripts/patch-apk.sh
+python scripts/patch_apk.py --help
 ```
 
 O patcher trabalha sobre **arquivo fornecido pelo próprio usuário** e gera a saída localmente.
@@ -328,19 +303,8 @@ O editor de tela de loading troca **apenas** a arte de fundo do loading
 (texturas `loading_background` e sazonais `*LoadingBackground*` dentro do
 bundle Addressables), em três modos: imagem, imagem com texto ou só texto.
 
-No Windows:
-
-```bat
-scripts\loading-screen-editor.bat
-```
-
-No Linux/Mac:
-
-```bash
-./scripts/loading-screen-editor.sh
-```
-
-Sem interface (composição + injeção diretas):
+Pelo Revival Studio (aba *Visuais → Editor de tela de loading*) ou sem interface
+(composição + injeção diretas):
 
 ```bash
 python scripts/inject_loading_screen.py \

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Resolvedor de Java para os orquestradores headless (fase 3 do plano).
+"""Resolvedor de Java como sonda de terminal (fase 3 do plano).
 
-O plano manda *"corrigir os orquestradores antigos para consumirem o mesmo
-resolvedor de Java, sem depender cegamente do PATH"*. Este CLI é a ponte:
-`patch-apk.*` e `setup-patcher-tools.*` chamam aqui e recebem o mesmo Java que
-o Revival Studio usaria — ordem idêntica à de `revival_editor.toolchain`:
+Sonda manual do mesmo resolvedor que o Revival Studio e os serviços de
+`revival_editor` usam (`revival_editor.toolchain.resolve_java`) — os
+orquestradores shell que chamavam este CLI foram aposentados em 2026-08-18,
+mas depurar "qual Java esta máquina vai usar" no terminal segue útil.
+Ordem idêntica à de `revival_editor.toolchain`:
 
 1. escolha explícita (parâmetro do Studio ou variável `REVIVAL_JAVA`);
 2. o JRE 17 embarcado em `.tools/jre17/`;

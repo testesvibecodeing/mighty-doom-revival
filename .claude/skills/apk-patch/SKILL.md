@@ -17,7 +17,8 @@ description: Pipeline fim-a-fim de patch do APK do Mighty DOOM 1.13.1 — trocar
 
 - UnityPy tem versão fixada: **1.25.3**. Outra versão reserializa diferente e
   invalida os testes.
-- Ferramentas em `.tools/` são baixadas por `scripts/setup-patcher-tools.{bat,sh}`,
+- Ferramentas em `.tools/` são baixadas pelo serviço de toolchain do Studio
+  (menu *Ferramentas → Preparar ferramentas*, `revival_editor/toolchain.py`),
   com versões e SHA-256 **pinados**: **Apktool 3.0.3**, **uber-apk-signer 1.3.0**.
   Não atualize "para ver se resolve" — o pipeline inteiro (e os testes) foi
   calibrado nesses binários.
@@ -27,45 +28,36 @@ description: Pipeline fim-a-fim de patch do APK do Mighty DOOM 1.13.1 — trocar
 
 ## Caminho feliz
 
-```bash
-scripts\patch-apk.bat        # Windows
-./scripts/patch-apk.sh       # Linux/Mac
-```
+O orquestrador é o serviço do Studio (`revival_editor/pipeline.py`), acionado pelo
+menu *APK → Aplicar endpoint* em `python scripts/revival_studio.py` (os antigos
+`patch-apk.{bat,sh}` foram aposentados em 2026-08-18; cópias em `tmp/` e no
+histórico do Git).
 
-Faz 8 passos, nesta ordem, e para no primeiro erro:
+O serviço roda, nesta ordem, e para no primeiro erro:
 
 1. preflight HTTPS do servidor (`check_revival_server.py`);
-2. `analyze_apk.py` (SHA-256, hosts encontrados);
-3. `apktool d -f` → `work/apk-patch/decoded`;
-4. `patch_apk.py` (fast path) — se sair **4**, cai para
+2. `apktool d -f` → `<projeto>/decoded` (**[1/7]**);
+3. `patch_apk.py` (fast path) (**[2/7]**) — se sair **4**, cai para
    `patch_bundle_from_report.py --sweep-all-bundles`;
-5. `apktool b` → `work/apk-patch/revival-unsigned.apk`;
-6. `verify_patched_apk.py` no APK reconstruído;
-7. `uber-apk-signer` (alinha + assina) e depois `--onlyVerify`, seguido de **nova**
-   `verify_patched_apk.py` no arquivo assinado;
-8. copia para `output/mighty-doom-revival.apk`.
+4. `apktool b` → APK não-assinado (**[3/7]**);
+5. `verify_patched_apk.py` no APK reconstruído (**[4/7]**);
+6. `uber-apk-signer` (alinha + assina) e depois `--onlyVerify`, seguido de **nova**
+   `verify_patched_apk.py` no arquivo assinado (**[5/7]**/**[6/7]**);
+7. copia para `output/mighty-doom-revival.apk` (**[7/7]**).
 
-Se você rodar passos manualmente, **não pule 6 nem a re-verificação do 7**.
+Se você rodar passos manualmente, **não pule o 5 nem a re-verificação do 6**.
 
-### Exit codes do orquestrador (`patch-apk.bat`)
+### Em qual passo morreu
 
-Para saber **em qual passo** uma automação morreu sem reler o log inteiro:
+O serviço grava relatório JSON em
+`work/revival-studio/<id-do-projeto>/reports/` com o exit code de cada passo
+(`steps`) e, na falha, um par `code`/`stage`: `ANALISE_ALVO`, `TOOLCHAIN`,
+`PRECHECK_INVALIDO`, `SERVER_PREFLIGHT`, `DECODE`, `PATCH`, `PATCH_ESTRATEGIA`,
+`REBUILD`, `VERIFY_PRE`, `SIGN`, `SIGN_VERIFY`, `VERIFY_POS`. O log da sessão
+marca o passo como `[N/7]`.
 
-| Exit | Passo que falhou |
-|---:|---|
-| 2 | hostname inválido (precheck `check_patch_length.py`) |
-| 3 | `python` ou `java` ausente no PATH |
-| 11 | preflight do servidor (`check_revival_server.py` — health/uts) |
-| 4 | `apktool d` (desmontagem) |
-| 5 | `apktool b` (rebuild) |
-| 6 | `verify_patched_apk.py` no APK **não-assinado** |
-| 7 | `uber-apk-signer` (assinar) |
-| 8 | `uber-apk-signer --onlyVerify` |
-| 9 | `verify_patched_apk.py` no APK **assinado** |
-| 10 | cópia final para `output/` |
-
-Exit 4 do **`check_patch_length.py`** (não do orquestrador) = não cabe no fast path
-→ o `.bat` segue automaticamente para o bundle-aware; não é fatal.
+Exit 4 do **`check_patch_length.py`** (não do serviço) = não cabe no fast path
+→ o pipeline segue automaticamente para o bundle-aware; não é fatal.
 
 ### Exit codes do `verify_patched_apk.py`
 

@@ -34,8 +34,8 @@ Linux/macOS:
 ./scripts/revival-studio.sh
 ```
 
-Execução direta por Python (caminho documentado e suportado — o empacotamento
-com PyInstaller é opcional e não é pré-requisito):
+Execução direta por Python (o launcher só abre este arquivo; o
+empacotamento com PyInstaller é opcional e não é pré-requisito):
 
 ```bash
 python scripts/revival_studio.py
@@ -72,7 +72,7 @@ Menu **Servidor**:
 
 - **Validar servidor**: preflight HTTPS (`/revival/health` + `uts` do
   envelope vivo). Exige o servidor rodando com certificado válido.
-- **Preparar servidor local**: o fluxo do `setup-server` como serviço —
+- **Preparar servidor local**: o preparo do servidor como serviço —
   valida Node.js + `node:sqlite`, cria `server/.env` e `config/*.json` a
   partir dos `*.example` **somente quando faltam** (configs existentes
   nunca são sobrescritos), roda `node --check` nos módulos e o smoke test

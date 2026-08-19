@@ -64,14 +64,10 @@ Não publique o APK ou dumps completos no GitHub. Para documentação, registre 
 
 ## Executar o patcher
 
-```bat
-scripts\patch-apk.bat
-```
-
-No Linux/Mac:
+Pelo Revival Studio (menu *APK → Aplicar endpoint*):
 
 ```bash
-./scripts/patch-apk.sh
+python scripts/revival_studio.py
 ```
 
 O assistente pede:
@@ -201,7 +197,7 @@ normalmente (validado em emulador Android com gameplay completo).
 
 ### Validação no 1.13.1
 
-O pipeline completo (`patch-apk.bat` → bundle-aware → assinatura) foi
+O pipeline completo (fast path → bundle-aware → assinatura) foi
 executado no APK real 1.13.1 e o APK resultante foi instalado em um emulador
 Android: registro de conta, login, bootstrap de sessão e um run completo do
 estágio 1-1 (vitória, recompensas, desbloqueio do 1-2) contra o servidor

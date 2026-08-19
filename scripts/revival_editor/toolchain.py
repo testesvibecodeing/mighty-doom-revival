@@ -25,6 +25,7 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.request
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -34,8 +35,11 @@ from .paths import REPO_ROOT
 __all__ = [
     "ToolStatus",
     "ToolchainReport",
+    "ToolchainError",
     "APKTOOL_SHA256",
     "SIGNER_SHA256",
+    "APKTOOL_URL",
+    "SIGNER_URL",
     "UNITYPY_VERSION",
     "MIN_JAVA_MAJOR",
     "MIN_PYTHON",
@@ -48,12 +52,18 @@ __all__ = [
     "check_node",
     "check_adb",
     "detect_toolchain",
+    "download_tool",
+    "prepare_tools",
     "sha256_file",
 ]
 
-#: Pinado em scripts/setup-patcher-tools.{bat,sh}. Fonte única aqui.
+#: Fonte única dos pins (URL + SHA-256). Os antigos wrappers de setup foram
+#: aposentados: quem baixa é `prepare_tools`, sempre por aqui.
 APKTOOL_SHA256 = "dbf930b076c6b9be08d57c449cacefc3bdd6b71ebd59b3066fc0e1f5b14f9423"
 SIGNER_SHA256 = "e1299fd6fcf4da527dd53735b56127e8ea922a321128123b9c32d619bba1d835"
+
+APKTOOL_URL = "https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar"
+SIGNER_URL = "https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar"
 
 APKTOOL_VERSION = "3.0.3"
 SIGNER_VERSION = "1.3.0"
@@ -427,3 +437,94 @@ def detect_toolchain(*, java_path: str | Path | None = None) -> ToolchainReport:
             check_adb(),
         ]
     )
+
+
+class ToolchainError(RuntimeError):
+    """Falha de preparo das ferramentas (mensagem já amigável)."""
+
+
+def download_tool(
+    destino: Path,
+    url: str,
+    sha_esperado: str,
+    rotulo: str,
+    *,
+    log: Any = None,
+    timeout: float = 600.0,
+) -> bool:
+    """Baixa um JAR com SHA-256 pinado; existente válido é reaproveitado.
+
+    Atomicidade: baixa para `<destino>.part` e só então promove com
+    `os.replace` — um download interrompido nunca deixa JAR pela metade no
+    lugar. Hash divergente após o download remove o arquivo e devolve False.
+    """
+    def _log(mensagem: str) -> None:
+        if log is not None:
+            log(mensagem)
+        else:
+            print(mensagem)
+
+    if destino.is_file() and sha256_file(destino) == sha_esperado:
+        _log(f"[OK] {rotulo} já existe e o SHA-256 confere.")
+        return True
+    if destino.is_file():
+        _log(f"[AVISO] hash inválido em {destino} — baixando novamente.")
+        destino.unlink()
+
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    parcial = destino.with_name(destino.name + ".part")
+    _log(f"Baixando {rotulo}…")
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resposta, parcial.open("wb") as saida:  # noqa: S310 - URL pinada no módulo
+            shutil.copyfileobj(resposta, saida)
+        os.replace(parcial, destino)
+    except (OSError, ValueError) as exc:
+        _log(f"[ERRO] falha ao baixar {rotulo}: {exc}")
+        for sobra in (parcial, destino):
+            try:
+                sobra.unlink()
+            except OSError:
+                pass
+        return False
+
+    real = sha256_file(destino)
+    if real != sha_esperado:
+        _log(f"[ERRO] SHA-256 de {rotulo} não confere. Arquivo removido.")
+        destino.unlink()
+        return False
+    _log(f"[OK] {rotulo} validado.")
+    return True
+
+
+def prepare_tools(ctx: Any) -> ToolchainReport:
+    """Serviço do botão "Preparar ferramentas" (fase 3): baixa e valida JARs.
+
+    Ordem: resolve o Java (o mesmo resolvedor do build — nunca PATH às
+    cegas), baixa apktool + uber-apk-signer com hashes pinados e prova cada
+    JAR com `java -jar … --version`. Falha levanta ToolchainError; sucesso
+    devolve o relatório completo da toolchain recém-detectada.
+    """
+    java = resolve_java()
+    if not java.ok or not java.path:
+        raise ToolchainError(f"Java utilizável não resolvido: {java.detail}")
+
+    ctx.progress("ferramentas", f"java: {java.path}", None)
+    for nome, jar, url, sha in (
+        ("Apktool 3.0.3", APKTOOL_JAR, APKTOOL_URL, APKTOOL_SHA256),
+        ("Uber APK Signer 1.3.0", SIGNER_JAR, SIGNER_URL, SIGNER_SHA256),
+    ):
+        if not download_tool(jar, url, sha, nome, log=ctx.log):
+            raise ToolchainError(f"não foi possível obter {nome} (veja o log acima)")
+
+    ctx.progress("ferramentas", "validando JARs com java -jar --version…", None)
+    for nome, jar in (("apktool", APKTOOL_JAR), ("uber-apk-signer", SIGNER_JAR)):
+        codigo = ctx.run_process(
+            [java.path, "-jar", str(jar), "--version"],
+            cwd=REPO_ROOT,
+            stage="ferramentas",
+            timeout=180,
+        )
+        if codigo != 0:
+            raise ToolchainError(f"{nome} baixado não executou corretamente (exit {codigo})")
+
+    return detect_toolchain(java_path=java.path)

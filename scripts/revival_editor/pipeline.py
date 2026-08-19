@@ -1,9 +1,10 @@
 """Pipeline "Aplicar endpoint" do Revival Studio (fase 6 do plano).
 
-Replica `scripts/patch-apk.sh` como serviço Python, chamando **os mesmos CLIs**
-do patcher (patch_apk.py, patch_bundle_from_report.py, verify_patched_apk.py,
-apktool, uber-apk-signer) — a GUI não ganha uma segunda implementação do
-patch, ganha a mesma com relatório estruturado e cancelamento.
+Réplica Python do antigo orquestrador `patch-apk.sh` (wrapper aposentado em
+2026-08-18), chamando **os mesmos CLIs** do patcher (patch_apk.py,
+patch_bundle_from_report.py, verify_patched_apk.py, apktool,
+uber-apk-signer) — a GUI não ganha uma segunda implementação do patch, ganha
+a mesma com relatório estruturado e cancelamento.
 
 Diferenças deliberadas em relação ao wrapper (todas exigidas pelo plano):
 
