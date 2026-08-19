@@ -126,7 +126,9 @@ def patch_raw_bundle(path: Path, target_host: str) -> dict[str, Any]:
     """Patch raw serialized strings atomically using UnityPy set_raw_data()."""
     UnityPy = _load_unitypy()
     path = path.resolve()
-    env = UnityPy.load(str(path))
+    # Dos bytes pelo mesmo motivo do patch_unity_bundle: handle aberto no
+    # original bloquearia o replace no Windows (WinError 5).
+    env = UnityPy.load(path.read_bytes())
     changes: list[dict[str, Any]] = []
 
     for obj in env.objects:
@@ -155,7 +157,9 @@ def patch_raw_bundle(path: Path, target_host: str) -> dict[str, Any]:
     temp = Path(temp_name)
     try:
         temp.write_bytes(payload)
-        check = UnityPy.load(str(temp))
+        # Mesmo motivo do patch_unity_bundle: carregar do caminho mantém o
+        # handle do tmp aberto e o replace falha com WinError 32 no Windows.
+        check = UnityPy.load(payload)
         official = 0
         target = 0
         for obj in check.objects:

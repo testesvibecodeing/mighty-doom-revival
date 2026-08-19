@@ -241,7 +241,10 @@ def patch_bundle(path: Path, target_host: str) -> dict[str, Any]:
     """Patch one Unity bundle atomically and verify it can be reparsed."""
     UnityPy = _load_unitypy()
     path = path.resolve()
-    env = UnityPy.load(str(path))
+    # Carrega dos BYTES: UnityPy.load com caminho mantém handle aberto no
+    # original e o os.replace(tmp -> original) falha no Windows (WinError 5
+    # "acesso negado" — replace sobre arquivo aberto; no Linux passa).
+    env = UnityPy.load(path.read_bytes())
     inspection = inspect_environment(env)
     changes = _patch_environment(env, target_host)
     if not changes:
@@ -260,7 +263,10 @@ def patch_bundle(path: Path, target_host: str) -> dict[str, Any]:
     temp = Path(temp_name)
     try:
         temp.write_bytes(payload)
-        check = UnityPy.load(str(temp))
+        # Verificação a partir dos BYTES: UnityPy.load com caminho mantém
+        # handle aberto no tmp e o replace abaixo estoura WinError 32 no
+        # Windows ("arquivo já está sendo usado por outro processo").
+        check = UnityPy.load(payload)
         verification = _scan_environment(check, target_host)
         if verification["target"] <= 0:
             raise RuntimeError("bundle reserializado não contém o hostname alvo em objetos verificáveis")

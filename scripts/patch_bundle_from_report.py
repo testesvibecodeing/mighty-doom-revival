@@ -35,7 +35,9 @@ def _all_official_raw_refs(path: Path) -> int:
     from patch_unity_bundle import KNOWN_HOSTS, _load_unitypy
 
     UnityPy = _load_unitypy()
-    env = UnityPy.load(str(path))
+    # Dos bytes: o env com handle aberto bloquearia o replace do estágio
+    # seguinte (patch_raw_bundle) no Windows (WinError 5).
+    env = UnityPy.load(path.read_bytes())
     total = 0
     for obj in env.objects:
         try:
