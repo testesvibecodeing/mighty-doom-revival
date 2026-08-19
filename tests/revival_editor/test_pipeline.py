@@ -286,13 +286,22 @@ class TestRegistroDaAcao(unittest.TestCase):
 
 
 class TestPipelineSucesso(BasePipeline):
-    def test_caminho_feliz_fast_path(self) -> None:
+    def test_caminho_feliz_auto_varre_bundles_como_prova(self) -> None:
+        """auto com fast path exit 0 AINDA varre os bundles (regressão real).
+
+        O fast path exit 0 só troca o host no global-metadata; o host oficial
+        da gameplay vive em bundles Addressables invisíveis ao scan cru (LZ4
+        fragmenta). Sem o sweep de prova o pipeline só descobria o resto no
+        verify-pre, depois do apktool b desperdiçado (VERIFY_PRE exit 5).
+        """
         ctx = CtxFalso(_roteiro_sucesso())
         resultado = self._rodar(ctx)
 
         self.assertTrue(resultado.ok, f"steps={resultado.steps} failure={resultado.failure}")
         self.assertIsNone(resultado.failure)
-        self.assertEqual(resultado.strategy_used, "fast-path")
+        self.assertEqual(resultado.strategy_used, "bundle-aware")
+        self.assertEqual(len(ctx.nomeados(PATCH_BUNDLE_CLI)), 1)
+        self.assertIn("--sweep-all-bundles", " ".join(ctx.nomeados(PATCH_BUNDLE_CLI)[0]))
 
         self.assertTrue(self.saida.is_file(), "APK final deveria existir")
         self.assertEqual(self.saida.read_bytes(), b"APK-RECONSTRUIDO")
@@ -371,6 +380,25 @@ class TestPipelineEstrategias(BasePipeline):
         self.assertTrue(resultado.ok, str(resultado.failure))
         self.assertEqual(resultado.strategy_used, "bundle-aware")
         self.assertEqual(len(ctx.nomeados(PATCH_BUNDLE_CLI)), 1)
+
+    def test_auto_com_fast_ok_mas_sweep_bloqueado_falha_antes_do_rebuild(self) -> None:
+        """Regressão e2e-vps-fase13: 5 refs oficiais no bundle de cenas.
+
+        Fast path exit 0 + sweep bloqueado (exit 4) tem que falhar em PATCH,
+        antes do apktool b — nunca construir um APK que o verify-pre
+        rejeitaria (era o falso "progresso" de 90s de build desperdiçado).
+        """
+        roteiro = _roteiro_sucesso(patch_exit=0)
+        roteiro[2] = (_eh_patch_bundle, Resposta(4, _efeito_relatorio_patch()))
+        ctx = CtxFalso(roteiro)
+        resultado = self._rodar(ctx)  # auto
+
+        self.assertFalse(resultado.ok)
+        self.assertEqual(resultado.failure.code, "PATCH")
+        self.assertEqual(resultado.failure.exit_code, 4)
+        self.assertEqual([c for c in ctx.comandos if _eh_build(c)], [],
+                         "rebuild não pode rodar com host oficial remanescente")
+        self.assertFalse(self.saida.exists())
 
     def test_patch_falhando_bloqueia_antes_do_rebuild(self) -> None:
         roteiro = _roteiro_sucesso()

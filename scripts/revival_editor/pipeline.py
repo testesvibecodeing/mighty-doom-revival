@@ -310,10 +310,21 @@ def _executar(
         codigo = _rodar_patch_bundle(ctx, workspace, host, relatorio_patch)
         if codigo == 0:
             resultado.strategy_used = "bundle-aware"
-    elif codigo == 0 and strategy == "bundle-aware":
-        # bundle-aware explícito: varre mesmo após sucesso direto — o host pode
-        # existir em bundles além do metadata.
-        ctx.log("estratégia bundle-aware: sweep adicional mesmo com fast path completo…")
+    elif codigo == 0 and strategy in ("auto", "bundle-aware"):
+        # Sucesso do fast path só prova a troca no global-metadata. O host
+        # oficial da gameplay (ProdGameServer.baseUrl) vive em bundles
+        # Addressables que o scan cru do patch_apk não enxerga — blocos LZ4
+        # fragmentam o hostname sem deixar ocorrência contígua em bytes
+        # brutos. O sweep é o único estágio que prova a árvore limpa: sem
+        # ele, o verify descobre o host remanescente só DEPOIS do apktool b
+        # desperdiçado (VERIFY_PRE exit 5 — caso real e2e-vps-fase13:
+        # 5 refs oficiais no bundle de cenas com fast path exit 0).
+        rotulo = (
+            "estratégia bundle-aware: sweep adicional mesmo com fast path completo…"
+            if strategy == "bundle-aware"
+            else "fast path não prova os bundles — sweep bundle-aware de prova…"
+        )
+        ctx.log(rotulo)
         codigo = _rodar_patch_bundle(ctx, workspace, host, relatorio_patch)
         if codigo == 0:
             resultado.strategy_used = "bundle-aware"
