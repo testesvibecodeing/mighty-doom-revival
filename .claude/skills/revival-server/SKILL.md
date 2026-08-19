@@ -147,9 +147,12 @@ nesta base.)
   de propósito (evento encerrado, não-editável).
 - Rotas: `/game/events/get-schedule` (`eventSchedule`) e `/game/events/get-progress`
   (`eventProgress`, com `game_mode_events_progress`, `store_offer_events_states`,
-  `battle_pass_events_states`). O schedule também **mescla os battle passes de
-  história do game-data** (`storyBattlePasses`), com dedup por `id` — não repita um
-  id de season no `events.json`.
+  `battle_pass_events_states`). O schedule **NÃO inclui os battle passes de
+  história do game-data**: o cliente 1.13.1 processa todo evento agendado como
+  game-mode no `EventModeController` e NRE com o FTUE_BattlePass na lista
+  (CARREGANDO eterno; provado no emulador 2026-08-19). O season fica visível no
+  `get-progress` e operável via start/end-season. A VERIFICAR: com game-data
+  completo, o conversor por `args` talvez tolere a entrada.
 
 ### CRUD de eventos pelo painel (sem editar arquivo)
 
@@ -212,10 +215,12 @@ mais os literais `ubu_sid`/`ubu_nonce` e a família `JwtInvalid/JwtExpired/
 JwtBadSignature/JwtBadSub` (2110–2113) no `ResponseCode`. Ou seja: espera um **JWT**
 com claims `iss/aud/iat/exp/sub` + `ubu_sid` + `ubu_nonce`.
 
-Consequência: `/game/session/refresh` também precisa devolver um token novo válido,
-não o mesmo `user.token`. **Não aplique essa mudança sem que a tarefa peça** —
-quando for tarefa de documentação, entregue o código proposto marcado como não
-aplicado.
+**RESOLVIDO** (implementado em `server/src/jwt.js`, validado no emulador
+2026-08-19): register/login-device/refresh devolvem `issueSessionToken` e o
+`user.token` opaco virou fallback legado. Contrato crítico: **`aud`/`audience`
+precisam ser ARRAY** — o cliente tipa audience como `String[]` e string crua
+derruba o `UpdateSessionToken` com `Could not cast or convert from System.String
+to System.String[]` em todo register/login/refresh (bisseção no emulador).
 
 ## Outros pontos de atenção
 
