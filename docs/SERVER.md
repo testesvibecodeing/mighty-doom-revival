@@ -9,7 +9,12 @@ O projeto comunitário `dannyhpy/mightydoom-gameserver` continua sendo uma refer
 CONFIRMADO em 2026-08-17 (`server/package.json` sem `dependencies`,
 `grep -n "^import" server/src/index.js`, `server/src/db.js:4`):
 
-- Node.js **>= 22.5.0** (`engines` do `package.json`; o CI usa 24)
+- Node.js **>= 22.5.0** (`engines` do `package.json`) — **recomendado: Node 24
+  LTS** para o gate reproduzível. Linhas não-LTS (25, 23…) funcionam
+  (`node:sqlite` responde e os testes passam; validado no 25.3.0 em
+  2026-08-19), mas o npm que as acompanha pode se declarar incompatível
+  (visto: npm 12.0.1 × Node 25.3.0) — o aviso não causou bug de contrato, e
+  nenhum bug deve ser atribuído a ele sem evidência
 - HTTP: `node:http` builtin — **sem Koa** e sem framework
 - SQLite: `node:sqlite` (`DatabaseSync`) — **sem `better-sqlite3`**
 - **zero dependências npm**: `npm install` não baixa nada

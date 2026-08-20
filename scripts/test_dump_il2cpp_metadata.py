@@ -85,6 +85,9 @@ def build_full_metadata(
         "SyntheticBrokenEnum", "SyntheticNotEnum",
         "Synthetic.Api", "Ubu.GameApi", "SyntheticAssembly.dll",
         ".ctor", "SyntheticMethod",
+        "Ubu.Synthetic", "SyntheticApi", "SyntheticOtherApi",
+        "SyntheticUpgradeResponse", "SyntheticUpgrade", "SyntheticOther",
+        "SyntheticParam", "syntheticGearId", "syntheticLevel", "SyntheticResult",
     ]
     str_offset_of: dict[str, int] = {}
     string_blob = bytearray()
@@ -106,16 +109,30 @@ def build_full_metadata(
             ("JwtBadSignature", values["JwtBadSignature"]),
             ("JwtBadSub", values["JwtBadSub"]), ("NotReceived", values["NotReceived"])],
          "methods": (1, 1)},
+        {"name": "SyntheticApi", "ns": "Ubu.Synthetic", "fields": [],
+         "methods": (2, 1), "nested": ["SyntheticUpgradeResponse"]},
+        {"name": "SyntheticUpgradeResponse", "ns": "", "fields": [
+            ("SyntheticResult", None)],
+         "methods": (4, 0)},
+        {"name": "SyntheticOtherApi", "ns": "Ubu.Synthetic", "fields": [],
+         "methods": (3, 1), "nested": ["SyntheticUpgradeResponse"]},
+        # homônimo proposital: mesmo nome de DTO aninhado em outra API
+        {"name": "SyntheticUpgradeResponse", "ns": "", "fields": [
+            ("SyntheticResult", None), ("AccessToken", None)],
+         "methods": (4, 0)},
         {"name": "SyntheticDtoRequest", "ns": "Synthetic.Api", "fields": [
             ("AccessToken", None), ("Xp", None), ("APIVersion", None)],
-         "methods": (0, 0)},
+         "methods": (4, 0)},
         {"name": "SyntheticBrokenEnum", "ns": "", "fields": [
             ("value__", None), ("SyntheticValue", 1), ("SyntheticMissing", None)],
-         "methods": (0, 0)},
+         "methods": (4, 0)},
         {"name": "SyntheticNotEnum", "ns": "", "fields": [
             ("SyntheticValue", 1), ("SyntheticSuccess", 1000)],
-         "methods": (0, 0)},
+         "methods": (4, 0)},
     ]
+    indice_de: dict[str, list[int]] = {}
+    for i, td in enumerate(typedefs):
+        indice_de.setdefault(td["name"], []).append(i)
 
     fields_blob = bytearray()
     defaults_blob = bytearray()
@@ -131,18 +148,47 @@ def build_full_metadata(
             field_index += 1
         td["field_count"] = len(td["fields"])
 
-    # ---- methods (2) e parameters (1): soma de parameterCount == 1
+    # ---- methods (4) e parameters (3): cadeia parameterStart exata
+    # m0 .ctor(1 param) · m1 SyntheticMethod(0) · m2 SyntheticUpgrade(2) ·
+    # m3 SyntheticOther(0); métodos sem parâmetros carregam parameterStart=-1
+    method_rows = [
+        (".ctor", 0, 1), ("SyntheticMethod", -1, 0),
+        ("SyntheticUpgrade", 1, 2), ("SyntheticOther", -1, 0),
+    ]
     methods_blob = bytearray()
-    for i, (pstart, pcount) in enumerate([(0, 1), (1, 0)]):
+    for i, (mname, pstart, pcount) in enumerate(method_rows):
         row = bytearray(32)
-        struct.pack_into("<i", row, 0, str_offset_of[".ctor" if i == 0 else "SyntheticMethod"])
-        struct.pack_into("<i", row, 20, pstart)
-        struct.pack_into("<I", row, 24, 0x06000001 + i)
-        struct.pack_into("<H", row, 30, pcount)
+        struct.pack_into("<i", row, 0, str_offset_of[mname])
+        struct.pack_into("<i", row, dump.METHOD_PARAM_START, pstart)
+        struct.pack_into("<I", row, 20, 0x06000001 + i)  # token@20 (não lido)
+        struct.pack_into("<H", row, dump.METHOD_PARAM_COUNT, pcount)
         methods_blob += row
     if break_region == "param_sum_off":
         struct.pack_into("<H", methods_blob, dump.METHOD_PARAM_COUNT, 2)
-    parameters_blob = struct.pack("<iii", 0, 0, 0)
+    if break_region == "param_start_off":
+        # método com parâmetros fora da cadeia (2 != 1)
+        struct.pack_into("<i", methods_blob, 2 * 32 + dump.METHOD_PARAM_START, 2)
+    parameters_blob = b"".join(
+        struct.pack("<iii", str_offset_of[nome], 0, 0)
+        for nome in ("SyntheticParam", "syntheticGearId", "syntheticLevel")
+    )
+
+    # ---- região nestedTypes: encadeada por ordem de typedef
+    nested_entries: list[int] = []
+    for td in typedefs:
+        filhos = td.get("nested")
+        if not filhos:
+            td["nested_start"] = 0
+            td["nested_count"] = 0
+            continue
+        td["nested_start"] = len(nested_entries)
+        td["nested_count"] = len(filhos)
+        for nome_filho in filhos:
+            # o homônimo declarante é resolvido pela própria posição do filho
+            nested_entries.append(indice_de[nome_filho].pop(0))
+    nested_blob = bytearray()
+    for idx in nested_entries:
+        nested_blob += struct.pack("<i", idx)
 
     # ---- typedefs (88B cada)
     td_blob = bytearray()
@@ -150,13 +196,18 @@ def build_full_metadata(
         row = bytearray(dump.TYPEDEF_SIZE)
         struct.pack_into("<i", row, dump.TD_NAME, str_offset_of[td["name"]])
         struct.pack_into("<i", row, dump.TD_NAMESPACE, str_offset_of[td["ns"]])
-        struct.pack_into("<i", row, 12, -1)   # declaring
+        struct.pack_into("<i", row, 12, -1)   # declaring: índice NATIVO (ilegível)
         struct.pack_into("<i", row, 16, -1)   # parent
         struct.pack_into("<i", row, 24, -1)   # genericContainer
         struct.pack_into("<i", row, dump.TD_FIELD_START, td["field_start"])
         struct.pack_into("<i", row, dump.TD_METHOD_START, td["methods"][0])
+        nested_start = td["nested_start"]
+        if break_region == "nested_chain_off" and nested_start == 0 and td["nested_count"]:
+            nested_start = 1  # primeiro alcance deslocado: cadeia quebra
+        struct.pack_into("<i", row, dump.TD_NESTED_START, nested_start)
         struct.pack_into("<H", row, dump.TD_FIELD_COUNT, td["field_count"])
         struct.pack_into("<H", row, dump.TD_METHOD_COUNT, td["methods"][1])
+        struct.pack_into("<H", row, dump.TD_NESTED_COUNT, td["nested_count"])
         struct.pack_into("<I", row, dump.TD_TOKEN, 0x02000001 + i)
         td_blob += row
 
@@ -195,6 +246,7 @@ def build_full_metadata(
         "fieldDefaultValues": bytes(fdv_blob),
         "fieldAndParameterDefaultValueData": bytes(defaults_blob),
         "parameters": parameters_blob,
+        "nestedTypes": bytes(nested_blob),
         "fields": bytes(fields_blob),
         "typeDefinitions": bytes(td_blob),
         "images": images_blob,
@@ -278,10 +330,10 @@ def test_rejects_wrong_version(tmp: Path) -> None:
 def test_builder_completo_passa_validacao(tmp: Path) -> None:
     mf = dump.MetadataFile(build_full_metadata())
     summary = mf.validation_summary()
-    assert summary["typedefs"] == 5, summary
-    assert summary["fields"] == 22, summary
-    assert summary["methods"] == 2, summary
-    assert summary["parameters"] == 1, summary
+    assert summary["typedefs"] == 9, summary
+    assert summary["fields"] == 25, summary
+    assert summary["methods"] == 4, summary
+    assert summary["parameters"] == 3, summary
     assert summary["field_defaults"] == 15, summary
 
 
@@ -384,13 +436,83 @@ def test_response_codes_ancora_errada_falha(tmp: Path) -> None:
 def test_dtos_com_wire_fallback(tmp: Path) -> None:
     result = dump.extract_dtos(dump.MetadataFile(build_full_metadata()))
     names = {dto["name"] for dto in result["dtos"]}
-    assert names == {"SyntheticDtoRequest"}, names
-    dto = result["dtos"][0]
+    # DTO solto + os dois contêineres (que possuem DTOs aninhados) + os
+    # responses aninhados, emitidos como entradas próprias com declaring_type
+    assert names == {"SyntheticDtoRequest", "SyntheticApi", "SyntheticOtherApi",
+                     "SyntheticUpgradeResponse"}, names
+    dto = next(d for d in result["dtos"] if d["name"] == "SyntheticDtoRequest")
     assert dto["assembly"] == "SyntheticAssembly.dll"
     assert dto["namespace"] == "Synthetic.Api"
+    assert dto["qualified_name"] == "Synthetic.Api.SyntheticDtoRequest"
     wires = {f["name"]: f["wire"] for f in dto["fields"]}
     assert wires == {"AccessToken": "access_token", "Xp": "xp", "APIVersion": "api_version"}, wires
     assert all(f["wire_source"] == "fallback_snakecase" for f in dto["fields"])
+    assert all(f["type"] == "unresolved" for f in dto["fields"]), "tipos nunca adivinhados"
+
+
+def test_dtos_pattern_acha_container_aninhado(tmp: Path) -> None:
+    """Critério da fase: filtro pelo tipo externo devolve o container com
+    métodos/parâmetros e o response aninhado — sem o homônimo da outra API."""
+    mf = dump.MetadataFile(build_full_metadata())
+    result = dump.extract_dtos(mf, "SyntheticApi")
+    qualificados = {d["qualified_name"] for d in result["dtos"]}
+    assert "Ubu.Synthetic.SyntheticApi" in qualificados, qualificados
+    assert "Ubu.Synthetic.SyntheticApi.SyntheticUpgradeResponse" in qualificados
+    # homônimo aninhado na outra API NÃO pode vazar para o filtro
+    assert "Ubu.Synthetic.SyntheticOtherApi.SyntheticUpgradeResponse" not in qualificados
+    assert "Ubu.Synthetic.SyntheticOtherApi" not in qualificados
+
+    api = next(d for d in result["dtos"] if d["name"] == "SyntheticApi")
+    assert api["declaring_type"] is None
+    assert [n["name"] for n in api["nested"]] == ["SyntheticUpgradeResponse"]
+    metodos = {m["name"]: m for m in api["methods"]}
+    assert set(metodos) == {"SyntheticUpgrade"}
+    assert [p["name"] for p in metodos["SyntheticUpgrade"]["parameters"]] == [
+        "syntheticGearId", "syntheticLevel"]
+    assert all(p["type"] == "unresolved" and p["type_source"] == "unresolved"
+               for m in api["methods"] for p in m["parameters"])
+    assert metodos["SyntheticUpgrade"]["return_type"] == "unresolved"
+
+    resposta = next(
+        d for d in result["dtos"]
+        if d["name"] == "SyntheticUpgradeResponse" and d["declaring_type"] == "SyntheticApi")
+    assert resposta["qualified_name"] == "Ubu.Synthetic.SyntheticApi.SyntheticUpgradeResponse"
+    assert [f["name"] for f in resposta["fields"]] == ["SyntheticResult"]
+    assert resposta["methods"] == []
+
+
+def test_dtos_pattern_por_homonimo_distingue_pelo_qualified(tmp: Path) -> None:
+    """Filtrar pelo nome do DTO devolve os dois, qualificados por container."""
+    result = dump.extract_dtos(dump.MetadataFile(build_full_metadata()), "SyntheticUpgradeResponse")
+    qualificados = sorted(d["qualified_name"] for d in result["dtos"])
+    assert qualificados == [
+        "Ubu.Synthetic.SyntheticApi.SyntheticUpgradeResponse",
+        "Ubu.Synthetic.SyntheticOtherApi.SyntheticUpgradeResponse",
+    ], qualificados
+
+
+def test_enums_qualificados(tmp: Path) -> None:
+    result = dump.extract_enums(dump.MetadataFile(build_full_metadata()), "GameApi")
+    nomes = {e["qualified_name"] for e in result["enums"]}
+    assert nomes == {"Ubu.GameApi.ResponseCode"}, nomes
+
+
+def test_rejeita_cadeia_de_nestedtypes_quebrada(tmp: Path) -> None:
+    try:
+        dump.MetadataFile(build_full_metadata(break_region="nested_chain_off"))
+    except dump.MetadataError as exc:
+        assert "encadeamento" in str(exc), exc
+    else:
+        raise AssertionError("deveria rejeitar nestedStart fora do encadeamento")
+
+
+def test_rejeita_paramstart_fora_de_cadeia(tmp: Path) -> None:
+    try:
+        dump.MetadataFile(build_full_metadata(break_region="param_start_off"))
+    except dump.MetadataError as exc:
+        assert "encadeamento" in str(exc), exc
+    else:
+        raise AssertionError("deveria rejeitar parameterStart fora da cadeia")
 
 
 def test_snake_case(tmp: Path) -> None:
@@ -448,7 +570,7 @@ def test_cli_all_gate_aprovado(tmp: Path) -> None:
     payload = __import__("json").loads(out_file.read_text(encoding="utf-8"))
     assert payload["sanity_checks"]["ok"] is True, payload["sanity_checks"]
     assert len(payload["routes"]) == dump.EXPECTED_ROUTE_COUNT
-    assert payload["validation"]["typedefs"] == 5
+    assert payload["validation"]["typedefs"] == 9
 
 
 def test_cli_all_gate_reprovado_sem_116_rotas(tmp: Path) -> None:
@@ -468,10 +590,14 @@ def main() -> int:
         test_builder_completo_passa_validacao,
         test_rejeita_regiao_fora_do_arquivo, test_rejeita_regioes_sobrepostas,
         test_rejeita_contagem_de_fields_quebrada, test_rejeita_soma_de_parametros_quebrada,
+        test_rejeita_cadeia_de_nestedtypes_quebrada, test_rejeita_paramstart_fora_de_cadeia,
         test_enums_resolvidos, test_valores_comprimidos_batem_com_o_real,
         test_read_compressed_uint_formas, test_default_negativo_decodifica,
         test_response_codes_ancoras_ok, test_response_codes_ancora_errada_falha,
-        test_dtos_com_wire_fallback, test_snake_case, test_wire_names_extraidos,
+        test_dtos_com_wire_fallback, test_dtos_pattern_acha_container_aninhado,
+        test_dtos_pattern_por_homonimo_distingue_pelo_qualified,
+        test_enums_qualificados,
+        test_snake_case, test_wire_names_extraidos,
         test_cli_routes_escreve_json, test_cli_all_gate_aprovado,
         test_cli_all_gate_reprovado_sem_116_rotas,
     )

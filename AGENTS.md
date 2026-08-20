@@ -171,8 +171,9 @@ de entrada mudar.
 - `java` no PATH desta máquina é **11**; apktool/uber-apk-signer precisam de **17+**:
   use `.tools/jre17/jdk-17.0.20+8-jre/bin/java.exe`.
 - Toolchain pinada: **Apktool 3.0.3** e **uber-apk-signer 1.3.0** (SHA-256 fixados em
-  `scripts/setup-patcher-tools.*`), **UnityPy 1.25.3** exata. Não "atualize para
-  resolver" — outra versão reserializa diferente e invalida os testes.
+  `scripts/revival_editor/toolchain.py`; download pelo Studio em Ferramentas →
+  Preparar ferramentas…), **UnityPy 1.25.3** exata. Não "atualize para
+  resolver" — outra versão resserializa diferente e invalida os testes.
 - O servidor implementa **57 caminhos `/game/*` distintos** (medido com
   `grep -o "game/[a-z0-9/-]*" server/src/*.js | sort -u` em 2026-08-17), contra as
   116 rotas do cliente. A diferença é o roadmap.

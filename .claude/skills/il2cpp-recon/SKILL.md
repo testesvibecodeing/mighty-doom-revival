@@ -94,8 +94,10 @@ de tipo, campo, método e namespace. Dela saem:
 Para **valores** de enum: os campos constantes vivem em `fieldDefaultValues`,
 apontando para `fieldAndParameterDefaultValueData`, onde inteiros estão em
 **compressed int** (mesmo esquema do `il2cpp` para `int32` variável). Para DTOs
-aninhados (`XApi/XResponse`), resolva pela tabela `nestedTypes` a partir do
-`typeDefinition` do tipo externo.
+aninhados (`XApi/XResponse`), o extrator resolve pela tabela `nestedTypes`
+(alcances encadeados por `nestedStart@48`) e emite `declaring_type` +
+`qualified_name` — homônimos como `XApi.UpgradeResponse` × `YApi.UpgradeResponse`
+ficam distinguíveis pelo nome qualificado.
 
 Para os nomes de wire (`[JsonProperty("...")]`), o argumento do atributo está no
 blob `attributeData`/`attributeDataRange`; o par (tipo do atributo → literal) sai
@@ -138,11 +140,21 @@ O servidor usa hoje `1000`, `2000`, `2101`, `2200` (envelope local em
 
 ## Script reutilizável
 
-`melhorias.md` prevê `scripts/dump_il2cpp_metadata.py` (stdlib pura, sem UnityPy)
-com `--routes`, `--enums`, `--dtos`, `--wire-names`. **Ele ainda não existe.** Se a
-tarefa precisar de extração repetível, crie-o nesse caminho, com teste em
-`tests/test_dump_il2cpp_metadata.py` usando um metadata sintético mínimo — não
-cole um dump congelado em documento.
+`scripts/dump_il2cpp_metadata.py` (stdlib pura, sem UnityPy) existe e tem teste
+em `scripts/test_dump_il2cpp_metadata.py` com metadata sintético v29 coerente —
+**use-o; não reimplemente offsets à mão**. Modos: `--routes`, `--enums`,
+`--dtos`, `--wire-names`, `--response-codes`, `--all`, com `--pattern`
+(substring case-insensitive no nome qualificado) para focar enums/DTOs.
+
+Fatos provados no 1.13.1 que o extrator valida em toda execução (closures):
+
+- `nestedTypes` encadeia por `nestedStart@48` do typedef na ordem da tabela
+  (0 divergências, fim = entradas) — é daí que sai `declaring_type`/`qualified_name`;
+- `parameterStart@12` do method: `parameterCount==0 → -1`, senão encadeia exato
+  até o fim da tabela de parâmetros;
+- `declaring@12`/`parent@16`/`byval@8` do typedef são índices na tabela NATIVA
+  `il2CppType` do `libil2cpp.so` — **ilegíveis só do metadata**; tipos C# saem
+  como `unresolved`, nunca adivinhados.
 
 Critério de aceite do extrator:
 
@@ -150,7 +162,16 @@ Critério de aceite do extrator:
 python scripts/dump_il2cpp_metadata.py --apk input/mighty-doom.apk --routes
 # esperado: 116 rotas
 # esperado: ResponseCode com Success=1000
+python scripts/dump_il2cpp_metadata.py --apk input/mighty-doom.apk --dtos --pattern GearApi
+# esperado: Ubu.GameApi.Methods.GearApi com métodos/parâmetros reais
+# (Upgrade(gearUid), MultiUpgrade(gearUid, levelsToUpgrade), Fuse(inputUids),
+#  Dismantle(gearUid), ApplyCosmetic(gearUid, cosmeticId)) e os responses
+# aninhados — sem misturar UpgradeResponse de outra *Api.
 ```
+
+Limites honestos: o binding rota→método não é demonstrável só do metadata (o
+return type é índice il2CppType nativo), e os nomes de wire seguem
+`fallback_snakecase` até existir o pareamento `attributeDataRange`×field.
 
 ## Comparar com o que o servidor implementa
 

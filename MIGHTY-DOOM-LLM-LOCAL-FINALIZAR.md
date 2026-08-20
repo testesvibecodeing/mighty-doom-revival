@@ -1,5 +1,13 @@
 # MISSÃO FINAL — Mighty DOOM Revival
 
+> **⚠️ OBSOLETO (2026-08-19) — prompt histórico; não execute.** Este prompt
+> manda baixar o APK oficial (proibido: use somente `input/mighty-doom.apk`
+> local), usar Koa (o runtime é `node:http` builtin + `node:sqlite`), procurar
+> apenas `slayersclub.bethesda.net` (o host de gameplay é
+> `international.gear.bethesda.net`, 31 bytes) e ressuscitar wrappers
+> aposentados. A missão vigente é
+> `docs/PROMPT-GLM-5.1-CORRIGIR-FRAMEWORK-REAL.md`.
+
 ## Objetivo principal
 
 Você está trabalhando no repositório:

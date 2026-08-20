@@ -99,7 +99,8 @@ Seções:
 4. **Manipulação de APK — completa.** Estrutura real do APK (202 entradas
    `assets/bin`, `assets/aa/` com bundle de 494 MB, `libil2cpp.so` de 68 MB),
    os três caminhos de patch (metadata direto com padding de userinfo /
-   bundle-aware UnityPy / `zero_catalog_crc`), limite de 24 bytes de hostname,
+   bundle-aware UnityPy / `zero_catalog_crc`), limite de hostname ditado pelo
+   precheck (`check_patch_length.py`; host de gameplay medido: 31 bytes),
    assinatura, injeção de loading screen, e o fluxo de rebuild sem `apktool`.
 5. **Recon IL2CPP**: como o `global-metadata.dat` v29 é lido, com o script novo.
 6. **As 116 rotas** em tabela, com coluna "implementado no Revival" (comparação
@@ -122,7 +123,8 @@ Seções:
 ### 2. `AGENTS.md` (raiz)
 
 Contrato curto para qualquer agente: regras inegociáveis (nunca commitar APK/assets,
-nunca aumentar hostname além de 24 bytes, sempre `zero_catalog_crc` após alterar
+nunca aumentar hostname além do orçamento do precheck (31 bytes no build
+   atual), sempre `zero_catalog_crc` após alterar
 bundle, sempre rodar `verify_patched_apk.py`), mapa de skills, e ponteiros para o
 `.md` grande.
 

@@ -100,8 +100,10 @@ class TestResolveJava(unittest.TestCase):
         self.assertFalse(status.ok)
         self.assertIn("Java 11", status.detail)
         self.assertIn("17", status.detail)
-        # A instrução tem que dizer o que fazer, não só que falhou.
-        self.assertIn("setup-patcher-tools", status.detail)
+        # A instrução tem que dizer o que fazer, não só que falhou — e não
+        # pode apontar script aposentado (scripts/setup-patcher-tools.*).
+        self.assertIn("REVIVAL_JAVA", status.detail)
+        self.assertNotIn("setup-patcher-tools", status.detail)
 
     def test_explicito_ganha_do_embarcado(self) -> None:
         outro = Path(self._tmp.name) / "meu-jdk"
@@ -167,7 +169,7 @@ class TestJarPinning(unittest.TestCase):
     def test_jar_ausente_orienta_o_setup(self) -> None:
         status = tc._check_jar("uber-apk-signer", self.dir / "sumido.jar", "0" * 64, "1.3.0")
         self.assertFalse(status.ok)
-        self.assertIn("setup-patcher-tools", status.detail)
+        self.assertIn("Preparar ferramentas", status.detail)
 
     def test_sha256_file_bate_com_valor_conhecido(self) -> None:
         vazio = self.dir / "vazio.bin"
@@ -223,6 +225,25 @@ class TestChecagensDeAmbiente(unittest.TestCase):
         self.assertFalse(status.ok)
         self.assertFalse(status.required)
         self.assertIn("22.5.0", status.detail)
+
+    def test_node_nao_lts_nao_bloqueia_mas_recomenda_lts(self) -> None:
+        """Node 25 (linha não-LTS) funciona; o gate não pode travar por
+        palpite, mas deve recomendar o 24 LTS (npm 12 x 25.3.0 avisa)."""
+        with mock.patch.object(tc.shutil, "which", lambda _: "/usr/bin/node"), \
+             mock.patch.object(tc, "_run", lambda cmd, timeout=20.0: (0, "v25.3.0\n")):
+            status = tc.check_node()
+        self.assertTrue(status.ok)
+        self.assertFalse(status.required)
+        self.assertIn("não-LTS", status.detail)
+        self.assertIn("24 LTS", status.detail)
+
+    def test_node_lts_par_fica_limpo(self) -> None:
+        with mock.patch.object(tc.shutil, "which", lambda _: "/usr/bin/node"), \
+             mock.patch.object(tc, "_run", lambda cmd, timeout=20.0: (0, "v24.15.0\n")):
+            status = tc.check_node()
+        self.assertTrue(status.ok)
+        self.assertIn("mínimo 22.5.0", status.detail)
+        self.assertNotIn("não-LTS", status.detail)
 
 
 class TestRelatorioDaToolchain(unittest.TestCase):

@@ -20,7 +20,14 @@ probe chain registrada na sessão) e validado por fechamentos exatos:
               interfacesStart@52 vtableStart@56 ifoffStart@60
               u16 method@64 property@66 field@68 event@70 nested@72
               vtable@74 interfaces@76 ifoff@78 | bitfield u32@80 token@84
-  methods     32 bytes: nameIndex@0 ... parameterStart@20 ... u16@30
+              declaring@12/parent@16/byval@8 são índices da tabela NATIVA
+              il2CppType (inúteis sem o libil2cpp.so) — o nesting legível
+              vem da região nestedTypes via nestedStart@48, provado por
+              encadeamento exato no metadata real (0 divergências, fim
+              4.669 = entradas); parameterStart@12 idem (métodos sem
+              parâmetros carregam -1; cadeia fecha em 93.356).
+  methods     32 bytes: nameIndex@0 ... token@20 ... parameterStart@12
+              ... parameterCount u16@30
   fields      12 bytes: nameIndex@0 typeIndex@4 token@8
   fdv         12 bytes: fieldIndex@0 typeIndex@4 dataIndex@8
   images      40 bytes: nameIndex@0 assemblyIndex@4 typeStart@8 typeCount@12
@@ -117,13 +124,14 @@ TD_FIELD_START = 32
 TD_METHOD_START = 36
 TD_METHOD_COUNT = 64
 TD_FIELD_COUNT = 68
+TD_NESTED_START = 48
 TD_NESTED_COUNT = 72
 TD_VTABLE_COUNT = 74
 TD_INTERFACES_COUNT = 76
 TD_TOKEN = 84
 
 METHOD_SIZE = 32
-METHOD_PARAM_START = 20
+METHOD_PARAM_START = 12
 METHOD_PARAM_COUNT = 30  # u16
 
 FIELD_SIZE = 12
@@ -254,6 +262,9 @@ class MetadataFile:
         self._validate_regions()
         self.typedefs: list[TypeDefRow] = []
         self._fdv_by_field: dict[int, int] = {}
+        self._parent_of: dict[int, int] = {}
+        self._children_of: dict[int, list[int]] = {}
+        self._qualified_cache: dict[int, str] = {}
         self._parse_content()
         self._validate_closures()
 
@@ -327,6 +338,22 @@ class MetadataFile:
         self.n_methods = self.regions["methods"][1] // METHOD_SIZE
         self.n_parameters = self.regions["parameters"][1] // 12
 
+        # nesting: a região nestedTypes encadeia por ordem de typedef (como
+        # images.typeStart) — declaring@12 aponta para a tabela NATIVA
+        # il2CppType e não é legível sem o libil2cpp.so.
+        nt_offset = self.regions["nestedTypes"][0]
+        for td in rows:
+            base = td_offset + td.index * TYPEDEF_SIZE
+            nested_start, = struct.unpack_from("<i", data, base + TD_NESTED_START)
+            nested_count, = struct.unpack_from("<H", data, base + TD_NESTED_COUNT)
+            if nested_count == 0:
+                continue
+            for j in range(nested_count):
+                child, = struct.unpack_from(
+                    "<i", data, nt_offset + (nested_start + j) * 4)
+                self._parent_of[child] = td.index
+                self._children_of.setdefault(td.index, []).append(child)
+
     def _validate_closures(self) -> None:
         """Fechamentos provados no metadata real — qualquer divergência aborta."""
         data = self.data
@@ -351,13 +378,60 @@ class MetadataFile:
                 )
 
         m_offset, m_size = self.regions["methods"]
-        sum_params = 0
-        for i in range(m_size // METHOD_SIZE):
-            count, = struct.unpack_from("<H", data, m_offset + i * METHOD_SIZE + METHOD_PARAM_COUNT)
-            sum_params += count
+        sum_params = sum(
+            struct.unpack_from("<H", data, m_offset + i * METHOD_SIZE + METHOD_PARAM_COUNT)[0]
+            for i in range(m_size // METHOD_SIZE)
+        )
         if sum_params != self.n_parameters:
             raise MetadataError(
                 f"soma de parameterCount {sum_params} != contagem da tabela {self.n_parameters}"
+            )
+        expected_param_start = 0
+        for i in range(m_size // METHOD_SIZE):
+            base = m_offset + i * METHOD_SIZE
+            count, = struct.unpack_from("<H", data, base + METHOD_PARAM_COUNT)
+            pstart, = struct.unpack_from("<i", data, base + METHOD_PARAM_START)
+            if count == 0:
+                if pstart != -1:
+                    raise MetadataError(
+                        f"method[{i}] sem parâmetros com parameterStart {pstart} != -1"
+                    )
+                continue
+            if pstart != expected_param_start:
+                raise MetadataError(
+                    f"parameterStart de method[{i}] {pstart} fora do encadeamento "
+                    f"(esperado {expected_param_start})"
+                )
+            expected_param_start += count
+        if expected_param_start != self.n_parameters:
+            raise MetadataError(
+                f"fim da cadeia de parameterStart {expected_param_start} != {self.n_parameters}"
+            )
+
+        # Encadeamento da região nestedTypes (prova do offset nestedStart@48):
+        # na ordem dos typedefs, os alcances somam exatamente a tabela.
+        nt_offset, nt_size = self.regions["nestedTypes"]
+        nt_entries = nt_size // 4
+        expected_nested_start = 0
+        for row in self.typedefs:
+            base = td_offset + row.index * TYPEDEF_SIZE
+            nested_start, = struct.unpack_from("<i", data, base + TD_NESTED_START)
+            nested_count, = struct.unpack_from("<H", data, base + TD_NESTED_COUNT)
+            if nested_count == 0:
+                continue
+            if nested_start != expected_nested_start:
+                raise MetadataError(
+                    f"nestedStart do typedef {row.index} {nested_start} fora do "
+                    f"encadeamento (esperado {expected_nested_start})"
+                )
+            if nested_start + nested_count > nt_entries:
+                raise MetadataError(
+                    f"alcance nestedTypes do typedef {row.index} ultrapassa a tabela"
+                )
+            expected_nested_start += nested_count
+        if expected_nested_start != nt_entries:
+            raise MetadataError(
+                f"fim da cadeia de nestedTypes {expected_nested_start} != entradas {nt_entries}"
             )
 
         for name, total in (
@@ -429,6 +503,70 @@ class MetadataFile:
                 return self.string(name_index)
         return "?"
 
+    def parent_of(self, td: TypeDefRow) -> TypeDefRow | None:
+        """Tipo externo (nested) lido da região nestedTypes — ou None."""
+        pai = self._parent_of.get(td.index)
+        return self.typedefs[pai] if pai is not None else None
+
+    def children_of(self, td: TypeDefRow) -> list[TypeDefRow]:
+        return [self.typedefs[i] for i in self._children_of.get(td.index, [])]
+
+    def qualified_name(self, td: TypeDefRow) -> str:
+        """Nome completo com cadeia de declaring types (namespace só na raiz).
+
+        Derivado da região nestedTypes; guardião de ciclo por segurança (a
+        prova de encadeamento já impõe árvore).
+        """
+        if td.index in self._qualified_cache:
+            return self._qualified_cache[td.index]
+        partes: list[str] = []
+        atual = td
+        vistos: set[int] = set()
+        while True:
+            if atual.index in vistos:
+                raise MetadataError(f"ciclo de declaring no typedef {atual.index}")
+            vistos.add(atual.index)
+            partes.append(atual.name)
+            pai = self._parent_of.get(atual.index)
+            if pai is None:
+                if atual.namespace:
+                    partes.append(atual.namespace)
+                break
+            atual = self.typedefs[pai]
+        qualificado = ".".join(reversed(partes))
+        self._qualified_cache[td.index] = qualificado
+        return qualificado
+
+    def methods_of(self, td: TypeDefRow) -> list[dict]:
+        """Métodos do tipo com nomes de parâmetros (nomes: metadata).
+
+        Tipos C# (retorno e parâmetros) não são resolvíveis sem a tabela
+        il2CppType do libil2cpp.so — saem como `unresolved`, nunca adivinhados.
+        """
+        m_offset = self.regions["methods"][0]
+        p_offset = self.regions["parameters"][0]
+        saida: list[dict] = []
+        for mi in range(td.method_start, td.method_start + td.method_count):
+            base = m_offset + mi * METHOD_SIZE
+            name_index, = struct.unpack_from("<i", self.data, base)
+            pstart, = struct.unpack_from("<i", self.data, base + METHOD_PARAM_START)
+            pcount, = struct.unpack_from("<H", self.data, base + METHOD_PARAM_COUNT)
+            parametros = []
+            for pi in range(pstart, pstart + pcount):
+                pname, = struct.unpack_from("<i", self.data, p_offset + pi * 12)
+                parametros.append({
+                    "name": self.string(pname),
+                    "type": "unresolved",
+                    "type_source": "unresolved",
+                })
+            saida.append({
+                "name": self.string(name_index),
+                "parameters": parametros,
+                "return_type": "unresolved",
+                "return_type_source": "unresolved",
+            })
+        return saida
+
     def iter_enums(self):
         """Gera (typedef, [(field_name, valor), ...]) para enums estruturais."""
         for td in self.typedefs:
@@ -481,21 +619,24 @@ def extract_routes(source: Path | str) -> dict:
     return routes_payload(MetadataFile.from_source(source))
 
 
-def _matches(td: TypeDefRow, pattern: str | None) -> bool:
+def _matches(mf: MetadataFile, td: TypeDefRow, pattern: str | None) -> bool:
+    """Casa o padrão contra o qualified_name — tipos aninhados são achados
+    pelo tipo externo (ex.: --pattern GearApi acha GearApi.UpgradeResponse)."""
     if not pattern:
         return True
-    return pattern.lower() in f"{td.namespace}.{td.name}".lower()
+    return pattern.lower() in mf.qualified_name(td).lower()
 
 
 def extract_enums(mf: MetadataFile, pattern: str | None = None) -> dict:
     enums = []
     for td, members in mf.iter_enums():
-        if not _matches(td, pattern):
+        if not _matches(mf, td, pattern):
             continue
         enums.append({
             "typedef": td.index,
             "namespace": td.namespace,
             "name": td.name,
+            "qualified_name": mf.qualified_name(td),
             "token": td.token,
             "fields": [{"name": name, "value": value} for name, value in members],
         })
@@ -524,11 +665,24 @@ def extract_response_codes(mf: MetadataFile) -> dict:
 
 
 def extract_dtos(mf: MetadataFile, pattern: str | None = None) -> dict:
+    """DTOs e contêineres de DTOs com contratos focáveis por --pattern.
+
+    Um tipo entra na lista quando é um DTO (sufixo *Request/*Response/*Dto/
+    *Data com fields) OU quando possui tipos aninhados que são DTOs — é o que
+    faz `--pattern GearApi` devolver o tipo externo (com métodos e parâmetros)
+    junto dos responses aninhados dele. O qualified_name diferencia homônimos:
+    GearApi.UpgradeResponse e ArmoryApi.UpgradeResponse não se misturam.
+    """
     dtos = []
     for td in mf.typedefs:
-        if td.field_count == 0 or not td.name.endswith(DTO_SUFFIXES):
+        if not _matches(mf, td, pattern):
             continue
-        if not _matches(td, pattern):
+        is_dto = td.field_count > 0 and td.name.endswith(DTO_SUFFIXES)
+        nested_dtos = [
+            filho for filho in mf.children_of(td)
+            if filho.field_count > 0 and filho.name.endswith(DTO_SUFFIXES)
+        ]
+        if not (is_dto or nested_dtos):
             continue
         fields = []
         for fi in range(td.field_start, td.field_start + td.field_count):
@@ -538,15 +692,25 @@ def extract_dtos(mf: MetadataFile, pattern: str | None = None) -> dict:
                 "token": mf.field_token(fi),
                 "wire": snake_case(name),
                 "wire_source": "fallback_snakecase",
+                "type": "unresolved",
+                "type_source": "unresolved",
             })
+        pai = mf.parent_of(td)
         dtos.append({
             "typedef": td.index,
             "namespace": td.namespace,
             "name": td.name,
+            "declaring_type": pai.name if pai else None,
+            "qualified_name": mf.qualified_name(td),
             "assembly": mf.assembly_of_typedef(td.index),
             "token": td.token,
             "field_count": td.field_count,
             "fields": fields,
+            "methods": mf.methods_of(td),
+            "nested": [
+                {"name": filho.name, "qualified_name": mf.qualified_name(filho)}
+                for filho in nested_dtos
+            ],
         })
     return {
         "version": EXPECTED_VERSION,
@@ -555,6 +719,15 @@ def extract_dtos(mf: MetadataFile, pattern: str | None = None) -> dict:
             "wire = fallback SnakeCaseNamingStrategy; overrides de JsonProperty "
             "exigem pareamento attributeDataRange×field ainda A VERIFICAR"
         ),
+        "provenance": {
+            "name": "metadata",
+            "wire": "fallback_snakecase",
+            "type": "unresolved",
+            "note": (
+                "tipos C# exigem a tabela il2CppType do libil2cpp.so; "
+                "binding rota->método não é demonstrável só do metadata"
+            ),
+        },
         "dtos": dtos,
     }
 

@@ -246,8 +246,8 @@ def resolve_java(explicit: str | Path | None = None) -> ToolStatus:
         instrucao = f"Use o JRE embarcado: {BUNDLED_JAVA}"
     else:
         instrucao = (
-            f"Baixe o JRE 17 com scripts/setup-patcher-tools.* ou aponte "
-            f"{JAVA_ENV_VAR} para um Java {MIN_JAVA_MAJOR}+."
+            f"Instale um Java {MIN_JAVA_MAJOR}+ (ou coloque o JRE em "
+            f"{BUNDLED_JAVA.parent.parent}) e/ou aponte {JAVA_ENV_VAR}."
         )
     return ToolStatus(
         name="java",
@@ -270,7 +270,7 @@ def _check_jar(nome: str, jar: Path, esperado: str, versao: str) -> ToolStatus:
         return ToolStatus(
             name=nome,
             ok=False,
-            detail=f"{jar} ausente. Rode scripts/setup-patcher-tools.* para baixar {nome} {versao}.",
+            detail=f"{jar} ausente. Use o Revival Studio em Ferramentas → Preparar ferramentas… para baixar {nome} {versao}.",
         )
     real = sha256_file(jar)
     if real != esperado:
@@ -282,7 +282,7 @@ def _check_jar(nome: str, jar: Path, esperado: str, versao: str) -> ToolStatus:
                 f"SHA-256 não confere — build BLOQUEADO.\n"
                 f"  esperado: {esperado}\n"
                 f"  no disco: {real}\n"
-                f"Apague o arquivo e rode scripts/setup-patcher-tools.* de novo. "
+                f"Apague o arquivo e prepare as ferramentas de novo "
                 f"Não substitua por outra versão."
             ),
         )
@@ -392,6 +392,18 @@ def check_node() -> ToolStatus:
         return ToolStatus(
             name="node", ok=False, required=False, path=caminho, version=versao,
             detail="o servidor usa node:sqlite, que exige Node >= 22.5.0 (o CI usa 24 LTS).",
+        )
+    if major % 2 == 1:
+        # Linha não-LTS (25, 23, …): funciona — node:sqlite responde e os
+        # testes passam (validado em 25.3.0) — mas o npm que acompanha pode
+        # declarar não suportá-la (visto: npm 12.0.1 x Node 25.3.0). Não
+        # bloqueamos por palpite; recomendamos o LTS para o gate reproduzível.
+        return ToolStatus(
+            name="node", ok=True, required=False, path=caminho, version=versao,
+            detail=f"Node {major} é linha não-LTS: atende ao mínimo 22.5.0 e o "
+                   "node:sqlite funciona, mas prefira Node 24 LTS para o gate "
+                   "reproduzível (o npm da linha não-LTS pode se declarar "
+                   "incompatível).",
         )
     return ToolStatus(name="node", ok=True, required=False, path=caminho, version=versao,
                       detail="atende ao mínimo 22.5.0 do servidor")

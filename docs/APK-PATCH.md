@@ -2,7 +2,7 @@
 
 O objetivo do patcher é receber **uma cópia local do APK do próprio usuário** e gerar uma cópia assinada para laboratório apontando para um backend self-hosted.
 
-Os scripts existem em duas versões equivalentes: `.bat` para Windows e `.sh` para Linux/Mac. Os exemplos abaixo mostram a versão Windows; basta trocar `scripts\nome.bat` por `./scripts/nome.sh` no Linux/Mac.
+A porta de entrada é o **Revival Studio** (`python scripts/revival_studio.py`, ou os launchers `scripts/revival-studio.bat`/`.sh`), que orquestra `scripts/patch_apk.py` e o pipeline bundle-aware. Os antigos wrappers encaminhadores de `scripts/` foram **aposentados em 2026-08-18** — além do launcher do Studio, só `install.sh`/`uninstall.sh` (deploy do servidor) permanecem; `tests/revival_editor/test_wrappers.py` guarda essa regra.
 
 O APK oficial e seus assets não fazem parte deste repositório.
 
@@ -28,11 +28,11 @@ Instale e deixe no `PATH`:
   (Java 11 no `PATH` é rejeitado com instrução; veja `scripts/resolve_java.py`)
 - ADB, recomendado para instalação/testes
 
-O `apktool.jar` e o `uber-apk-signer.jar` são baixados automaticamente para
-`.tools\` pelo `scripts/setup-patcher-tools.bat`/`.sh` — não é preciso instalar
-apktool/zipalign/apksigner do Android SDK; o signer cuida de alinhar e assinar.
-No Revival Studio, o mesmo preparo está em **Ferramentas → Preparar
-ferramentas…** (com confirmação antes do download).
+O `apktool.jar` e o `uber-apk-signer.jar` são baixados para `.tools\` pelo
+serviço **Ferramentas → Preparar ferramentas…** do Revival Studio
+(`scripts/revival_editor/toolchain.py::prepare_tools`, SHA-256 pinado) — não é
+preciso instalar apktool/zipalign/apksigner do Android SDK; o signer cuida de
+alinhar e assinar.
 
 Confirme no Prompt/PowerShell:
 
@@ -112,34 +112,34 @@ Depois de `apktool d`, o patcher:
 
 ## Como o patch lida com o tamanho (e por que hostname maior é bloqueado)
 
-> **Correção (CONFIRMADO 2026-08-17).** Esta seção descrevia o host ancilar
-> `slayersclub.bethesda.net` (24 bytes) como se fosse o orçamento do build. Não é.
-> O host da **API de gameplay** do 1.13.1 é `international.gear.bethesda.net` =
-> **31 bytes**, e é ele que `patch_apk.py` patcheia quando presente. Quem decide o
-> orçamento é o precheck, não esta tabela:
->
-> ```bash
-> python scripts/check_patch_length.py input/mighty-doom.apk <host>
-> # medido nesta base: host de 31 bytes -> exit 0; 32 bytes -> exit 4
-> ```
->
-> Leia "24" como "31" nos parágrafos abaixo; a mecânica (padding de userinfo,
-> bloqueio do host maior) continua exata.
+Quem decide o orçamento é o precheck, não uma tabela fixa neste documento:
 
-No APK real 1.13.1, o endpoint não está em um Addressable/bundle — está
-embutido duas vezes no `global-metadata.dat` do IL2CPP como a URL completa
-`https://slayersclub.bethesda.net/` (33 bytes): uma na tabela de string
-literals (`stringLiteralData`) e outra no blob de valores default de
-campo/parâmetro (`fieldAndParameterDefaultValueData`). Strings dentro desse
-formato não devem ser aumentadas por uma simples busca-e-substituição: isso
-exigiria realocar as duas seções e deslocar os offsets de todas as ~20 seções
-de metadata que vêm depois no arquivo, e um erro aí quebra o boot do IL2CPP
-(o app nem abre).
+```bash
+python scripts/check_patch_length.py input/mighty-doom.apk <host>
+# medido nesta base 1.13.1: host de 31 bytes -> exit 0; 32 bytes -> exit 4
+```
+
+O host da **API de gameplay** medido no 1.13.1 é
+`international.gear.bethesda.net` = **31 bytes** — é o orçamento do build.
+Onde cada host vive:
+
+- **`international.gear.bethesda.net`** (gameplay): dentro de bundles
+  Addressables comprimidos em LZ4, como campo `baseUrl` do objeto
+  `ProdGameServer` (ver "Patch bundle-aware" abaixo);
+- **`slayersclub.bethesda.net`** (ancilar): embutido duas vezes no
+  `global-metadata.dat` como a URL completa `https://slayersclub.bethesda.net/`
+  (33 bytes) — uma na tabela de string literals (`stringLiteralData`) e outra
+  no blob de valores default (`fieldAndParameterDefaultValueData`).
+
+Strings nessas estruturas não devem ser aumentadas por uma simples
+busca-e-substituição: isso exigiria realocar seções e deslocar os offsets de
+todas as ~20 seções de metadata que vêm depois no arquivo, e um erro aí quebra
+o boot do IL2CPP (o app nem abre).
 
 O patcher aceita qualquer hostname com **até o comprimento do oficial**
-(24 bytes no build atual):
+(31 bytes para o host de gameplay no build atual):
 
-- **mesmo comprimento** (24 bytes): troca direta byte a byte;
+- **mesmo comprimento**: troca direta byte a byte;
 - **mais curto** (ex.: `doom.sualoja.app.br`, 19 bytes): o patcher troca a
   URL inteira `https://<host>/` por outra **de mesmo comprimento total**,
   preenchendo a diferença com *userinfo* de URI:
@@ -148,8 +148,8 @@ O patcher aceita qualquer hostname com **até o comprimento do oficial**
   arquivo é deslocado. Validado contra o `global-metadata.dat` real: as duas
   ocorrências trocadas, tamanho idêntico, zero bytes do host oficial;
   faltando 1 byte só, usa o ponto final do FQDN (`<host>.`), também válido;
-- **mais longo** (ex.: `doom.debruinsistemas.com.br`, 27 bytes): **bloqueado
-  de propósito** (exit 4), preservando o APK de trabalho.
+- **mais longo**: **bloqueado de propósito** (exit 4), preservando o APK de
+  trabalho.
 
 Hosts conhecidos atualmente:
 

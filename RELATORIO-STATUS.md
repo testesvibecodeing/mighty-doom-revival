@@ -2,6 +2,12 @@
 
 Data: 2026-08-16 · main @ `d855299` · VPS sincronizada e ativa
 
+> **Snapshot histórico de 2026-08-16.** Fatos daqui podem estar superados
+> (ex.: orçamento de hostname, que hoje é ditado pelo
+> `check_patch_length.py` — host de gameplay de 31 bytes). Documentos
+> autoritativos: `docs/APK-PATCH.md`, `docs/SERVER.md`,
+> `docs/ENDPOINT-MATRIX.md`.
+
 ## Resumo em uma linha
 
 O caminho completo **APK patcheado → servidor Revival → jogo jogando** está
