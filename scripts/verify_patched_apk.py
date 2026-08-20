@@ -201,8 +201,12 @@ def scan_insecure_lab_markers(apk: Path, target_host: str) -> dict[str, object]:
     """
     alvo = re.escape(target_host.encode("ascii"))
     http_re = re.compile(rb"http://(?:[A-Za-z0-9._~%!$&'()*+,;=:-]*@)?" + alvo)
+    # `None` = NÃO MEDIDO. Nunca `False` por omissão: antes este campo saía
+    # `false` sem que ninguém tivesse decodificado o AXML, o que fazia o
+    # relatório afirmar mais do que sabia.
     achados = {"insecure": False, "reason": "", "http_base_urls": 0,
-               "marker_entries": [], "cleartext_permitted": False}
+               "marker_entries": [], "cleartext_permitted": None,
+               "cleartext_source": "não medido", "cleartext_domains": []}
     with zipfile.ZipFile(apk, "r") as archive:
         for name in archive.namelist():
             if not (name == "assets/bin/Data/Managed/Metadata/global-metadata.dat"
@@ -219,6 +223,9 @@ def scan_insecure_lab_markers(apk: Path, target_host: str) -> dict[str, object]:
                 achados["http_base_urls"] += hits
             if LAB_MARKER.encode("ascii") in data:
                 achados["marker_entries"].append(name)
+    # Cleartext DECODIFICADO do AXML, não presumido.
+    achados.update(read_cleartext_policy(apk))
+
     if achados["http_base_urls"]:
         achados["insecure"] = True
         achados["reason"] = (f"{achados['http_base_urls']} base URL(s) em http:// "
@@ -226,7 +233,74 @@ def scan_insecure_lab_markers(apk: Path, target_host: str) -> dict[str, object]:
     elif achados["marker_entries"]:
         achados["insecure"] = True
         achados["reason"] = f"marcador {LAB_MARKER} em {achados['marker_entries'][0]}"
+    elif achados["cleartext_permitted"] is True:
+        achados["insecure"] = True
+        escopo = (f"{len(achados['cleartext_domains'])} domínio(s)"
+                  if achados["cleartext_domains"] else "escopo sem domínio nomeado")
+        achados["reason"] = (f"cleartextTrafficPermitted=true ({escopo}) em "
+                             f"{achados['cleartext_source']}")
     return achados
+
+
+def read_cleartext_policy(apk: Path) -> dict[str, object]:
+    """Decodifica o AXML e devolve a política de cleartext REALMENTE declarada.
+
+    Três desfechos, todos honestos:
+      - `True`  : algum `cleartextTrafficPermitted="true"` no config ou no
+                  `android:usesCleartextTraffic` do Manifest;
+      - `False` : o atributo existe e é `false` em toda ocorrência;
+      - `None`  : não deu para medir (arquivo ausente, AXML ilegível). O
+                  chamador trata como inconclusivo — nunca como `false`.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from revival_editor.axml import AxmlError, parse_axml_elements  # noqa: PLC0415
+    except ImportError as exc:
+        return {"cleartext_permitted": None,
+                "cleartext_source": f"parser AXML indisponível: {exc}",
+                "cleartext_domains": []}
+
+    permitido: bool | None = None
+    dominios: list[str] = []
+    origens: list[str] = []
+    with zipfile.ZipFile(apk, "r") as archive:
+        alvos = [n for n in archive.namelist()
+                 if n == "AndroidManifest.xml" or (n.startswith("res/xml/") and n.endswith(".xml"))]
+        for nome in alvos:
+            try:
+                elementos = parse_axml_elements(archive.read(nome))
+            except (AxmlError, Exception):  # noqa: BLE001 - qualquer falha é "não medido"
+                if nome == "AndroidManifest.xml":
+                    origens.append(f"{nome}: AXML ilegível")
+                continue
+            # No AXML o `<domain>` é FILHO do `<domain-config>`, então aparece
+            # DEPOIS do atributo na ordem do documento. Por isso o escopo aberto
+            # por um domain-config permissivo só fecha no próximo domain-config.
+            escopo_permissivo = False
+            for elemento, atributos in elementos:
+                if elemento in ("domain-config", "base-config", "application"):
+                    escopo_permissivo = False
+                valor = (atributos.get("cleartextTrafficPermitted")
+                         or atributos.get("usesCleartextTraffic"))
+                if valor is not None:
+                    origens.append(f"{nome}:{elemento}")
+                    if str(valor).lower() == "true":
+                        permitido = True
+                        escopo_permissivo = True
+                        if elemento in ("base-config", "application"):
+                            dominios.append("(todo o app)")
+                    elif permitido is None:
+                        permitido = False
+                elif elemento == "domain" and escopo_permissivo:
+                    # O NOME do domínio é o texto do elemento, não um atributo,
+                    # e este parser lê só atributos. Contamos o escopo em vez de
+                    # reportar um valor errado (`includeSubdomains` não é o host).
+                    dominios.append("(domínio no escopo permissivo)")
+    return {
+        "cleartext_permitted": permitido,
+        "cleartext_source": ", ".join(origens) or "nenhum atributo encontrado",
+        "cleartext_domains": sorted(set(dominios)),
+    }
 
 
 def main() -> int:

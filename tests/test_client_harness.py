@@ -239,6 +239,59 @@ class TestSignatures(unittest.TestCase):
                          "cast String->String[] não pode terminar em flow_validated")
 
 
+class TestIdleRewardsTimer(unittest.TestCase):
+    """Regressão do falso positivo medido em 2026-08-20.
+
+    Dois E2E terminaram em `flow_validated` com esta exceção no logcat
+    (`e2e-final/logcat-…:1263`, `e2e-strict/logcat-…:1339`). O timer de idle
+    rewards morre por completo, então é falha de fluxo — não ruído.
+    """
+
+    # Trecho real do logcat, com a stack que identifica a origem.
+    LOGCAT = (
+        "08-20 21:04:37.767 12743 12787 E Unity   : ArgumentException: Invalid value "
+        "'1787259906000' for parameter 'interval'.\n"
+        "08-20 21:04:37.767 12743 12787 E Unity   :   at System.Timers.Timer..ctor "
+        "(System.Double interval) [0x00000]\n"
+        "08-20 21:04:37.767 12743 12787 E Unity   :   at "
+        "Ubu.IdleRewards.IdleRewardsController.UpdateNextClaimEpoch () [0x00000]\n"
+        "08-20 21:04:37.767 12743 12787 E Unity   :   at "
+        "Ubu.IdleRewards.IdleRewardsController.SetIdleRewardState (…IdleRewardState) [0x00000]\n"
+    )
+
+    def test_intervalo_invalido_e_fatal(self):
+        fatais = [f for f in hch.scan_logcat(self.LOGCAT) if f["severity"] == "fatal"]
+        self.assertTrue(fatais, "a exceção do Timer tem que ser reconhecida")
+        self.assertIn("next_claim", " ".join(f["description"] for f in fatais))
+
+    def test_corta_a_janela_cedo(self):
+        self.assertTrue(hch.early_stop_hits(self.LOGCAT),
+                        "execução já condenada não deve queimar a janela inteira")
+
+    def test_e2e_com_a_excecao_nao_pode_ser_flow_validated(self):
+        verdict, validado = hch.decide_verdict(
+            has_fatal=bool([f for f in hch.scan_logcat(self.LOGCAT) if f["severity"] == "fatal"]),
+            capture_error=False, missing_milestones=[], required_missing=[],
+            validated_fallbacks=[], capture_requested=True, flow="menu", diagnostic=False)
+        self.assertEqual(verdict, "failed")
+        self.assertFalse(validado)
+
+    def test_o_valor_recusado_e_next_claim_vezes_mil(self):
+        # É a prova do contrato: o cliente faz `new Timer(next_claim * 1000)`,
+        # ou seja, next_claim é DURAÇÃO em segundos, não epoch absoluto.
+        import re
+        valor = int(re.search(r"Invalid value '(\d+)'", self.LOGCAT).group(1))
+        self.assertEqual(valor % 1000, 0)
+        self.assertGreater(valor // 1000, 1_700_000_000,
+                           "o valor recusado é um epoch em segundos multiplicado por 1000")
+        limite_timer_ms = 2 ** 31 - 1     # int.MaxValue: teto do System.Timers.Timer
+        self.assertGreater(valor, limite_timer_ms,
+                           "epoch em ms estoura o teto do Timer — daí o ArgumentException")
+
+    def test_logcat_sem_a_excecao_nao_dispara(self):
+        self.assertEqual(hch.early_stop_hits("I Unity : idle rewards ok"), [])
+
+
 class TestLanding(unittest.TestCase):
     """Prova de ATERRISSAGEM: onde o tráfego caiu, não onde dissemos que cairia.
 

@@ -221,3 +221,41 @@ def read_manifest_facts(apk: Path | str, membro: str = "AndroidManifest.xml") ->
     except (OSError, KeyError, zipfile.BadZipFile) as exc:
         raise AxmlError(f"não foi possível ler {membro} do APK: {exc}") from exc
     return parse_axml_manifest(dados)
+
+
+def parse_axml_elements(dados: bytes) -> list[tuple[str, dict[str, str]]]:
+    """TODOS os elementos de abertura de um AXML: [(nome, {atributo: valor})].
+
+    `parse_axml_manifest` para na raiz `<manifest>` de propósito. Esta função
+    existe para inspecionar documentos pequenos inteiros — hoje o
+    `network_security_config.xml`, cujo `cleartextTrafficPermitted` precisa ser
+    LIDO de verdade pelo verificador do APK final, e não presumido.
+
+    Erro de parse levanta `AxmlError`: quem chama decide entre inconclusivo e
+    falha, mas nunca recebe um `false` inventado.
+    """
+    if len(dados) < 8:
+        raise AxmlError(f"AXML com {len(dados)} bytes é truncado demais")
+    tipo, header_size, tamanho = struct.unpack_from("<HHI", dados, 0)
+    if tipo != RES_XML_TYPE:
+        raise AxmlError(f"não é AXML (tipo do chunk raiz 0x{tipo:04X})")
+    limite = min(tamanho, len(dados))
+
+    pool: list[str] = []
+    elementos: list[tuple[str, dict[str, str]]] = []
+    pos = header_size
+    while pos + 8 <= limite:
+        ctipo, _chdr, ctam = struct.unpack_from("<HHI", dados, pos)
+        if ctam < 8 or pos + ctam > limite:
+            raise AxmlError(f"chunk 0x{ctipo:04X} estoura o arquivo em {pos}")
+        if ctipo == RES_STRING_POOL_TYPE:
+            pool = _ler_string_pool(dados[pos : pos + ctam])
+        elif ctipo == RES_XML_START_ELEMENT_TYPE:
+            nome, atributos = _ler_elemento(dados, pos, ctam, pool)
+            if nome is not None:
+                elementos.append((nome, atributos))
+        pos += ctam
+
+    if not pool:
+        raise AxmlError("AXML sem string pool utilizável")
+    return elementos

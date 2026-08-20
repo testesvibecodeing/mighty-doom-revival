@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-20T21:12:06Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-20T23:46:47Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -105,7 +105,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/inbox/claim` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
 | `game/inbox/delete` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
-| `game/inbox/get-messages` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/inbox/get-messages` | ✅ | ✅ | ✅ | ✅ | · | — | ✅ | ✅ | — | schema extraído |
 | `game/inbox/read` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
 
 ### player
@@ -269,7 +269,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/ads/begin-watch` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/ads/cancel-watch` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/ads/get-state` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/ads/get-state` | ✅ | · | ✅ | ✅ | · | — | · | ✅ | — | implementado, aguardando validação |
 | `game/ads/refresh-token` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 
 ### iap

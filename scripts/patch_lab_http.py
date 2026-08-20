@@ -364,6 +364,22 @@ def patch_apk(*, apk_in: Path, apk_out: Path, host: str, allow_insecure_lab: boo
             relatorio["written"] = False
             return relatorio
 
+        # ---- CRC do catálogo: obrigatório para todo bundle alterado ----------
+        # Regra 3 do AGENTS.md e DEAD-ENDS #7. A Unity só valida CRC não-zero;
+        # bundle reserializado com CRC antigo no catálogo derruba o load da cena
+        # com "CRC Mismatch ... Will not load AssetBundle". Antes isto funcionava
+        # por acidente — herdando um catálogo já zerado do APK de entrada.
+        bundles_alterados = [n for n in patches if n.startswith("assets/aa/") and n.endswith(".bundle")]
+        catalogo_nome = next((n for n in zin.namelist() if n.endswith("assets/aa/catalog.json")), None)
+        if bundles_alterados and catalogo_nome is None:
+            raise LabPatchError(
+                f"{len(bundles_alterados)} bundle(s) alterado(s) e nenhum assets/aa/catalog.json "
+                "no APK — sem catálogo não dá para zerar o CRC")
+        if bundles_alterados:
+            patches[catalogo_nome], relatorio["catalog_crc"] = _zerar_crcs(
+                zin.read(catalogo_nome), bundles_alterados)
+            relatorio["bundles_alterados"] = bundles_alterados
+
         saida.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as zout:
             for info in zin.infolist():
@@ -375,10 +391,70 @@ def patch_apk(*, apk_in: Path, apk_out: Path, host: str, allow_insecure_lab: boo
                 novo.external_attr = info.external_attr
                 zout.writestr(novo, dados)
 
+        # ---- pós-condição: prova, não promessa -------------------------------
+        if bundles_alterados:
+            restantes = verify_catalog_crc_zero(saida, bundles_alterados)
+            if restantes:
+                raise LabPatchError(
+                    "CRC do catálogo continua não-zero para: " + ", ".join(restantes))
+            relatorio["catalog_crc_verified"] = True
+
     relatorio["written"] = True
     relatorio["output_apk"] = saida.name
     relatorio["output_sha256"] = _sha256(saida)
     return relatorio
+
+
+def _zerar_crcs(catalogo: bytes, bundles: list[str]) -> tuple[bytes, list[dict]]:
+    """Zera o `m_Crc` de cada bundle alterado, pela rotina canônica do projeto.
+
+    Delega para `patch_unity_bundle.zero_catalog_crc`, que faz a substituição
+    preservando o comprimento em bytes (o JSON vive em UTF-16LE dentro do base64
+    de `m_ExtraDataString`, e deslocar offsets quebraria o catálogo inteiro).
+    """
+    import tempfile  # noqa: PLC0415
+    from patch_unity_bundle import zero_catalog_crc  # noqa: PLC0415
+
+    relatorios: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="revival-lab-crc-") as tmp:
+        alvo = Path(tmp) / "catalog.json"
+        alvo.write_bytes(catalogo)
+        for nome in bundles:
+            fake_bundle = Path(tmp) / Path(nome).name
+            fake_bundle.write_bytes(b"")     # só o NOME importa: o hash de 32 hex
+            info = zero_catalog_crc(alvo, fake_bundle)
+            relatorios.append({"bundle": nome, **{k: info.get(k) for k in
+                                                  ("zeroed", "matched", "entries", "reason")}})
+        return alvo.read_bytes(), relatorios
+
+
+def verify_catalog_crc_zero(apk: Path, bundles: list[str]) -> list[str]:
+    """Bundles cujo `m_Crc` no catálogo do APK AINDA não é zero."""
+    import base64  # noqa: PLC0415
+    import json as _json  # noqa: PLC0415
+
+    faltando: list[str] = []
+    with zipfile.ZipFile(apk) as zf:
+        nome_catalogo = next((n for n in zf.namelist() if n.endswith("assets/aa/catalog.json")), None)
+        if nome_catalogo is None:
+            return [f"{b} (catálogo ausente)" for b in bundles]
+        catalogo = _json.loads(zf.read(nome_catalogo).decode("utf-8"))
+    extras = catalogo.get("m_ExtraDataString") or ""
+    try:
+        bruto = base64.b64decode(extras).decode("utf-16-le", "replace")
+    except Exception:
+        return [f"{b} (m_ExtraDataString ilegível)" for b in bundles]
+    for nome in bundles:
+        m = re.search(r"([0-9a-f]{32})", Path(nome).name)
+        if not m:
+            continue
+        # Cada AssetBundleRequestOptions carrega o hash e o m_Crc do seu bundle.
+        for trecho in re.finditer(r'\{[^{}]*' + m.group(1) + r'[^{}]*\}', bruto):
+            crc = re.search(r'"m_Crc"\s*:\s*(\d+)', trecho.group(0))
+            if crc and crc.group(1) != "0":
+                faltando.append(nome)
+                break
+    return faltando
 
 
 def write_lab_network_security(decoded: Path, host: str, *, allow_insecure_lab: bool,

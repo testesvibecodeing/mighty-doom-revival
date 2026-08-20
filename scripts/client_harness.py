@@ -78,6 +78,16 @@ SIGNATURES: list[tuple[str, str, str]] = [
     # já está condenada; classificar como warning esconderia a falha real.
     (r"Could not cast or convert from System\.String to System\.String\[\]", "fatal",
      "cliente recusou o token de sessão: aud/audience veio string onde o DTO tipa String[]"),
+    # Medido em 2026-08-20 (e2e-final logcat:1263, e2e-strict logcat:1339): o
+    # harness deu `flow_validated` com esta exceção no log. `System.Timers.Timer`
+    # recusa intervalo acima de int.MaxValue ms (~24,8 dias), e o valor recusado
+    # é exatamente `next_claim * 1000` — o cliente trata `next_claim` como
+    # DURAÇÃO, e o servidor mandava epoch absoluto. Todo o timer de idle rewards
+    # morre com isso, então é falha de fluxo, não ruído.
+    (r"ArgumentException: Invalid value '[-0-9.]+' for parameter 'interval'", "fatal",
+     "IdleRewardsController: next_claim virou intervalo inválido de Timer (epoch onde se espera duração)"),
+    (r"IdleRewardsController\.UpdateNextClaimEpoch", "fatal",
+     "stack do timer de idle rewards — acompanha o intervalo inválido acima"),
     (r"Session token is not a well formed JWT", "warning", "token opaco; warning comprovadamente não fatal (DEAD-ENDS #9)"),
     (r"Cant find corresponding data tool data", "warning", "game-data sem definição da ability citada"),
 ]
@@ -88,6 +98,7 @@ SIGNATURES: list[tuple[str, str, str]] = [
 EARLY_STOP_SIGNATURES = frozenset({
     r"Failed to launch after \d+ attempts",
     r"Could not cast or convert from System\.String to System\.String\[\]",
+    r"ArgumentException: Invalid value '[-0-9.]+' for parameter 'interval'",
 })
 
 # Perfis de fluxo: milestones mínimos que a sequência temporal da execução tem

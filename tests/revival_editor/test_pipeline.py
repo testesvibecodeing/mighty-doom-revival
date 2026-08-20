@@ -292,6 +292,12 @@ class BasePipeline(unittest.TestCase):
             project_dir=self.projeto,
             analyze=lambda apk, log: analise or AnaliseFalsa(),
             preflight=lambda host, **kw: preflight or PreflightFalso(),
+            # Prontidão de contrato injetada: o teste não fala com rede.
+            # O gate real (health sem identidade/revisão, research_mode ligado)
+            # tem cobertura própria em test_pipeline_auth_job.py.
+            readiness=lambda host, **kw: {"ready": True, "reasons": [],
+                                          "required_revision": pl.REQUIRED_CONTRACT_REVISION,
+                                          "observed_revision": pl.REQUIRED_CONTRACT_REVISION},
             toolchain_detect=lambda **kw: toolchain or _toolchain_ok(),
         )
         padrao.update(sobrepos)

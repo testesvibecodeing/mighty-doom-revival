@@ -223,14 +223,7 @@ public final class RevivalAuthActivity extends Activity {
                     final String recovery = response.optString("recovery_code", "");
                     ui.post(new Runnable() {
                         @Override public void run() {
-                            // ID e recovery são o que o jogador precisa anotar
-                            // para reentrar. A SENHA nunca é exibida nem logada.
-                            status("Conta criada.\n\nID: " + creds.userId
-                                    + (recovery.isEmpty() ? "" : "\nCódigo de recuperação: " + recovery)
-                                    + "\n\nAnote antes de continuar. Abrindo o jogo…");
-                            ui.postDelayed(new Runnable() {
-                                @Override public void run() { launchUnity(); }
-                            }, 6000);
+                            showCredentialsToKeep(creds, recovery);
                         }
                     });
                 } catch (final Exception error) {
@@ -278,6 +271,94 @@ public final class RevivalAuthActivity extends Activity {
                 }
             }
         });
+    }
+
+    /**
+     * Tela de "guarde estes dados" — sem auto-dismiss e sem pressa.
+     *
+     * O que o jogador precisa para reentrar depois de desinstalar é ID + SENHA.
+     * A senha é gerada pelo servidor e antes só existia dentro do
+     * `credentials.json`: sem ADB, quem perdesse os dados perdia a conta. Agora
+     * os três valores ficam em tela, selecionáveis e copiáveis, e a Unity só
+     * abre depois de o jogador confirmar explicitamente.
+     *
+     * Continua valendo: nada disto vai para logcat, Intent, Toast ou relatório.
+     */
+    private void showCredentialsToKeep(final Credentials creds, String recovery) {
+        LinearLayout painel = new LinearLayout(this);
+        painel.setOrientation(LinearLayout.VERTICAL);
+        painel.setBackgroundColor(Color.parseColor("#0B0F14"));
+        int pad = dp(24);
+        painel.setPadding(pad, dp(40), pad, pad);
+
+        TextView titulo = new TextView(this);
+        titulo.setText("GUARDE ESTES DADOS");
+        titulo.setTextColor(Color.parseColor("#7FD41B"));
+        titulo.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        titulo.setGravity(Gravity.CENTER);
+        painel.addView(titulo);
+
+        TextView aviso = new TextView(this);
+        aviso.setText("São a única forma de voltar à sua conta se você desinstalar o jogo "
+                + "ou trocar de aparelho. Anote ou copie antes de continuar.");
+        aviso.setTextColor(Color.parseColor("#E8A33D"));
+        aviso.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        aviso.setPadding(0, dp(12), 0, dp(20));
+        painel.addView(aviso);
+
+        final String bloco = "ID da conta: " + creds.userId
+                + "\nSenha: " + creds.password
+                + (recovery.isEmpty() ? "" : "\nCódigo de recuperação: " + recovery);
+
+        TextView dados = new TextView(this);
+        dados.setText(bloco);
+        dados.setTextColor(Color.WHITE);
+        dados.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        dados.setTextIsSelectable(true);            // seleção manual
+        dados.setPadding(dp(12), dp(16), dp(12), dp(16));
+        dados.setBackgroundColor(Color.parseColor("#141B23"));
+        painel.addView(dados);
+
+        Button copiar = new Button(this);
+        copiar.setText("COPIAR PARA A ÁREA DE TRANSFERÊNCIA");
+        copiar.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                android.content.ClipboardManager cb = (android.content.ClipboardManager)
+                        getSystemService(CLIPBOARD_SERVICE);
+                if (cb != null) {
+                    cb.setPrimaryClip(android.content.ClipData.newPlainText("Revival", bloco));
+                    Toast.makeText(RevivalAuthActivity.this, "Copiado.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        painel.addView(copiar);
+
+        final Button continuar = new Button(this);
+        continuar.setEnabled(false);
+        continuar.setText("ANOTEI — ABRIR O JOGO");
+        painel.addView(continuar);
+
+        final android.widget.CheckBox confirmou = new android.widget.CheckBox(this);
+        confirmou.setText("Guardei o ID e a senha em lugar seguro");
+        confirmou.setTextColor(Color.parseColor("#E8EDF2"));
+        confirmou.setOnCheckedChangeListener(
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+                    @Override public void onCheckedChanged(
+                            android.widget.CompoundButton botao, boolean marcado) {
+                        continuar.setEnabled(marcado);
+                    }
+                });
+        painel.addView(confirmou, painel.indexOfChild(continuar));
+
+        continuar.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { launchUnity(); }
+        });
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Color.parseColor("#0B0F14"));
+        scroll.addView(painel, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(scroll);
     }
 
     private void failOnUi(final Exception error) {

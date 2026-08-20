@@ -1,7 +1,7 @@
 {
   "endpoint": "game/store/get",
   "provenance": "client",
-  "captured_at": "2026-08-20T21:06:49Z",
+  "captured_at": "2026-08-20T23:42:07Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
@@ -49,9 +49,23 @@
               "amount": 2500
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         },
         {
@@ -75,9 +89,23 @@
               "amount": 50
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         },
         {
@@ -101,9 +129,23 @@
               "amount": 180
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         },
         {
@@ -135,9 +177,23 @@
               "amount": 8000
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         },
         {
@@ -173,9 +229,23 @@
               "amount": 15000
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         },
         {
@@ -204,9 +274,23 @@
               "amount": 320
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         },
         {
@@ -236,9 +320,23 @@
               "amount": 30000
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         },
         {
@@ -270,9 +368,23 @@
               "amount": 150
             }
           ],
+          "quota_id": null,
           "requirements": {
             "selector_format_version": 1,
-            "player": {}
+            "player": {
+              "userId": null,
+              "playerLevel": null,
+              "chapterProgress": null,
+              "storeQuotas": null,
+              "gear": null,
+              "slayers": null,
+              "entitlements": null,
+              "cosmetics": null,
+              "lastLogin": null,
+              "iapPurchases": null,
+              "device": null,
+              "firstInstall": null
+            }
           }
         }
       ],

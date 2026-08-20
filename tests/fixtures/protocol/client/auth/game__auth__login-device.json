@@ -1,14 +1,14 @@
 {
   "endpoint": "game/auth/login-device",
   "provenance": "client",
-  "captured_at": "2026-08-20T21:06:49Z",
+  "captured_at": "2026-08-20T23:42:07Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
     "method": "POST",
     "path": "/game/auth/login-device",
     "body": {
-      "user_id": 11,
+      "user_id": 12,
       "device_id": "<device-id>",
       "password": "<password>",
       "platform_id": 4,
@@ -30,7 +30,8 @@
         "eula_version": 1,
         "allow_personalization": false,
         "allow_sharing": false
-      }
+      },
+      "playfab_session_ticket": null
     }
   }
 }

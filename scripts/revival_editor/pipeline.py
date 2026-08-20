@@ -129,6 +129,10 @@ class PipelineResult:
     # Relatório da RevivalAuthActivity quando o passo opcional roda; `None`
     # quando o build é só de endpoint. Nunca carrega URL nem segredo.
     auth_report: dict[str, Any] | None = None
+    # A opção PEDIDA, para o relatório provar que o parâmetro chegou — mesmo
+    # quando o passo falha ou nem roda.
+    revival_auth_requested: bool = False
+    server_readiness: dict[str, Any] | None = None
     api_version: str | None = None
     client_version: str | None = None
     failure: Failure | None = None
@@ -150,12 +154,73 @@ class PipelineResult:
             "precheck_exit": self.precheck_exit,
             "bundles_alterados": self.bundles_alterados,
             "crcs_zerados": self.crcs_zerados,
+            "revival_auth_requested": self.revival_auth_requested,
+            "server_readiness": self.server_readiness,
             "auth_report": self.auth_report,
             "ok": self.ok,
         }
         if self.failure:
             dados["failure"] = self.failure.to_dict()
         return dados
+
+
+# Revisao MINIMA de contrato que um APK gerado hoje exige do servidor. Sobe
+# junto com CONTRACT_REVISION do server/src/instance.js sempre que um contrato
+# `/game/*` muda de forma que o cliente enxerga.
+REQUIRED_CONTRACT_REVISION = 2
+
+
+def _prontidao_do_servidor(host: str, *, insecure_lab: bool = False) -> dict[str, Any]:
+    """Le `/revival/health` e diz se o servidor aguenta o APK que vamos gerar.
+
+    Espelha `productionReadiness` do server/src/instance.js — aqui em Python
+    porque o pipeline nao roda dentro do servidor. Recusa, com motivo
+    acionavel: identidade ausente (build antigo), revisao de contrato abaixo da
+    exigida, `research_mode` ligado e build sujo.
+
+    Servidor inalcancavel NAO e "pronto": e falta de medicao, e o gate reprova.
+    """
+    import json as _json
+    import urllib.request as _url
+
+    saude: dict[str, Any] | None = None
+    erro: str | None = None
+    for esquema in ("https", "http"):
+        try:
+            with _url.urlopen(f"{esquema}://{host}/revival/health", timeout=15) as resposta:
+                saude = _json.loads(resposta.read().decode("utf-8"))
+            break
+        except Exception as exc:  # noqa: BLE001 - qualquer falha vira "nao medido"
+            erro = f"{esquema}: {exc}"
+
+    motivos: list[str] = []
+    if saude is None:
+        motivos.append(f"health indisponivel ({erro or 'sem detalhe'})")
+    else:
+        revisao = saude.get("contract_revision")
+        if saude.get("instance_id") is None and saude.get("build_id") is None:
+            motivos.append("health sem identidade de instancia/build "
+                           "(servidor anterior a server/src/instance.js)")
+        if not isinstance(revisao, int):
+            motivos.append("health sem contract_revision")
+        elif revisao < REQUIRED_CONTRACT_REVISION:
+            motivos.append(f"contract_revision {revisao} < {REQUIRED_CONTRACT_REVISION} exigida — "
+                           "faltam as correcoes de wire que este APK espera")
+        if saude.get("research_mode") is True:
+            motivos.append("research_mode ligado: rota desconhecida responde sucesso vazio")
+        if saude.get("build_dirty") is True:
+            motivos.append("build_id sujo: o commit publicado nao identifica os bytes em execucao")
+
+    return {
+        "ready": not motivos,
+        "reasons": motivos,
+        "required_revision": REQUIRED_CONTRACT_REVISION,
+        "observed_revision": (saude or {}).get("contract_revision"),
+        "instance_id": (saude or {}).get("instance_id"),
+        "build_id": (saude or {}).get("build_id"),
+        "research_mode": (saude or {}).get("research_mode"),
+        "override_lab": bool(insecure_lab),
+    }
 
 
 def apply_endpoint(
@@ -167,10 +232,12 @@ def apply_endpoint(
     ca_file: Path | str | None = None,
     strategy: str = "auto",
     revival_auth: bool = False,
+    allow_incompatible_server: bool = False,
     java_path: Path | str | None = None,
     analyze: Callable[..., Any] = analyze_apk,
     preflight: Callable[..., Any] = server_preflight,
     toolchain_detect: Callable[..., Any] = detect_toolchain,
+    readiness: Callable[..., Any] = None,
 ) -> PipelineResult:
     """Executa o pipeline completo de endpoint contra `host`.
 
@@ -190,7 +257,9 @@ def apply_endpoint(
             entrada=entrada, projeto=projeto, host=host_normalizado,
             ca=Path(ca_file) if ca_file else None,
             strategy=strategy, java_path=java_path, revival_auth=revival_auth,
+            allow_incompatible_server=allow_incompatible_server,
             analyze=analyze, preflight=preflight, toolchain_detect=toolchain_detect,
+            readiness=readiness or _prontidao_do_servidor,
         )
     except _AbortPipeline as abort:
         if resultado.failure:
@@ -210,9 +279,11 @@ def _executar(
     strategy: str,
     java_path: Path | str | None,
     revival_auth: bool = False,
+    allow_incompatible_server: bool = False,
     analyze: Callable[..., Any],
     preflight: Callable[..., Any],
     toolchain_detect: Callable[..., Any],
+    readiness: Callable[..., Any] = _prontidao_do_servidor,
 ) -> None:
     if ca is not None:
         try:
@@ -275,6 +346,28 @@ def _executar(
             message="servidor Revival não passou no preflight (gate da fase 5)",
             details=erros,
         )
+
+    # -- compatibilidade de CONTRATO, antes de publicar qualquer APK ----------
+    # O preflight acima só prova que o servidor está vivo e fala o envelope.
+    # Em 2026-08-20 um build saiu "verde" contra uma VPS que não tem as
+    # correções de wire deste APK (sem identidade, sem contract_revision,
+    # research_mode ligado) — o cliente reproduziria os `Malformed response
+    # payload` já corrigidos. Este gate roda ANTES do decode: falhar aqui custa
+    # segundos, falhar depois custa o build inteiro.
+    prontidao = readiness(host, insecure_lab=allow_incompatible_server)
+    resultado.server_readiness = prontidao
+    if not prontidao["ready"] and not allow_incompatible_server:
+        _falhar(
+            resultado, code="SERVER_CONTRACT", stage="preflight",
+            message=(f"o servidor em {host} não é compatível com este APK "
+                     f"(revisão de contrato exigida: {prontidao['required_revision']})"),
+            details="; ".join(prontidao["reasons"])
+            + ". Publique o servidor atualizado antes de gerar o APK, ou use a "
+              "opção explícita de laboratório para ignorar (nunca em produção).",
+        )
+    if not prontidao["ready"]:
+        ctx.log("[LAB] servidor incompatível ACEITO por override explícito: "
+                + "; ".join(prontidao["reasons"]), stream="erro")
     ctx.raise_if_cancelled()
 
     # -- workspace -----------------------------------------------------------
@@ -354,6 +447,7 @@ def _executar(
     # entra). Pós-condição conferida pelo próprio patcher: um único launcher,
     # Activity Unity preservada com deep link.
     dex_revival: Path | None = None
+    resultado.revival_auth_requested = bool(revival_auth)
     if revival_auth:
         _passo(ctx, "auth", "[2b/7] RevivalAuthActivity — compilando e patchando Manifest…")
         try:

@@ -10,6 +10,7 @@ ZIP montado no teste.
 """
 from __future__ import annotations
 
+import base64
 import json
 import struct
 import sys
@@ -55,10 +56,28 @@ def bundle_sintetico(*strings: bytes) -> bytes:
     return bytes(saida)
 
 
+HASH_BUNDLE = "00112233445566778899aabbccddeeff"
+NOME_BUNDLE = f"assets/aa/Android/grupo_all_{HASH_BUNDLE}.bundle"
+
+
+def catalogo_sintetico(crc: int) -> bytes:
+    """`catalog.json` do Addressables com um AssetBundleRequestOptions real.
+
+    O JSON dos options vive em UTF-16LE dentro do base64 de
+    `m_ExtraDataString` — e assim que o catalogo do jogo guarda o `m_Crc`.
+    """
+    options = ('{"m_Hash":"' + HASH_BUNDLE + '","m_Crc":' + str(crc)
+               + ',"m_BundleName":"grupo_all_' + HASH_BUNDLE + '.bundle"}')
+    extra = base64.b64encode(options.encode("utf-16-le")).decode("ascii")
+    return json.dumps({"m_ExtraDataString": extra, "m_InternalIds": [NOME_BUNDLE]}).encode("utf-8")
+
+
 def apk_sintetico(destino: Path, *, metadata: bytes, bundle: bytes) -> Path:
+    """APK minimo COM catalogo: bundle alterado sem catalogo e recusado."""
     with zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr(lab.METADATA_ENTRY, metadata)
-        z.writestr("assets/aa/Android/grupo_all_00112233445566778899aabbccddeeff.bundle", bundle)
+        z.writestr(NOME_BUNDLE, bundle)
+        z.writestr("assets/aa/catalog.json", catalogo_sintetico(4023233417))
         z.writestr("AndroidManifest.xml", b"\x03\x00\x08\x00fake")
     return destino
 
@@ -155,6 +174,74 @@ class TestFronteiraExata(unittest.TestCase):
         self.assertEqual(len(saida), len(meta))
         self.assertEqual(rel.total, 1)
         self.assertNotIn(b"https://", saida)
+
+
+class TestCrcDoCatalogo(unittest.TestCase):
+    """Bundle alterado sem CRC zerado = menu abre e a cena morre (DEAD-ENDS #7).
+
+    O teste anterior so passava por HERDAR um catalogo ja zerado do APK de
+    entrada. Aqui o catalogo comeca com CRC NAO-ZERO de proposito.
+    """
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.apk = self.dir / "entrada.apk"
+        with zipfile.ZipFile(self.apk, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr(lab.METADATA_ENTRY, metadata_sintetico([URL_METADATA]))
+            z.writestr(NOME_BUNDLE, bundle_sintetico(URL_BUNDLE))
+            z.writestr("assets/aa/catalog.json", catalogo_sintetico(4023233417))
+            z.writestr("AndroidManifest.xml", b"\x03\x00\x08\x00fake")
+        self.saida = lab.LAB_DIR / "crc-LAB-HTTP.apk"
+
+    def tearDown(self):
+        if self.saida.exists():
+            self.saida.unlink()
+
+    def test_entrada_comeca_com_crc_nao_zero(self):
+        pendentes = lab.verify_catalog_crc_zero(self.apk, [NOME_BUNDLE])
+        self.assertEqual(pendentes, [NOME_BUNDLE],
+                         "o fixture precisa comecar sujo, senao o teste nao prova nada")
+
+    def test_patch_zera_e_prova_o_crc(self):
+        rel = lab.patch_apk(apk_in=self.apk, apk_out=self.saida, host="10.0.2.2",
+                            from_host=HOST_PUBLICO, allow_insecure_lab=True)
+        self.assertEqual(rel["bundles_alterados"], [NOME_BUNDLE])
+        self.assertTrue(rel["catalog_crc_verified"], "a pos-condicao tem que ter rodado")
+        self.assertTrue(all(c["zeroed"] for c in rel["catalog_crc"]),
+                        f"zero_catalog_crc nao zerou: {rel['catalog_crc']}")
+        self.assertEqual(lab.verify_catalog_crc_zero(self.saida, [NOME_BUNDLE]), [],
+                         "no APK de saida o CRC daquele bundle tem que ser 0")
+
+    def test_apk_sem_catalogo_e_recusado(self):
+        sem = self.dir / "sem-catalogo.apk"
+        with zipfile.ZipFile(sem, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr(lab.METADATA_ENTRY, metadata_sintetico([URL_METADATA]))
+            z.writestr(NOME_BUNDLE, bundle_sintetico(URL_BUNDLE))
+        alvo = lab.LAB_DIR / "sem-catalogo-LAB.apk"
+        try:
+            with self.assertRaises(lab.LabPatchError) as ctx:
+                lab.patch_apk(apk_in=sem, apk_out=alvo, host="10.0.2.2",
+                              from_host=HOST_PUBLICO, allow_insecure_lab=True)
+            self.assertIn("catalog", str(ctx.exception).lower())
+            self.assertFalse(alvo.exists(), "nada e escrito numa recusa")
+        finally:
+            if alvo.exists():
+                alvo.unlink()
+
+    def test_apk_so_com_metadata_nao_exige_catalogo(self):
+        # Sem bundle alterado nao ha CRC a zerar — e nao pode inventar exigencia.
+        so_meta = self.dir / "so-metadata.apk"
+        with zipfile.ZipFile(so_meta, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr(lab.METADATA_ENTRY, metadata_sintetico([URL_METADATA]))
+        alvo = lab.LAB_DIR / "so-meta-LAB.apk"
+        try:
+            rel = lab.patch_apk(apk_in=so_meta, apk_out=alvo, host="10.0.2.2",
+                                from_host=HOST_PUBLICO, allow_insecure_lab=True)
+            self.assertEqual(rel.get("bundles_alterados", []), [])
+            self.assertNotIn("catalog_crc_verified", rel)
+        finally:
+            if alvo.exists():
+                alvo.unlink()
 
 
 class TestGatesDeSeguranca(unittest.TestCase):

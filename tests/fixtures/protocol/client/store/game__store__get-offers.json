@@ -1,7 +1,7 @@
 {
   "endpoint": "game/store/get-offers",
   "provenance": "client",
-  "captured_at": "2026-08-20T21:06:49Z",
+  "captured_at": "2026-08-20T23:42:07Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {

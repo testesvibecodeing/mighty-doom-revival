@@ -1,7 +1,7 @@
 {
   "endpoint": "game/player/user-data",
   "provenance": "client",
-  "captured_at": "2026-08-20T21:06:49Z",
+  "captured_at": "2026-08-20T23:42:07Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
@@ -25,8 +25,9 @@
           ],
           "weapons": [
             {
-              "uid": 20,
+              "uid": 22,
               "level": 1,
+              "cosmetic": null,
               "rid": 4,
               "tier": 1
             }
@@ -43,8 +44,9 @@
           "ultimates": [],
           "slayers": [
             {
-              "uid": 19,
+              "uid": 21,
               "level": 1,
+              "cosmetic": null,
               "rid": 67
             }
           ],
@@ -52,18 +54,19 @@
           "slots": [
             {
               "id": 1,
-              "item": 20
+              "item": 22
             },
             {
               "id": 9,
-              "item": 19
+              "item": 21
             }
           ],
           "cosmetics": []
         },
         "chapter_progression": {
           "chapters": [],
-          "challenges": []
+          "challenges": [],
+          "current_run": null
         },
         "talent_progression": {
           "talents": []
@@ -72,7 +75,7 @@
           "sequences": [
             {
               "sequence": 30,
-              "complete_epoch": 1787259306
+              "complete_epoch": 1787268856
             }
           ]
         },
@@ -88,6 +91,7 @@
           "stats": []
         },
         "total_attempt_count": 0,
+        "player_settings": null,
         "last_login": 0
       }
     }

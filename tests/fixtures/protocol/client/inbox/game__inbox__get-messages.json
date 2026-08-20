@@ -1,13 +1,16 @@
 {
-  "endpoint": "game/iap/get-purchase-history-info",
+  "endpoint": "game/inbox/get-messages",
   "provenance": "client",
   "captured_at": "2026-08-20T23:42:07Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
     "method": "POST",
-    "path": "/game/iap/get-purchase-history-info",
-    "body": {}
+    "path": "/game/inbox/get-messages",
+    "body": {
+      "preferred_lang": "en",
+      "fallback_lang": ""
+    }
   },
   "response": {
     "status": 200,
@@ -15,7 +18,7 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "total_lifetime_purchase": 0
+      "messages": []
     }
   }
 }

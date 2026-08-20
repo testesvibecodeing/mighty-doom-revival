@@ -1,7 +1,7 @@
 {
   "endpoint": "game/idle-rewards/get-state",
   "provenance": "client",
-  "captured_at": "2026-08-20T21:06:49Z",
+  "captured_at": "2026-08-20T23:42:07Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
@@ -16,9 +16,9 @@
       "uts": "<uts>",
       "code": 1000,
       "state": {
-        "last_claim": 1787259306,
+        "last_claim": 1787268857,
         "boost_available": 0,
-        "next_claim": 1787259906,
+        "next_claim": 267,
         "idle_generation": [
           {
             "rid": 1,

@@ -1214,6 +1214,13 @@ def _trabalho_pipeline(projeto: Project, diretorio: Path, ctx: Any) -> Any:
         project_dir=diretorio,
         ca_file=projeto.ca_path,
         strategy=projeto.patch_strategy,
+        # Sem isto o botão normal "Aplicar endpoint" gerava um APK SEM a
+        # RevivalAuthActivity, e só um script auxiliar produzia o build de
+        # verdade. A opção vem do projeto e é persistida com ele.
+        revival_auth=projeto.revival_auth,
+        # Override de laboratório: só quando o projeto o declara, e o
+        # `pipeline.json` registra que foi usado.
+        allow_incompatible_server=projeto.allow_incompatible_server,
     )
     relatorio = diretorio / "reports" / "pipeline.json"
     relatorio.parent.mkdir(parents=True, exist_ok=True)
