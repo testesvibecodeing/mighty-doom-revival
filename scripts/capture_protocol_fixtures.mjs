@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { sanitize } from './fixture_sanitize.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const serverRoot = resolve(repoRoot, 'server')
@@ -260,28 +261,6 @@ async function call (label, path, body, token = null) {
   if (response.status !== 200) throw new Error(`${path} -> ${response.status}: ${JSON.stringify(data)}`)
   captured.push({ label, path, body, status: response.status, data })
   return data
-}
-
-function sanitize (value) {
-  if (Array.isArray(value)) return value.map(sanitize)
-  if (value && typeof value === 'object') {
-    const out = {}
-    for (const [key, inner] of Object.entries(value)) {
-      if (key === 'uts') out[key] = '<uts>'
-      else if (key === 'token') out[key] = '<token>'
-      else if (key === 'password') out[key] = '<password>'
-      else if (key === 'recovery_code') out[key] = '<recovery-code>'
-      else if (key === 'url') out[key] = String(inner).replace(/^https?:\/\/[^/]+/, '<base>')
-      else if (key === 'account_age' || key === 'last_login') out[key] = 0
-      // Épocs derivados do relógio no momento da captura (idle/offer/run) —
-      // mascarados para o fixture ser regenerável sem diff. start_time de
-      // eventos agendados NÃO entra aqui: vem da config, é determinístico.
-      else if (key === 'last_claim' || key === 'next_claim' || key === 'started_at_ms' || key === 'best_completion_time_milliseconds' || key === 'authorization_time' || key === 'last_access_time') out[key] = '<epoch>'
-      else out[key] = sanitize(inner)
-    }
-    return out
-  }
-  return value
 }
 
 try {

@@ -1,0 +1,95 @@
+{
+  "endpoint": "game/player/user-data",
+  "provenance": "client",
+  "captured_at": "2026-08-20T21:06:49Z",
+  "sanitized": true,
+  "source": "client_harness.py (request_log pareado do servidor)",
+  "request": {
+    "method": "POST",
+    "path": "/game/player/user-data",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "code": 1000,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "user_data": {
+        "inventory": {
+          "currencies": [
+            {
+              "rid": 3,
+              "amount": 60
+            }
+          ],
+          "weapons": [
+            {
+              "uid": 20,
+              "level": 1,
+              "rid": 4,
+              "tier": 1
+            }
+          ],
+          "equipment": [],
+          "launchers": [],
+          "energies": [
+            {
+              "rid": 28,
+              "amount": 20,
+              "regen_epoch": 0
+            }
+          ],
+          "ultimates": [],
+          "slayers": [
+            {
+              "uid": 19,
+              "level": 1,
+              "rid": 67
+            }
+          ],
+          "entitlements": [],
+          "slots": [
+            {
+              "id": 1,
+              "item": 20
+            },
+            {
+              "id": 9,
+              "item": 19
+            }
+          ],
+          "cosmetics": []
+        },
+        "chapter_progression": {
+          "chapters": [],
+          "challenges": []
+        },
+        "talent_progression": {
+          "talents": []
+        },
+        "tutorial_progression": {
+          "sequences": [
+            {
+              "sequence": 30,
+              "complete_epoch": 1787259306
+            }
+          ]
+        },
+        "account_age": 0,
+        "player": {
+          "level": {
+            "current": 1,
+            "max": 1,
+            "details_current": {},
+            "details_next": {}
+          },
+          "chapter_progression": 0,
+          "stats": []
+        },
+        "total_attempt_count": 0,
+        "last_login": 0
+      }
+    }
+  }
+}

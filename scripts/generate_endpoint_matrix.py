@@ -11,8 +11,13 @@ Campos DERIVADOS (recomputados, escrever à mão não tem efeito):
                    prefixo registrado em PREFIX_ROUTES)
   regression_test  rota aparece como literal em server/test/*.mjs
   fixture          existe captura em tests/fixtures/protocol/<slug>.json
-  request_observed/response_observed  auto-true quando a captura tem
-                   provenance "client" (harness real); senão preserva o manual
+  request_observed/response_observed  TRUE só com provenance de evidência
+                   aceita: fixture provenance=client sanitizada
+                   (client-fixture), observação legada documentada
+                   (legacy-observation, EVIDENCE_SEED) ou --set manual com
+                   nota (client-manual). Sem provenance, o gate NÃO sobe.
+  evidence_provenance  de onde vem o observed: client-fixture |
+                   legacy-observation | client-manual | null
   server_only      rotas implementadas no servidor que NÃO existem nas 116 do
                    cliente (código legado; candidatas a remoção)
 
@@ -74,6 +79,10 @@ DOD_GATES = (
 )
 
 ROUTE_RE = re.compile(r"['\"](/game/[a-z0-9/-]*?)['\"]")
+
+# Provenances que autorizam request/response_observed=true. Uma observação sem
+# nenhuma destas é combinação impossível (verify_everything reprova).
+ACCEPTED_OBSERVED_PROVENANCE = ("client-fixture", "legacy-observation", "client-manual")
 
 EVIDENCE_SEED = {
     # Bootstrap validado ponta a ponta no emulador (RELATORIO-STATUS 2026-08-16):
@@ -166,6 +175,10 @@ def test_routes() -> set[str]:
 
 
 def load_fixtures() -> dict[str, dict]:
+    """Fixtures por endpoint; quando client e server-replay coexistem para a
+    mesma rota, a evidência real (client) vence — server-replay nunca pode
+    sobrescrever uma captura de cliente."""
+    priority = {"client": 0, "server-replay": 1}
     fixtures: dict[str, dict] = {}
     if not FIXTURES_DIR.is_dir():
         return fixtures
@@ -175,11 +188,20 @@ def load_fixtures() -> dict[str, dict]:
         except (json.JSONDecodeError, OSError):
             continue
         endpoint = data.get("endpoint")
-        if isinstance(endpoint, str) and endpoint.startswith("game/"):
-            fixtures[endpoint] = {
-                "file": str(path.relative_to(ROOT)).replace("\\", "/"),
-                "provenance": data.get("provenance", "unknown"),
-            }
+        if not (isinstance(endpoint, str) and endpoint.startswith("game/")):
+            continue
+        try:
+            file_ref = str(path.relative_to(ROOT)).replace("\\", "/")
+        except ValueError:  # fixtures fora do repo (testes)
+            file_ref = str(path)
+        candidate = {
+            "file": file_ref,
+            "provenance": data.get("provenance", "unknown"),
+            "sanitized": data.get("sanitized") is True,
+        }
+        current = fixtures.get(endpoint)
+        if current is None or priority.get(candidate["provenance"], 99) < priority.get(current["provenance"], 99):
+            fixtures[endpoint] = candidate
     return fixtures
 
 
@@ -235,11 +257,24 @@ def build_compat(metadata: Path | None, previous: dict | None) -> dict:
         seed = EVIDENCE_SEED.get(route, {})
         fixture = fixtures.get(route)
 
-        request_observed = bool(prev.get("request_observed") or seed.get("request_observed"))
-        response_observed = bool(prev.get("response_observed") or seed.get("response_observed"))
-        if fixture and fixture["provenance"] == "client":
+        # observed só sobe com provenance de evidência aceita. Ordem de força:
+        # fixture client sanitizada > seed legado documentado > prev que já
+        # tinha provenance válida. Um prev observado "do nada" não propaga —
+        # correção honesta pode reduzir a métrica até nova captura real.
+        observed_provenance = None
+        if fixture and fixture["provenance"] == "client" and fixture["sanitized"]:
             request_observed = True
             response_observed = True
+            observed_provenance = "client-fixture"
+        else:
+            prev_provenance = prev.get("evidence_provenance")
+            prev_accepted = prev_provenance in ACCEPTED_OBSERVED_PROVENANCE
+            request_observed = bool(seed.get("request_observed") or (prev.get("request_observed") and prev_accepted))
+            response_observed = bool(seed.get("response_observed") or (prev.get("response_observed") and prev_accepted))
+            if seed.get("request_observed"):
+                observed_provenance = "legacy-observation"
+            elif prev.get("request_observed") and prev_accepted:
+                observed_provenance = prev_provenance
 
         endpoints[route] = {
             "module": module,
@@ -247,6 +282,7 @@ def build_compat(metadata: Path | None, previous: dict | None) -> dict:
             "schema_extracted": bool(prev.get("schema_extracted", False)),
             "request_observed": request_observed,
             "response_observed": response_observed,
+            "evidence_provenance": observed_provenance,
             "client_validated": bool(prev.get("client_validated") or seed.get("client_validated", False)),
             "persistence_validated": prev.get("persistence_validated", seed.get("persistence_validated")),
             "regression_test": route in tests,
@@ -285,7 +321,7 @@ def build_compat(metadata: Path | None, previous: dict | None) -> dict:
             "updated": utc_now(),
             "dod_gates": list(DOD_GATES),
             "derived": ["implemented", "regression_test", "fixture", "fixture_provenance",
-                        "request_observed*", "response_observed*"],
+                        "request_observed*", "response_observed*", "evidence_provenance"],
             "note": "Gerado por scripts/generate_endpoint_matrix.py; não edite campos derivados à mão.",
         },
         "endpoints": endpoints,
@@ -442,8 +478,15 @@ def apply_set(compat: dict, route: str, assignments: list[str], notes: dict[str,
             print(f"ERRO: {key} espera true/false, veio {raw!r}", file=sys.stderr)
             raise SystemExit(2)
         endpoint[key] = raw == "true"
+    # client_validated declarado na mão (relatório de emulador etc.) ganha
+    # provenance explícita — não pode se passar por fixture que não existe.
+    if endpoint.get("client_validated") and endpoint.get("evidence_provenance") != "client-fixture":
+        endpoint["evidence_provenance"] = "client-manual"
     if route in notes:
-        endpoint["evidence"] = notes[route]
+        # --note ANEXA à evidência existente: histórico documentado nunca é
+        # apagado por uma declaração nova.
+        base_note = endpoint.get("evidence") or ""
+        endpoint["evidence"] = f"{base_note} | {notes[route]}".strip(" |") if base_note else notes[route]
 
 
 def main() -> int:
@@ -480,8 +523,11 @@ def main() -> int:
                 print(f"ERRO: --set espera rota=campo=valor, veio {item!r}", file=sys.stderr)
                 return 2
             grouped.setdefault(route, []).append(assignment)
-        for route, assignments in grouped.items():
-            apply_set(compat, route, assignments, notes)
+        # --note sem --set também precisa tocar a rota: senão a nota é
+        # silenciosamente descartada (grouped só tem rotas de --set).
+        routes = list(grouped) + [r for r in notes if r not in grouped]
+        for route in routes:
+            apply_set(compat, route, grouped.get(route, []), notes)
 
     # Campos derivados não dependem de --set: --set só toca evidência.
     # Recalcula updated apenas quando algo mudou além do timestamp.

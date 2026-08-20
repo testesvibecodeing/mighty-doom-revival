@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-18T00:21:58Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-20T21:12:06Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -118,7 +118,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/player/set-push-token` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: PlayerApi.SetPushToken CONFIRMADO; envelope puro; push_token obrigatório (2200); nome de campo A VERIFICAR |
 | `game/player/stats` | ✅ | ✅ | · | · | · | — | · | ✅ | — | schema extraído |
 | `game/player/update-settings` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/player/user-data` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: user-data no bootstrap e refletindo progressão persistida após restart do servidor. |
+| `game/player/user-data` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: user-data no bootstrap e refletindo progressão persistida após restart do servidor. | client_harness 2026-08-20T21:06:49Z fluxo menu contra http://127.0.0.1:8110 |
 
 ### events
 
@@ -131,8 +131,8 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/events/game-mode-event-redeem-voucher` | ✅ | ✅ | · | · | · | — | ✅ | · | — | EventsApi.GameModeEventRedeemVoucher(voucherId); voucher_id literal CONFIRMADO; consome item do inventario, aplica ao run ativo (sem scheduledEventId no contrato). |
 | `game/events/game-mode-event-revive` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.Revive(scheduledEventId) sem DTO -> envelope puro; +1 revive no run do evento. |
 | `game/events/get-instance` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.GetInstance(instanceId) -> GetInstanceResponse{eventInstance}; sem DTO EventInstance no metadata — respondido com o wire do schedule (mesmo DTO que o cliente parseia em get-schedule). A VERIFICAR ate captura do cliente. |
-| `game/events/get-progress` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: eventos do menu com progresso/timers vindos do servidor. 2026-08-19: preview de archive dos story passes parseia no boot; o FTUE só chama end-season depois dele (sem start-season). |
-| `game/events/get-schedule` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: menu com eventos do servidor (Slayers Energy / Speedrun Challenge) no emulador. 2026-08-19: story battle passes FORA do schedule — o EventModeController trata todo evento agendado como game-mode e NRE em InternalUpdateEventData com o FTUE_BattlePass na lista (CARREGANDO eterno); sem eles o boot flui. A VERIFICAR: com game-data completo, o conversor por args talvez tolere a entrada. |
+| `game/events/get-progress` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: eventos do menu com progresso/timers vindos do servidor. | 2026-08-19: preview de archive dos story passes parseia no boot; o FTUE só chama end-season depois dele (sem start-season). |
+| `game/events/get-schedule` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: menu com eventos do servidor (Slayers Energy / Speedrun Challenge) no emulador. | 2026-08-19: story battle passes FORA do schedule — o EventModeController trata todo evento agendado como game-mode e NRE em InternalUpdateEventData com o FTUE_BattlePass na lista (CARREGANDO eterno); sem eles o boot flui. A VERIFICAR: com game-data completo, o conversor por args talvez tolere a entrada. | client_harness 2026-08-20T21:06:49Z fluxo menu contra http://127.0.0.1:8110 |
 | `game/events/start-game-mode-event` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.StartGameModeEvent(scheduledEventId) -> StartGameModeEventResponse{attempt}; attempt = GameModeEventRun{scheduledEventId,seed,startTime,slots,maxLoot,battlePassPointsLoot,gameModeEventProgress,lootPools} extraido do metadata; teste events.mjs + fixture server-replay. |
 | `game/events/update-game-mode-event-progress` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | EventsApi.UpdateGameModeEventProgress(scheduledEventId,progress) -> {minUpdateTime}; progress literal CONFIRMADO; espelha chapters/update (min_update_time nullable validado com cliente real). |
 
@@ -145,17 +145,17 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/battle-pass/claim-track-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.ClaimTrackAll(seasonId) -> ClaimTrackAllResponse{resources}; varre tiers com pontos suficientes, 2300 nothing-to-claim quando vazio. |
 | `game/battle-pass/claim-track-reward` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.ClaimTrackReward(seasonId,tierId,rewardId) -> {resources}; gates 2200 tier/reward-not-found, 2300 insufficient-points/reward-already-claimed/premium-required. |
 | `game/battle-pass/claim-track-tier` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | ClaimTrackTierResponse{resources}; premium gate agora exige PremiumState=2 conforme enum extraido. |
-| `game/battle-pass/end-season` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.EndSeason(seasonId) -> EndSeasonResponse{resources}; concede os rewards ja conquistados e marca ActiveState=Ended(2); gates 2300 season-ended/season-not-started. 2026-08-19: activeSeasonState materializa estado default quando não há start-season — o FTUE chama end-season direto após o preview de archive do get-progress (400 season-not-started em loop + diálogo de ERRO antes do fix). |
+| `game/battle-pass/end-season` | ✅ | ✅ | ✅ | ✅ | · | — | ✅ | ✅ | — | BattlePassApi.EndSeason(seasonId) -> EndSeasonResponse{resources}; concede os rewards ja conquistados e marca ActiveState=Ended(2); gates 2300 season-ended/season-not-started. | 2026-08-19: activeSeasonState materializa estado default quando não há start-season — o FTUE chama end-season direto após o preview de archive do get-progress (400 season-not-started em loop + diálogo de ERRO antes do fix). |
 | `game/battle-pass/prestige` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.Prestige(seasonId) -> PrestigeResponse{resources}; exige ultimo tier, concede prestige_reward_pool, reseta pontos para prestige_point_start+(prestige-1)*increment e limpa reward_claims (A VERIFICAR); enums e DTOs extraidos do metadata. |
 | `game/battle-pass/redeem-premium-entitlement` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | BattlePassApi.RedeemPremiumEntitlement(seasonId) -> Response sem campos (envelope puro); PremiumState None=0 -> Premium=2 mediante posse do premium_entitlement_id do args; teste battle-pass.mjs + fixture. |
-| `game/battle-pass/start-season` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | StartSeasonResponse{state} de BattlePassEventState{seasonId,activeState,premiumState,points,prestige,rewardClaims,missionProgress} extraido; premium_state corrigido para o enum (None/Free/Premium). |
+| `game/battle-pass/start-season` | ✅ | ✅ | ✅ | ✅ | · | — | ✅ | ✅ | — | StartSeasonResponse{state} de BattlePassEventState{seasonId,activeState,premiumState,points,prestige,rewardClaims,missionProgress} extraido; premium_state corrigido para o enum (None/Free/Premium). |
 
 ### daily-rewards
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/daily-rewards/claim` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
-| `game/daily-rewards/get-state` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/daily-rewards/get-state` | ✅ | · | ✅ | ✅ | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 
 ### idle-rewards
 
@@ -164,7 +164,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/idle-rewards/ad-boost` | ✅ | ✅ | · | · | · | — | · | · | — | metadata v29: IdleRewardApi.AdBoost(rewardTokenId) CONFIRMADO; consome AdRewardToken IdleRewardBoost ignorando cooldown; sem emissor game/ads/* o 2300 é honesto; reward_token_id A VERIFICAR |
 | `game/idle-rewards/boost` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: IdleRewardApi.Boost() CONFIRMADO; sem Response DTO -> envelope puro; concede períodos pendentes × gameData.idle_reward.boost.multiplier, cooldown do boost grátis |
 | `game/idle-rewards/claim` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/idle-rewards/get-state` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/idle-rewards/get-state` | ✅ | · | ✅ | ✅ | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 
 ### store
 
@@ -173,11 +173,11 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/store/activate-daily-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/store/activate-offer` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.ActivateOffer(offerId, gearResourceId) CONFIRMADO; ActivateOfferResponse{offer}; fixture server-replay 2026-08-17; offer_id/gear_resource_id A VERIFICAR |
 | `game/store/ad-purchase` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: StoreApi.AdPurchaseItem(itemId, rewardTokenId) CONFIRMADO; AdPurchaseResponse{resources}; token StoreItemCrate/StoreItemGold via ad-tokens.js; sem emissor ads -> 2300 honesto; item_id/reward_token_id A VERIFICAR |
-| `game/store/get` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/store/get` | ✅ | · | ✅ | ✅ | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 | `game/store/get-daily-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/store/get-items` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetItems() CONFIRMADO; GetItemsResponse{storeItems, iapItems, adItems}; iap_items vazio por design (IAP desligado); packs ad separados em ad_items |
 | `game/store/get-offer-items` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetOfferItems() CONFIRMADO; mesmo DTO de GetItems; fixture server-replay 2026-08-17 |
-| `game/store/get-offers` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/store/get-offers` | ✅ | · | ✅ | ✅ | · | — | · | ✅ | — | implementado, aguardando validação |
 | `game/store/get-player-offers` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetPlayerOffers() CONFIRMADO; GetPlayerOffersResponse{offers} com PlayerOfferModel das offers ativadas |
 | `game/store/purchase` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 
@@ -200,13 +200,13 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/tutorial/complete-sequence` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/tutorial/complete-sequence` | ✅ | · | ✅ | ✅ | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 
 ### session
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/session/heartbeat` | ✅ | · | · | · | · | — | ✅ | ✅ | — | implementado, aguardando validação |
+| `game/session/heartbeat` | ✅ | · | ✅ | ✅ | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 | `game/session/refresh` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: session/refresh contínuo durante o combate (keepalive). |
 | `game/session/update-legal` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SessionApi.UpdateLegal CONFIRMADO; envelope puro; persiste versões tos/pp/eula + flags em session/legal; nomes de campos A VERIFICAR |
 
@@ -214,11 +214,11 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/auth/login-device` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: login-device no bootstrap do emulador, resposta aceita pelo cliente. |
+| `game/auth/login-device` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: login-device no bootstrap do emulador, resposta aceita pelo cliente. | client_harness 2026-08-20T21:06:49Z fluxo menu contra http://127.0.0.1:8110 |
 | `game/auth/login-game-center` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 | `game/auth/login-google-play-games` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 | `game/auth/login-xbox` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: AuthApi login de plataforma; ResponseCode EXTRAÍDO dos fieldDefaultValues (âncoras Success=1000/2200/2300/3000): XboxUnavailable=3127 — indisponibilidade real, Revival não fala com Xbox Live |
-| `game/auth/register` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: registro da conta revivaltest feito pelo cliente no emulador, boot completo sem erros no logcat. 2026-08-19: JWT aud/audience como ARRAY — o cliente tipa audience como String[] e string crua derruba o UpdateSessionToken com "Could not cast or convert from System.String to System.String[]" em register/login/refresh (vale para todo token de sessão). |
+| `game/auth/register` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: registro da conta revivaltest feito pelo cliente no emulador, boot completo sem erros no logcat. | 2026-08-19: JWT aud/audience como ARRAY — o cliente tipa audience como String[] e string crua derruba o UpdateSessionToken com 'Could not cast or convert from System.String to System.String[]' em register/login/refresh (vale para todo token de sessão). |
 
 ### identity
 
@@ -279,7 +279,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/iap/begin-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/iap/cancel-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/iap/confirm-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/iap/get-purchase-history-info` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
+| `game/iap/get-purchase-history-info` | ✅ | · | ✅ | ✅ | · | — | ✅ | ✅ | — | implementado, aguardando validação |
 | `game/iap/recover-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/iap/validate-purchase` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 

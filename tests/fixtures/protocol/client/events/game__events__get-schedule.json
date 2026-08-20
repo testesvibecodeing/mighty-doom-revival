@@ -1,0 +1,21 @@
+{
+  "endpoint": "game/events/get-schedule",
+  "provenance": "client",
+  "captured_at": "2026-08-20T21:06:49Z",
+  "sanitized": true,
+  "source": "client_harness.py (request_log pareado do servidor)",
+  "request": {
+    "method": "POST",
+    "path": "/game/events/get-schedule",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "code": 1000,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "scheduled_events": []
+    }
+  }
+}

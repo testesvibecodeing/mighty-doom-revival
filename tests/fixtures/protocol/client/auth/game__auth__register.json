@@ -1,28 +1,25 @@
 {
   "endpoint": "game/auth/register",
-  "provenance": "server-replay",
-  "captured_at": "2026-08-17T12:33:00Z",
+  "provenance": "client",
+  "captured_at": "2026-08-19T22:26:18Z",
   "sanitized": true,
-  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
     "method": "POST",
     "path": "/game/auth/register",
-    "headers": {
-      "content-type": "application/json",
-      "x-ubu-apiversion": "24.0.0",
-      "x-ubu-token": "<token>"
-    },
     "body": {
+      "platform_id": 4,
       "client_version": "1.13.1",
-      "device_id": "<device-id>"
+      "region": "US"
     }
   },
   "response": {
     "status": 200,
+    "code": 1000,
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "user_id": 2,
+      "user_id": 8,
       "device_id": "<device-id>",
       "password": "<password>",
       "recovery_code": "<recovery-code>",

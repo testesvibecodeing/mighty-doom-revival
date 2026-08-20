@@ -13,7 +13,7 @@
       "x-ubu-token": "<token>"
     },
     "body": {
-      "push_token": "fixtures-push"
+      "push_token": "<push-token>"
     }
   },
   "response": {

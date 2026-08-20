@@ -1,0 +1,283 @@
+{
+  "endpoint": "game/store/get",
+  "provenance": "client",
+  "captured_at": "2026-08-20T21:06:49Z",
+  "sanitized": true,
+  "source": "client_harness.py (request_log pareado do servidor)",
+  "request": {
+    "method": "POST",
+    "path": "/game/store/get",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "code": 1000,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "day_start_epoch": 1787184000,
+      "day_end_epoch": 1787270400,
+      "week_start_epoch": 1786838400,
+      "week_end_epoch": 1787443200,
+      "store_quota_purchases": [],
+      "store_items": [
+        {
+          "id": 900001,
+          "tag": "revival_starter_weapon_pack",
+          "contents": {
+            "display_type": 0,
+            "priority": 100,
+            "resources": [
+              {
+                "rid": 4,
+                "amount": 1,
+                "level": 2,
+                "tier": 1
+              },
+              {
+                "rid": 76,
+                "amount": 1,
+                "level": 1
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 1,
+              "amount": 2500
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        },
+        {
+          "id": 900002,
+          "tag": "revival_coin_pack_small",
+          "contents": {
+            "display_type": 0,
+            "priority": 90,
+            "resources": [
+              {
+                "rid": 1,
+                "amount": 10000
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 3,
+              "amount": 50
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        },
+        {
+          "id": 900003,
+          "tag": "revival_coin_pack_large",
+          "contents": {
+            "display_type": 0,
+            "priority": 80,
+            "resources": [
+              {
+                "rid": 1,
+                "amount": 45000
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 3,
+              "amount": 180
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        },
+        {
+          "id": 900004,
+          "tag": "revival_weapon_crate_pack",
+          "contents": {
+            "display_type": 0,
+            "priority": 70,
+            "resources": [
+              {
+                "rid": 30,
+                "amount": 3
+              },
+              {
+                "rid": 29,
+                "amount": 3
+              },
+              {
+                "rid": 307,
+                "amount": 500
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 1,
+              "amount": 8000
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        },
+        {
+          "id": 900005,
+          "tag": "revival_barrage_gear_pack",
+          "contents": {
+            "display_type": 0,
+            "priority": 60,
+            "resources": [
+              {
+                "rid": 90,
+                "amount": 1
+              },
+              {
+                "rid": 88,
+                "amount": 1
+              },
+              {
+                "rid": 91,
+                "amount": 1
+              },
+              {
+                "rid": 89,
+                "amount": 1
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 1,
+              "amount": 15000
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        },
+        {
+          "id": 900006,
+          "tag": "revival_gold_slayer_pack",
+          "contents": {
+            "display_type": 0,
+            "priority": 50,
+            "resources": [
+              {
+                "rid": 72,
+                "amount": 1,
+                "level": 1
+              },
+              {
+                "rid": 307,
+                "amount": 2000
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 3,
+              "amount": 320
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        },
+        {
+          "id": 900007,
+          "tag": "revival_ultimate_pack",
+          "contents": {
+            "display_type": 0,
+            "priority": 40,
+            "resources": [
+              {
+                "rid": 32,
+                "amount": 1,
+                "level": 1
+              },
+              {
+                "rid": 34,
+                "amount": 1,
+                "level": 1
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 1,
+              "amount": 30000
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        },
+        {
+          "id": 900008,
+          "tag": "revival_event_skin_pack",
+          "contents": {
+            "display_type": 0,
+            "priority": 30,
+            "resources": [
+              {
+                "rid": 121,
+                "amount": 1
+              },
+              {
+                "rid": 127,
+                "amount": 1
+              },
+              {
+                "rid": 137,
+                "amount": 1
+              }
+            ],
+            "mystery_resources": [],
+            "reward_track_id": 0
+          },
+          "cost": [
+            {
+              "rid": 3,
+              "amount": 150
+            }
+          ],
+          "requirements": {
+            "selector_format_version": 1,
+            "player": {}
+          }
+        }
+      ],
+      "iap_items": [],
+      "ad_items": []
+    }
+  }
+}

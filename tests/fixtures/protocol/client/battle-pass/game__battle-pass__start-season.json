@@ -1,0 +1,67 @@
+{
+  "endpoint": "game/battle-pass/start-season",
+  "provenance": "client",
+  "captured_at": "2026-08-20T21:06:49Z",
+  "sanitized": true,
+  "source": "client_harness.py (request_log pareado do servidor)",
+  "request": {
+    "method": "POST",
+    "path": "/game/battle-pass/start-season",
+    "body": {
+      "season_id": "4f7586f7-98cb-4750-a2e2-ecd45a131a92"
+    }
+  },
+  "response": {
+    "status": 200,
+    "code": 1000,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "state": {
+        "season_id": "4f7586f7-98cb-4750-a2e2-ecd45a131a92",
+        "active_state": 1,
+        "premium_state": 2,
+        "points": 0,
+        "prestige": 0,
+        "reward_claims": [],
+        "mission_progress": [
+          {
+            "mission_id": 1,
+            "progress": 0,
+            "claim_state": 1
+          },
+          {
+            "mission_id": 2,
+            "progress": 0,
+            "claim_state": 1
+          },
+          {
+            "mission_id": 3,
+            "progress": 0,
+            "claim_state": 1
+          },
+          {
+            "mission_id": 4,
+            "progress": 0,
+            "claim_state": 1
+          },
+          {
+            "mission_id": 5,
+            "progress": 0,
+            "claim_state": 1
+          },
+          {
+            "mission_id": 6,
+            "progress": 0,
+            "claim_state": 1
+          },
+          {
+            "mission_id": 7,
+            "progress": 0,
+            "claim_state": 1
+          }
+        ]
+      }
+    }
+  }
+}

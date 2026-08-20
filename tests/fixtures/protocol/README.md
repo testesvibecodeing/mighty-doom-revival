@@ -26,9 +26,18 @@ um por endpoint, no formato:
 ## Sanitização
 
 Tokens, passwords e recovery codes viram `<token>`/`<password>`/
-`<recovery-code>`; timestamps voláteis (`uts`) viram `<uts>`; URLs absolutas
+`<recovery-code>`; `device_id` e `push_token` viram `<device-id>`/`<push-token>`;
+`puuid` vira `<puuid>`; timestamps voláteis (`uts`) viram `<uts>`; URLs absolutas
 perdem o host (`<base>/data`); `account_age`/`last_login` zeram. O shape do
 wire — chaves, tipos, nullabilidade — permanece exatamente o observado.
+
+`puuid` **não é credencial**: é o identificador estável da conta no wire, que
+sozinho não dá acesso a nada. Ele é redigido porque correlaciona execuções e
+sobrevive a restart, e a fixture só precisa provar a chave e o tipo. As
+fixtures `server-replay` são geradas contra um servidor de captura descartável
+(`scripts/capture_protocol_fixtures.mjs`), então nem todo valor que aparecia
+nelas vinha de uma conta real — a redação vale para as duas provenances por
+uniformidade, não por classificação de risco.
 
 ## Regras
 

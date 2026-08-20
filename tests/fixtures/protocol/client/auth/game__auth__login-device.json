@@ -1,25 +1,23 @@
 {
   "endpoint": "game/auth/login-device",
-  "provenance": "server-replay",
-  "captured_at": "2026-08-17T12:33:00Z",
+  "provenance": "client",
+  "captured_at": "2026-08-20T21:06:49Z",
   "sanitized": true,
-  "note": "Capturado contra o servidor Revival com dataset sintético; substitua por provenance=client via scripts/client_harness.py",
+  "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
     "method": "POST",
     "path": "/game/auth/login-device",
-    "headers": {
-      "content-type": "application/json",
-      "x-ubu-apiversion": "24.0.0",
-      "x-ubu-token": "<token>"
-    },
     "body": {
-      "client_version": "1.13.1",
-      "user_id": 2,
-      "password": "<password>"
+      "user_id": 11,
+      "device_id": "<device-id>",
+      "password": "<password>",
+      "platform_id": 4,
+      "client_version": "1.13.1"
     }
   },
   "response": {
     "status": 200,
+    "code": 1000,
     "body": {
       "uts": "<uts>",
       "code": 1000,
@@ -32,8 +30,7 @@
         "eula_version": 1,
         "allow_personalization": false,
         "allow_sharing": false
-      },
-      "playfab_session_ticket": null
+      }
     }
   }
 }

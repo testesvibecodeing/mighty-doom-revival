@@ -1,0 +1,20 @@
+{
+  "endpoint": "game/session/heartbeat",
+  "provenance": "client",
+  "captured_at": "2026-08-19T22:26:18Z",
+  "sanitized": true,
+  "source": "client_harness.py (request_log pareado do servidor)",
+  "request": {
+    "method": "POST",
+    "path": "/game/session/heartbeat",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "code": 1000,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000
+    }
+  }
+}
