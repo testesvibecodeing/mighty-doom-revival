@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -183,6 +184,51 @@ def scan_apk(apk: Path, target_host: str) -> dict[str, object]:
         }
 
 
+LAB_MARKER = "LAB_ONLY_INSECURE_HTTP"
+
+
+def scan_insecure_lab_markers(apk: Path, target_host: str) -> dict[str, object]:
+    """Procura, no APK, sinais de que ele é artefato de laboratório.
+
+    Três sinais, em ordem de gravidade:
+
+    1. base URL do game server em `http://` para o host alvo (com ou sem
+       userinfo de padding) — cleartext no wire;
+    2. o marcador textual `LAB_ONLY_INSECURE_HTTP` em qualquer entrada;
+    3. `cleartextTrafficPermitted="true"` no `network_security_config`.
+
+    Só o conteúdo conta: renomear o arquivo não muda nada.
+    """
+    alvo = re.escape(target_host.encode("ascii"))
+    http_re = re.compile(rb"http://(?:[A-Za-z0-9._~%!$&'()*+,;=:-]*@)?" + alvo)
+    achados = {"insecure": False, "reason": "", "http_base_urls": 0,
+               "marker_entries": [], "cleartext_permitted": False}
+    with zipfile.ZipFile(apk, "r") as archive:
+        for name in archive.namelist():
+            if not (name == "assets/bin/Data/Managed/Metadata/global-metadata.dat"
+                    or (name.startswith("assets/aa/") and name.endswith(".bundle"))
+                    or name.startswith("res/xml/")
+                    or name == "AndroidManifest.xml"):
+                continue
+            try:
+                data = archive.read(name)
+            except Exception:
+                continue
+            hits = len(http_re.findall(data))
+            if hits:
+                achados["http_base_urls"] += hits
+            if LAB_MARKER.encode("ascii") in data:
+                achados["marker_entries"].append(name)
+    if achados["http_base_urls"]:
+        achados["insecure"] = True
+        achados["reason"] = (f"{achados['http_base_urls']} base URL(s) em http:// "
+                             f"para {target_host}")
+    elif achados["marker_entries"]:
+        achados["insecure"] = True
+        achados["reason"] = f"marcador {LAB_MARKER} em {achados['marker_entries'][0]}"
+    return achados
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apk", required=True)
@@ -205,7 +251,18 @@ def main() -> int:
         print(f"ERRO ao verificar APK: {exc}", file=sys.stderr)
         return 2
 
-    result["verified"] = bool(result["target_occurrences"]) and not bool(result["official_occurrences"])
+    # Verificação NEGATIVA do entregável: o artefato final é HTTPS, sempre.
+    # scripts/patch_lab_http.py produz um APK de laboratório com o wire em
+    # cleartext e marcador LAB_ONLY_INSECURE_HTTP; ele nunca pode passar por
+    # aqui como se fosse final. A checagem é por conteúdo, não por nome de
+    # arquivo — renomear não engana o gate.
+    lab_findings = scan_insecure_lab_markers(apk, host)
+    result["lab_markers"] = lab_findings
+    result["verified"] = (
+        bool(result["target_occurrences"])
+        and not bool(result["official_occurrences"])
+        and not lab_findings["insecure"]
+    )
     payload = json.dumps(result, indent=2, ensure_ascii=False)
     print(payload)
     if args.report:
@@ -226,6 +283,13 @@ def main() -> int:
             file=sys.stderr,
         )
         return 5
+    if lab_findings["insecure"]:
+        print(
+            "ERRO: este é um artefato de LABORATÓRIO, não um entregável — "
+            f"{lab_findings['reason']}. O APK final exige HTTPS.",
+            file=sys.stderr,
+        )
+        return 6
 
     print("APK final validado: endpoint Revival presente e API Gear oficial ausente nas áreas verificadas.")
     return 0

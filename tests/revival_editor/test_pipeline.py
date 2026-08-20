@@ -152,11 +152,49 @@ def _toolchain_sem_java() -> ToolchainReport:
     )
 
 
-def _efeito_relatorio_patch(conteudo: dict | None = None) -> Callable[[list[str]], None]:
-    payload = conteudo if conteudo is not None else {
-        "bundles_alterados": ["assets/bin/Data/resources.bundle"],
-        "crcs_zerados": ["resources.bundle"],
+def _entrada_bundle(
+    caminho: str, *, mudou: bool = False, crc_zerado: bool | None = None
+) -> dict:
+    """Entrada de `bundle_aware` no schema real do patch_bundle_from_report.py."""
+    entrada: dict = {
+        "path": caminho,
+        "changed": mudou,
+        "objects": [{"type": "MonoBehaviour", "name": "ProdGameServer",
+                     "path_id": 24130, "replacements": 1}] if mudou else [],
+        "replacements": 1 if mudou else 0,
+        "verified": mudou,
+        "inspection": {"serializable": [], "raw_only": [],
+                       "serializable_references": 0, "raw_only_references": 0},
+        "remaining_official_raw_references": 0,
     }
+    if crc_zerado is not None:
+        entrada["catalog_crc"] = {
+            "path": "D:\\decoded\\assets\\aa\\catalog.json",
+            "bundle": caminho.replace("\\", "/").rsplit("/", 1)[-1],
+            "hash": "da" * 16,
+            "crc_before": 260506697,
+            "zeroed": crc_zerado,
+        }
+    return entrada
+
+
+def _relatorio_bundle_aware(*entradas: dict) -> dict:
+    return {
+        "server_host": "doom.exemplo.com",
+        "status": "ok",
+        "bundle_aware": list(entradas) or [
+            # recorte fiel do e2e-vps-fase13: um bundle de cenas alterado com
+            # CRC zerado, os demais intactos.
+            _entrada_bundle("assets/bin/Data/Managed/Metadata/global-metadata.dat"),
+            _entrada_bundle("assets\\aa\\Android\\defaultlocalgroup_scenes_all_da.bundle",
+                            mudou=True, crc_zerado=True),
+            _entrada_bundle("assets\\aa\\Android\\defaultlocalgroup_assets_all_db.bundle"),
+        ],
+    }
+
+
+def _efeito_relatorio_patch(conteudo: dict | None = None) -> Callable[[list[str]], None]:
+    payload = conteudo if conteudo is not None else _relatorio_bundle_aware()
 
     def efeito(cmd: list[str]) -> None:
         rel = Path(cmd[cmd.index("--report") + 1])
@@ -311,8 +349,16 @@ class TestPipelineSucesso(BasePipeline):
         )
         # o APK de entrada é imutável
         self.assertEqual(self.apk.read_bytes(), b"APK-ORIGINAL")
-        self.assertEqual(resultado.bundles_alterados, ["assets/bin/Data/resources.bundle"])
-        self.assertEqual(resultado.crcs_zerados, ["resources.bundle"])
+        self.assertEqual(
+            resultado.bundles_alterados,
+            ["assets/aa/Android/defaultlocalgroup_scenes_all_da.bundle"],
+            "derivado de bundle_aware[].changed=true, separador normalizado",
+        )
+        self.assertEqual(
+            resultado.crcs_zerados,
+            ["assets/aa/Android/defaultlocalgroup_scenes_all_da.bundle"],
+            "derivado de bundle_aware[].catalog_crc.zeroed=true",
+        )
         self.assertTrue(self.projeto.joinpath("decoded").is_dir(), "workspace decodado criado")
 
     def test_java_resolvido_nao_e_o_do_path(self) -> None:
@@ -348,6 +394,84 @@ class TestPipelineSucesso(BasePipeline):
         self.assertEqual(dados["host"], "doom.exemplo.com")
         self.assertEqual(len(dados["steps"]), 8)
         json.dumps(dados)  # não pode levantar
+
+
+# ----------------------------------------------------------------------
+# consolidação do schema bundle-aware real (e2e-vps-fase13)
+# ----------------------------------------------------------------------
+
+
+class TestPipelineConsolidacaoBundles(BasePipeline):
+    def test_bundle_alterado_sem_crc_zerado_falha_antes_do_rebuild(self) -> None:
+        """assets/aa/** alterado sem catalog_crc.zeroed = catálogo quebrado."""
+        relatorio = _relatorio_bundle_aware(
+            _entrada_bundle("assets\\aa\\Android\\scenes.bundle", mudou=True, crc_zerado=False),
+        )
+        ctx = CtxFalso(_roteiro_sucesso())
+        # troca o payload padrão das duas chamadas de patch pelo relatório viciado
+        for i, (casador, _) in enumerate(ctx.roteiro):
+            if casador in (_eh_patch, _eh_patch_bundle):
+                ctx.roteiro[i] = (casador, Resposta(0, _efeito_relatorio_patch(relatorio)))
+        resultado = self._rodar(ctx)
+
+        self.assertFalse(resultado.ok)
+        self.assertEqual(resultado.failure.code, "BUNDLE_SEM_CRC")
+        self.assertIn("scenes.bundle", resultado.failure.details)
+        self.assertEqual(resultado.bundles_alterados, ["assets/aa/Android/scenes.bundle"])
+        self.assertFalse(
+            any(_eh_build(c) for c in ctx.comandos),
+            "rebuild não pode rodar com a relação aberta",
+        )
+
+    def test_crc_zerado_para_bundle_intacto_falha(self) -> None:
+        """CRC zerado sem mudança correspondente também é relação aberta."""
+        relatorio = _relatorio_bundle_aware(
+            _entrada_bundle("assets\\aa\\Android\\scenes.bundle", mudou=False, crc_zerado=True),
+        )
+        ctx = CtxFalso(_roteiro_sucesso())
+        for i, (casador, _) in enumerate(ctx.roteiro):
+            if casador in (_eh_patch, _eh_patch_bundle):
+                ctx.roteiro[i] = (casador, Resposta(0, _efeito_relatorio_patch(relatorio)))
+        resultado = self._rodar(ctx)
+
+        self.assertFalse(resultado.ok)
+        self.assertEqual(resultado.failure.code, "CRC_SEM_MUDANCA")
+        self.assertEqual(resultado.crcs_zerados, ["assets/aa/Android/scenes.bundle"])
+
+    def test_bundle_alterado_fora_de_assets_aa_dispensa_crc(self) -> None:
+        """A regra do CRC é do catálogo Addressables (assets/aa/**)."""
+        relatorio = _relatorio_bundle_aware(
+            _entrada_bundle("assets/bin/Data/resources.bundle", mudou=True),
+        )
+        ctx = CtxFalso(_roteiro_sucesso())
+        for i, (casador, _) in enumerate(ctx.roteiro):
+            if casador in (_eh_patch, _eh_patch_bundle):
+                ctx.roteiro[i] = (casador, Resposta(0, _efeito_relatorio_patch(relatorio)))
+        resultado = self._rodar(ctx)
+
+        self.assertTrue(resultado.ok, str(resultado.failure))
+        self.assertEqual(resultado.bundles_alterados, ["assets/bin/Data/resources.bundle"])
+        self.assertEqual(resultado.crcs_zerados, [])
+
+    def test_fast_path_puro_sem_bundle_aware_deixa_agregados_vazios(self) -> None:
+        """strategy=fast-path com exit 0: relatório do patch_apk, sem bundles."""
+        relatorio = {"server_host": "doom.exemplo.com", "status": "ok"}
+        roteiro = [
+            (_eh_decode, Resposta(0)),
+            (_eh_patch, Resposta(0, _efeito_relatorio_patch(relatorio))),
+            (_eh_build, Resposta(0, _efeito_cria_saida())),
+            (_eh_verify, Resposta(0)),
+            (_eh_sign, Resposta(0)),
+            (_eh_sign_verify, Resposta(0)),
+        ]
+        ctx = CtxFalso(roteiro)
+        resultado = self._rodar(ctx, strategy="fast-path")
+
+        self.assertTrue(resultado.ok, str(resultado.failure))
+        self.assertEqual(resultado.strategy_used, "fast-path")
+        self.assertFalse(ctx.nomeados(PATCH_BUNDLE_CLI), "sem sweep na estratégia fast-path")
+        self.assertEqual(resultado.bundles_alterados, [])
+        self.assertEqual(resultado.crcs_zerados, [])
 
 
 # ----------------------------------------------------------------------
@@ -550,6 +674,47 @@ class TestPipelineFalhasTardias(BasePipeline):
         ctx.cancelado_apos = 1  # cancela depois do decode
         with self.assertRaises(JobCancelled):
             self._rodar(ctx)
+
+
+class TestEtapaRevivalAuth(unittest.TestCase):
+    """A etapa da RevivalAuthActivity e OPCIONAL e nao muda o build de endpoint.
+
+    O E2E de verdade vive no rig (work/audit-opus/FASE-7-E2E-LAB.md); aqui o que
+    se cobra e o contrato do orquestrador: o passo so existe quando pedido, o
+    relatorio nao carrega URL, e `auth_report` fica nulo quando ninguem pediu a
+    Activity.
+    """
+
+    def test_resultado_sem_auth_nao_inventa_relatorio(self):
+        from revival_editor.pipeline import PipelineResult
+        resultado = PipelineResult(host="doom.exemplo.br")
+        self.assertIsNone(resultado.auth_report)
+        self.assertIn("auth_report", resultado.to_dict())
+        self.assertIsNone(resultado.to_dict()["auth_report"])
+
+    def test_relatorio_de_auth_e_serializavel_e_sem_url(self):
+        from revival_editor.pipeline import PipelineResult
+        resultado = PipelineResult(host="doom.exemplo.br")
+        resultado.auth_report = {
+            "activity_class": "br.com.revival.auth.RevivalAuthActivity",
+            "dex_entry": "classes3.dex",
+            "launcher_count": 1,
+            "unity_activity_preserved": True,
+            "base_url_scheme": "https",
+            "secrets_redacted": True,
+        }
+        dados = json.dumps(resultado.to_dict())
+        self.assertIn("classes3.dex", dados)
+        self.assertNotIn("http://", dados, "a URL completa nao entra no relatorio")
+        self.assertEqual(resultado.to_dict()["auth_report"]["launcher_count"], 1)
+
+    def test_apply_endpoint_aceita_a_flag(self):
+        import inspect
+        from revival_editor.pipeline import apply_endpoint
+        assinatura = inspect.signature(apply_endpoint)
+        self.assertIn("revival_auth", assinatura.parameters)
+        self.assertFalse(assinatura.parameters["revival_auth"].default,
+                         "desligado por padrao: build de endpoint continua igual")
 
 
 if __name__ == "__main__":

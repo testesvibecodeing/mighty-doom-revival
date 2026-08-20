@@ -126,6 +126,11 @@ class PipelineResult:
     precheck_exit: int | None = None
     bundles_alterados: list[str] = field(default_factory=list)
     crcs_zerados: list[str] = field(default_factory=list)
+    # Relatório da RevivalAuthActivity quando o passo opcional roda; `None`
+    # quando o build é só de endpoint. Nunca carrega URL nem segredo.
+    auth_report: dict[str, Any] | None = None
+    api_version: str | None = None
+    client_version: str | None = None
     failure: Failure | None = None
 
     @property
@@ -145,6 +150,7 @@ class PipelineResult:
             "precheck_exit": self.precheck_exit,
             "bundles_alterados": self.bundles_alterados,
             "crcs_zerados": self.crcs_zerados,
+            "auth_report": self.auth_report,
             "ok": self.ok,
         }
         if self.failure:
@@ -160,6 +166,7 @@ def apply_endpoint(
     project_dir: Path | str,
     ca_file: Path | str | None = None,
     strategy: str = "auto",
+    revival_auth: bool = False,
     java_path: Path | str | None = None,
     analyze: Callable[..., Any] = analyze_apk,
     preflight: Callable[..., Any] = server_preflight,
@@ -182,7 +189,7 @@ def apply_endpoint(
             ctx, resultado,
             entrada=entrada, projeto=projeto, host=host_normalizado,
             ca=Path(ca_file) if ca_file else None,
-            strategy=strategy, java_path=java_path,
+            strategy=strategy, java_path=java_path, revival_auth=revival_auth,
             analyze=analyze, preflight=preflight, toolchain_detect=toolchain_detect,
         )
     except _AbortPipeline as abort:
@@ -202,6 +209,7 @@ def _executar(
     ca: Path | None,
     strategy: str,
     java_path: Path | str | None,
+    revival_auth: bool = False,
     analyze: Callable[..., Any],
     preflight: Callable[..., Any],
     toolchain_detect: Callable[..., Any],
@@ -337,13 +345,34 @@ def _executar(
 
     if relatorio_patch.is_file():
         resultado.patch_report = json.loads(relatorio_patch.read_text(encoding="utf-8"))
-        resultado.bundles_alterados = list(resultado.patch_report.get("bundles_alterados") or [])
-        resultado.crcs_zerados = list(resultado.patch_report.get("crcs_zerados") or [])
-        if resultado.bundles_alterados:
-            ctx.log(
-                f"bundles alterados: {len(resultado.bundles_alterados)} · "
-                f"CRCs zerados: {len(resultado.crcs_zerados)}"
+        _consolidar_bundles(ctx, resultado)
+
+    # -- autenticação Revival (opcional) ---------------------------------------
+    # Roda DEPOIS do patch de host e ANTES do rebuild: a Activity precisa do
+    # Manifest da árvore já patchada, e o dex entra no APK construído (o Apktool
+    # regenera classes*.dex a partir do smali, então dex solto na árvore não
+    # entra). Pós-condição conferida pelo próprio patcher: um único launcher,
+    # Activity Unity preservada com deep link.
+    dex_revival: Path | None = None
+    if revival_auth:
+        _passo(ctx, "auth", "[2b/7] RevivalAuthActivity — compilando e patchando Manifest…")
+        try:
+            from patch_revival_auth import apply as aplicar_auth  # noqa: PLC0415
+            relatorio_auth = aplicar_auth(
+                decoded=workspace,
+                base_url=f"https://{host}/collections/doom",
+                api_version=resultado.api_version or "24.0.0",
+                client_version=resultado.client_version or "1.13.1",
             )
+        except Exception as exc:  # noqa: BLE001 - AuthPatchError traz mensagem pronta
+            _falhar(resultado, code="REVIVAL_AUTH", stage="auth",
+                    message=f"injeção da RevivalAuthActivity falhou: {exc}")
+        resultado.auth_report = relatorio_auth
+        dex_revival = Path(relatorio_auth["dex_path"])
+        ctx.log(f"Activity {relatorio_auth['activity_class']} — launcher único, "
+                f"Unity preservada (dex {relatorio_auth['dex_sha256'][:16]}…)")
+        _registrar(resultado, "auth", 0, "patch_revival_auth")
+        ctx.raise_if_cancelled()
 
     # -- rebuild ---------------------------------------------------------------
     unsigned = build_dir / "revival-unsigned.apk"
@@ -358,6 +387,14 @@ def _executar(
                 message=f"apktool b falhou (exit {codigo})", exit_code=codigo or None)
     promote_atomic(temporario, unsigned)
     _registrar(resultado, "rebuild", codigo, "apktool b")
+
+    if dex_revival is not None:
+        from patch_revival_auth import inject_dex  # noqa: PLC0415
+        com_dex = ctx.temp_path(unsigned)
+        info_dex = inject_dex(unsigned, dex_revival, apk_out=com_dex)
+        promote_atomic(com_dex, unsigned)
+        ctx.log(f"Activity injetada como {info_dex['dex_entry']}")
+        resultado.auth_report = {**(resultado.auth_report or {}), **info_dex}
     ctx.raise_if_cancelled()
 
     # -- verificação pré-assinatura ---------------------------------------------
@@ -422,6 +459,65 @@ def _rodar_patch_bundle(
          "--report", str(relatorio), "--sweep-all-bundles"],
         cwd=REPO_ROOT, stage="patch-bundle", timeout=3600,
     )
+
+
+def _consolidar_bundles(ctx: RunnerProtocol, resultado: PipelineResult) -> None:
+    """Consolida bundles alterados/CRCs zerados do schema real do relatório.
+
+    O relatório do patch_bundle_from_report.py carrega os bundles na lista
+    `bundle_aware` — uma entrada por arquivo com `changed` e, para os do
+    catálogo, `catalog_crc.zeroed`. As chaves de topo `bundles_alterados`/
+    `crcs_zerados` que a versão anterior lia nunca existiram em nenhum CLI: o
+    e2e real (fase 13) terminou com os agregados vazios e um bundle alterado.
+
+    A relação precisa fechar ou o pipeline falha antes do rebuild desperdiçado:
+
+    - todo bundle `changed=true` sob `assets/aa/**` exige `catalog_crc.zeroed`;
+    - nenhum CRC zerado para bundle que o relatório não marca como alterado.
+
+    Caminhos são normalizados para `/` — o CLI escreve com o separador nativo
+    e o agregado precisa ser estável entre plataformas.
+    """
+    relatorio = resultado.patch_report or {}
+    entradas = relatorio.get("bundle_aware")
+    if not isinstance(entradas, list):
+        return  # fast-path puro: relatório do patch_apk não tem dados de bundle
+    sem_crc: list[str] = []
+    crc_sem_mudanca: list[str] = []
+    for entrada in entradas:
+        if not isinstance(entrada, dict):
+            continue
+        caminho = str(entrada.get("path") or "").replace("\\", "/")
+        if not caminho:
+            continue
+        crc = entrada.get("catalog_crc")
+        crc_zerado = isinstance(crc, dict) and crc.get("zeroed") is True
+        mudou = entrada.get("changed") is True
+        if mudou:
+            resultado.bundles_alterados.append(caminho)
+            if caminho.startswith("assets/aa/") and not crc_zerado:
+                sem_crc.append(caminho)
+        if crc_zerado:
+            resultado.crcs_zerados.append(caminho)
+            if not mudou:
+                crc_sem_mudanca.append(caminho)
+    if resultado.bundles_alterados or resultado.crcs_zerados:
+        ctx.log(
+            f"bundles alterados: {len(resultado.bundles_alterados)} · "
+            f"CRCs zerados: {len(resultado.crcs_zerados)}"
+        )
+    if sem_crc:
+        _falhar(
+            resultado, code="BUNDLE_SEM_CRC", stage="patch",
+            message="bundle alterado sob assets/aa/** sem CRC zerado no catálogo",
+            details="; ".join(sem_crc[:5]),
+        )
+    if crc_sem_mudanca:
+        _falhar(
+            resultado, code="CRC_SEM_MUDANCA", stage="patch",
+            message="CRC zerado para bundle que o relatório não marca como alterado",
+            details="; ".join(crc_sem_mudanca[:5]),
+        )
 
 
 def _verificar(ctx: RunnerProtocol, apk: Path, host: str, relatorio: Path) -> int:
