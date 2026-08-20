@@ -295,7 +295,15 @@ export function handleBattlePassRequest (path, body, userId, repo, runtime) {
     if (typeof seasonId !== 'string') return { error: [400, 2200, { reason: 'season-required' }] }
     const pass = battlePassById(runtime, seasonId)
     if (!available(runtime, pass)) return { error: [400, 2200, { reason: 'season-not-found' }] }
-    if (battlePassState(repo, userId, runtime, seasonId)) return { error: [400, 2300, { reason: 'season-already-started' }] }
+    const previous = battlePassState(repo, userId, runtime, seasonId)
+    // Provado no cliente real 1.13.1 (rig local 2026-08-19, request_log
+    // 250→251): o FTUE chama end-season e start-season DA MESMA season no
+    // mesmo boot. Estado encerrado (active_state 2) não é "started" —
+    // recomeçar devolve o state default; responder 2300 aqui derruba o
+    // cliente em "playing offline".
+    if (previous && previous.active_state !== 2) {
+      return { error: [400, 2300, { reason: 'season-already-started' }] }
+    }
     const state = battlePassDefaultState(runtime, pass)
     repo.setState(userId, NS, stateKey(seasonId), state)
     return { data: { state } }

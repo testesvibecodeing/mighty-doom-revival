@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import { chapterProgressionWire, handleChapterRequest } from '../src/chapters.js'
+import { stripNulls } from '../src/wire.js'
 
 // Dataset sintético — mesmos números do capture_protocol_fixtures.mjs.
 const coins = { id: 100, tag: 'coins', category_id: 1 }
@@ -89,11 +90,17 @@ assert.equal(result.data.attempt.challenge_id, 1)
 assert.equal(Object.keys(result.data).length, 1, 'StartChapterResponse tem só attempt')
 assert.equal(repo.attemptCount, 1)
 
-// UpdateChapter(progress) -> {min_update_time} apenas (nulo sobreviveu ao
-// cliente real: campo nullable no DTO).
+// UpdateChapter(progress) -> {min_update_time} apenas. O handler devolve null
+// (campo nullable no DTO — o null chegou a sobreviver ao cliente real), e o
+// `wire()` OMITE a chave antes de sair, pela regra do projeto: campo sem valor
+// é omitido, nunca null (AGENTS.md regra 6). Para um campo nullable os dois são
+// equivalentes no cliente — Newtonsoft deixa a propriedade ausente no default —
+// e a omissão é a única forma segura para os NÃO-nullable (DEAD-ENDS #3).
 result = handleChapterRequest('/game/chapters/update', { progress: { stage: 3, state: 0 } }, UID, repo, runtime)
-assert.ok('min_update_time' in result.data)
+assert.ok('min_update_time' in result.data, 'o handler continua declarando o campo')
+assert.equal(result.data.min_update_time, null)
 assert.equal(Object.keys(result.data).length, 1)
+assert.deepEqual(stripNulls(result.data), {}, 'no wire a chave não sai com null')
 
 // Revive() -> sem DTO dedicado: envelope puro.
 result = handleChapterRequest('/game/chapters/revive', {}, UID, repo, runtime)

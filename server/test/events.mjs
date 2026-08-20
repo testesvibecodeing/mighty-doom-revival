@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 
 import { Repository } from '../src/db.js'
 import { handleEventRequest } from '../src/events.js'
+import { stripNulls } from '../src/wire.js'
 
 // Dataset sintético — mesmo padrão dos demais testes de módulo.
 const coins = { id: 100, tag: 'coins', category_id: 1 }
@@ -93,6 +94,9 @@ try {
   assert.equal(H('/game/events/update-game-mode-event-progress', { scheduled_event_id: 503, progress: { stage: 1 } }).error[2].reason, 'no-active-run')
   result = H('/game/events/update-game-mode-event-progress', { scheduled_event_id: 501, progress: { stage: 2, state: 0 } })
   assert.deepEqual(result.data, { min_update_time: null })
+  // No wire a chave é omitida: campo sem valor nunca sai como null
+  // (AGENTS.md regra 6). Equivalente para nullable, obrigatório para os demais.
+  assert.deepEqual(stripNulls(result.data), {})
 
   // revive: envelope puro; exige run do evento.
   assert.equal(H('/game/events/game-mode-event-revive', { scheduled_event_id: 503 }).error[2].reason, 'no-active-run')

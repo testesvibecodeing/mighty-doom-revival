@@ -74,8 +74,14 @@ try {
     repo,
     runtime
   )
-  assert.equal(duplicate.error[2].reason, 'sequence-already-complete')
-  assert.equal(repo.balance(user.id, 100), 125)
+  // Reenvio de sequência já concluída é SUCESSO idempotente, não erro.
+  // Regressão do defeito medido no rig em 2026-08-20 (request_log 287): o 400
+  // que existia aqui derrubou o parse do cliente no restart com
+  // `Malformed response payload`.
+  assert.equal(duplicate.error, undefined, 'repetir não pode ser erro')
+  assert.deepEqual(duplicate.data.resources, [], 'nada é reconcedido')
+  assert.ok(Array.isArray(duplicate.data.resources), 'mesmo shape do sucesso')
+  assert.equal(repo.balance(user.id, 100), 125, 'saldo intacto: sem recompensa dupla')
 
   const progression = tutorialProgressionWire(repo, user.id)
   assert.deepEqual(progression.sequences.map(row => row.sequence), [1, 2])

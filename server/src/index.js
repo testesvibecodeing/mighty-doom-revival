@@ -24,6 +24,8 @@ import { handleTutorialRequest, tutorialProgressionWire } from './tutorial.js'
 import { createSiteRouter } from './site.js'
 import { panelResourceInfo } from './assets.js'
 import { readSmtpConfig, sendMail, smtpConfigured } from './mail.js'
+import { instanceIdentity } from './instance.js'
+import { stripNulls } from './wire.js'
 import { createSessionToken, sessionSecret, verifySessionToken } from './jwt.js'
 
 const serverRoot = resolve(import.meta.dirname, '..')
@@ -80,7 +82,23 @@ function wire (data = {}, code = 1000) {
   // "yyyy-MM-ddTHH:mm:ss" UTC (unix epoch, ISO com espaço e chaves
   // timestamp/utc_timestamp são ignoradas ou rejeitadas).
   const uts = formatServerTimestamp(new Date())
-  return { uts, code, ...data }
+  return stripNulls({ uts, code, ...data })
+}
+
+// Chaves cujo VALOR nunca deve ficar em texto claro no request_log (corpo
+// persistido = mínimo necessário ao contrato; a fixture final é sanitizada
+// de novo pelo harness). Headers não são persistidos — nada de Authorization.
+const SECRET_LOG_KEYS = new Set(['token', 'password', 'recovery_code', 'push_token', 'device_id'])
+
+function redactForLog (value, depth = 0) {
+  if (value === null || typeof value !== 'object' || depth > 8) return value
+  if (Array.isArray(value)) return value.map(item => redactForLog(item, depth + 1))
+  const out = {}
+  for (const [key, item] of Object.entries(value)) {
+    // Nullabilidade/shape preservados: só valores truthy são redigidos.
+    out[key] = SECRET_LOG_KEYS.has(key) && item ? `<${key}>` : redactForLog(item, depth + 1)
+  }
+  return out
 }
 
 function formatServerTimestamp (date) {
@@ -99,10 +117,33 @@ function json (res, status, payload) {
     'cache-control': 'no-store'
   })
   res.end(body)
+  persistGameLog(res, status, payload)
   // handleAccount() usa `return json(...)` como sinal de "rota respondida";
   // sem o true o handle() prossegue até o 404 catch-all e responde duas
   // vezes (ERR_HTTP_HEADERS_SENT). O json() de site.js já faz o mesmo.
   return true
+}
+
+// Ponto único de pairing: toda resposta JSON de rota /game/* anexa um ctx em
+// `res.revivalGameLog` (criado no handle()); quando a resposta efetivamente
+// sai, gravamos request+response na MESMA linha do request_log — inclusive
+// register/login-device, que não passam pela autenticação. Falha no log não
+// pode derrubar a resposta já enviada ao cliente.
+function persistGameLog (res, status, payload) {
+  const ctx = res.revivalGameLog
+  if (!ctx || ctx.logged) return
+  ctx.logged = true
+  try {
+    ctx.id = repo.logRequest(ctx.userId ?? null, ctx.path, redactForLog(ctx.body), {
+      method: ctx.method,
+      status,
+      code: typeof payload?.code === 'number' ? payload.code : null,
+      response: redactForLog(payload),
+      note: ctx.note || null
+    })
+  } catch (error) {
+    console.error('[request-log] falha ao persistir:', error.message)
+  }
 }
 
 function ok (res, data = {}) {
@@ -576,6 +617,7 @@ function loginUser (body) {
   const user = repo.login(userId, body.password)
   if (!user) return { error: [403, 2101] }
   return {
+    userId: user.id,
     data: {
       token: issueSessionToken(user.id),
       session_id: 1,
@@ -817,6 +859,19 @@ function handleAuthed (path, body, user, req) {
     if (handled) return handled
   }
 
+  // Consulta READ-ONLY do histórico de compras. Não reativa IAP: comprar
+  // continua desligado logo abaixo. Medido no rig em 2026-08-20 (request_log
+  // 323): o cliente chama esta rota no boot e o 400/2000 derrubou o parse com
+  // `Malformed response payload`, abortando o restart.
+  //
+  // Contrato extraído do metadata v29 (IapApi.GetIapPurchaseHistory ->
+  // IapHistoryPurchaseResponse): campos `timeSinceLastPurchase` e
+  // `totalLifetimePurchase`. Sem nenhuma compra, `total_lifetime_purchase` é 0
+  // e `time_since_last_purchase` é OMITIDO — numérico sem valor nunca vai como
+  // null (DEAD-ENDS #3), e omitir deixa o default do tipo concreto valer.
+  if (path === '/game/iap/get-purchase-history-info') {
+    return { data: { total_lifetime_purchase: 0 } }
+  }
   if (path.startsWith('/game/iap/')) return { error: [400, 2000, { iap_disabled: true }] }
   if (path.startsWith('/game/ads/')) return { data: { ads_disabled: true } }
 
@@ -842,6 +897,10 @@ async function handle (req, res) {
   if (req.method === 'GET' && path === '/revival/health') {
     return json(res, 200, {
       ok: true,
+      // Identidade da instância que respondeu (instance.js). Sem isto,
+      // client_version/api_version eram idênticos entre local e VPS e não
+      // distinguiam as duas instâncias. Nada aqui é segredo e nada toca `game/*`.
+      ...instanceIdentity(),
       server: runtime.revival.server_name,
       client_version: runtime.revival.client_version,
       api_version: runtime.revival.api_version,
@@ -894,9 +953,25 @@ async function handle (req, res) {
     })
   }
 
+  // Captura de evidência para o harness. Modo legacy (sem since_id): as
+  // `limit` mais recentes, DESC. Modo incremental (?since_id=N&limit=M): só
+  // linhas de id > N em ordem ASC — a sequência temporal real de UMA execução,
+  // sem herdar requests antigos. `last_id` é o cursor do baseline.
   if (req.method === 'GET' && path === '/revival/requests') {
     if (!adminAuthorized(req)) return json(res, 401, { ok: false })
-    return json(res, 200, { ok: true, requests: repo.requestLog(Number(url.searchParams.get('limit') || 100)) })
+    const since = url.searchParams.get('since_id')
+    const limit = Number(url.searchParams.get('limit') || 100)
+    if (since !== null) {
+      const rows = repo.requestsSince(since, limit)
+      return json(res, 200, {
+        ok: true,
+        since_id: Math.max(0, Math.floor(Number(since) || 0)),
+        last_id: rows.length ? rows[rows.length - 1].id : repo.requestLogCursor(),
+        count: rows.length,
+        requests: rows
+      })
+    }
+    return json(res, 200, { ok: true, last_id: repo.requestLogCursor(), requests: repo.requestLog(limit) })
   }
 
   // Site público (/), assets, download do APK e links temporários de upload.
@@ -922,6 +997,11 @@ async function handle (req, res) {
   }
 
   if (!path.startsWith('/game/')) return json(res, 404, { ok: false, error: 'not-found' })
+  // Evidência de execução: TODA rota /game/* (register e login incluídos,
+  // mesmo rejeitados pelos guards) vira uma linha com request e response
+  // pareados quando a resposta sai — ver persistGameLog().
+  res.revivalGameLog = { path, method: req.method, body: null, userId: null }
+  const gameLog = res.revivalGameLog
   if (req.method !== 'POST') return fail(res, 405, 2200)
   if (req.headers['x-ubu-apiversion'] !== runtime.revival.api_version) return fail(res, 403, 2200)
 
@@ -931,16 +1011,20 @@ async function handle (req, res) {
   } catch (error) {
     return fail(res, error.httpStatus || 400, error.gameCode || 2200)
   }
+  gameLog.body = body
 
   if (path === '/game/auth/register') {
     if (body?.client_version !== runtime.revival.client_version) return fail(res, 400, 2200)
     if (req.headers['x-ubu-token']) return fail(res, 403, 2200)
-    return ok(res, bootstrapUser(body))
+    const created = bootstrapUser(body)
+    gameLog.userId = created.user_id
+    return ok(res, created)
   }
 
   if (path === '/game/auth/login-device') {
     const result = loginUser(body)
     if (result.error) return fail(res, ...result.error)
+    gameLog.userId = result.userId
     return ok(res, result.data)
   }
 
@@ -956,8 +1040,7 @@ async function handle (req, res) {
   const session = token ? verifySessionToken(token, sessionSecret(runtime.revival)) : null
   const user = session ? repo.userById(session.userId) : (token ? repo.userByToken(token) : null)
   if (!user) return fail(res, 401, 2101)
-
-  repo.logRequest(user.id, path, body)
+  gameLog.userId = user.id
 
   try {
     const result = handleAuthed(path, body, user, req)
@@ -971,6 +1054,7 @@ async function handle (req, res) {
   if (researchMode()) {
     console.warn(`[research] endpoint ainda não implementado: ${path}`)
     recordResearchFallback(path)
+    gameLog.note = 'research-fallback'
     return ok(res)
   }
   return fail(res, 404, 2000)

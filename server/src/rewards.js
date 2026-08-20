@@ -91,6 +91,33 @@ export function claimDailyReward (repo, userId, runtime, epoch = nowEpoch()) {
   return { ok: true, resources: grants, claimed_day: current.state.day }
 }
 
+// `0D00H05M00S` -> 300. Formato real do game-data 1.13.1 (medido em
+// 2026-08-20: `idle_reward.generation_period === '0D00H05M00S'`).
+const DURATION_RE = /^\s*(?:(\d+)D)?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?\s*$/i
+
+/**
+ * Segundos a partir de número OU da duração em texto do game-data.
+ *
+ * Existe porque `Number('0D00H05M00S')` é NaN e `JSON.stringify(NaN)` emite
+ * **null** — foi exatamente assim que `generation_period: null` chegou ao wire
+ * e derrubou o parse do cliente com `Malformed response payload` no restart
+ * (medido no rig em 2026-08-20, request_log 326, `Network response (14)`).
+ * Campo numérico não-nullable jamais pode virar null (DEAD-ENDS #3).
+ *
+ * Valor irreconhecível devolve `fallback` — nunca NaN, nunca null.
+ */
+export function durationSeconds (valor, fallback = 0) {
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : fallback
+  if (typeof valor !== 'string' || !valor.trim()) return fallback
+  const cru = Number(valor)
+  if (Number.isFinite(cru)) return cru
+  const m = DURATION_RE.exec(valor)
+  if (!m || !m.slice(1).some(Boolean)) return fallback
+  const [, d, h, min, s] = m.map(x => (x === undefined ? 0 : Number(x)))
+  const total = d * 86400 + h * 3600 + min * 60 + s
+  return Number.isFinite(total) ? total : fallback
+}
+
 function chooseIdleGeneration (gameData, chapterProgression) {
   const idle = gameData?.idle_reward || gameData?.idle_rewards || {}
   const table = Array.isArray(idle?.chapter_idle_generation) ? idle.chapter_idle_generation : []
@@ -102,12 +129,33 @@ function chooseIdleGeneration (gameData, chapterProgression) {
   }
   return {
     idle_generation: arrayOrEmpty(chosen?.idle_generation),
-    generation_period: Number(idle?.generation_period || 0),
-    max_generation_periods: Number(idle?.max_generation_periods ?? idle?.max_periods ?? 0)
+    generation_period: durationSeconds(idle?.generation_period, 0),
+    max_generation_periods: durationSeconds(idle?.max_generation_periods ?? idle?.max_periods, 0)
   }
 }
 
-export function idleRewardState (repo, userId, runtime, epoch = nowEpoch()) {
+/**
+ * `300` -> `0D00H05M00S`. É o formato que o CLIENTE exige no wire.
+ *
+ * CONFIRMADO por bisseção no rig em 2026-08-20 (série `lab-bisect-*`): o campo
+ * `generation_period` de `idle-rewards/get-state` derrubava o restart com
+ * `Malformed response payload` (`Network response (14)`) enquanto era enviado
+ * como INTEIRO. Removê-lo -> `flow_validated`; enviá-lo como TimeSpan .NET
+ * (`00:05:00`) -> falha de novo; enviá-lo neste formato -> `flow_validated`.
+ *
+ * É o mesmo formato que o game-data oficial usa
+ * (`idle_reward.generation_period === '0D00H05M00S'`), ou seja: o servidor
+ * devolve a duração na forma em que o cliente já sabe lê-la.
+ */
+export function formatDuration (segundos) {
+  const total = Math.max(0, Math.floor(Number(segundos) || 0))
+  const pad = n => String(n).padStart(2, '0')
+  return `${Math.floor(total / 86400)}D${pad(Math.floor((total % 86400) / 3600))}H` +
+    `${pad(Math.floor((total % 3600) / 60))}M${pad(total % 60)}S`
+}
+
+/** Números crus do idle reward — o wire é montado a partir daqui. */
+function computeIdle (repo, userId, runtime, epoch) {
   const user = repo.userById(userId)
   const generation = chooseIdleGeneration(runtime?.gameData, user?.chapter_progression || 0)
   let lastClaim = Number(repo.getState(userId, IDLE_NS, 'last_claim', 0) || 0)
@@ -120,22 +168,31 @@ export function idleRewardState (repo, userId, runtime, epoch = nowEpoch()) {
   let periods = period > 0 ? Math.floor(Math.max(0, epoch - lastClaim) / period) : 0
   if (generation.max_generation_periods > 0) periods = Math.min(periods, generation.max_generation_periods)
 
+  return { generation, lastClaim, period, periods }
+}
+
+export function idleRewardState (repo, userId, runtime, epoch = nowEpoch()) {
+  const { generation, lastClaim, period, periods } = computeIdle(repo, userId, runtime, epoch)
+
   return {
     last_claim: lastClaim,
     boost_available: 0,
     next_claim: period > 0 ? lastClaim + (periods + 1) * period : 0,
     idle_generation: generation.idle_generation,
-    generation_period: period,
+    // Duração em TEXTO — inteiro aqui derruba o parse do cliente (ver
+    // formatDuration). O valor em segundos continua interno.
+    generation_period: formatDuration(period),
     claimable_periods: periods
   }
 }
 
 export function claimIdleReward (repo, userId, runtime, epoch = nowEpoch()) {
+  const { period } = computeIdle(repo, userId, runtime, epoch)
   const state = idleRewardState(repo, userId, runtime, epoch)
   if (state.claimable_periods <= 0) return { ok: false, reason: 'not-ready', state }
 
   const grants = []
-  const claimedSeconds = state.claimable_periods * state.generation_period
+  const claimedSeconds = state.claimable_periods * period
   repo.tx(() => {
     for (const reward of state.idle_generation) {
       const amount = Number(reward?.amount ?? 0)
@@ -171,6 +228,9 @@ function boostConfig (runtime) {
 export function boostIdleReward (repo, userId, runtime, epoch = nowEpoch(), ad = null) {
   const config = boostConfig(runtime)
   if (config.multiplier === null) return { ok: false, reason: 'boost-config-missing' }
+  // `period` em SEGUNDOS: no wire `generation_period` é texto (formatDuration),
+  // então a aritmética usa o número interno, nunca o campo do wire.
+  const { period } = computeIdle(repo, userId, runtime, epoch)
   const state = idleRewardState(repo, userId, runtime, epoch)
   if (state.claimable_periods <= 0) return { ok: false, reason: 'not-ready' }
   if (ad === null && config.cooldown > 0) {
@@ -190,7 +250,7 @@ export function boostIdleReward (repo, userId, runtime, epoch = nowEpoch(), ad =
       }, runtime)
       grants.push(grant.wire)
     }
-    repo.setState(userId, IDLE_NS, 'last_claim', state.last_claim + state.claimable_periods * state.generation_period)
+    repo.setState(userId, IDLE_NS, 'last_claim', state.last_claim + state.claimable_periods * period)
     if (ad === null && config.cooldown > 0) repo.setState(userId, IDLE_NS, 'last_boost', epoch)
   })
 

@@ -365,7 +365,12 @@ try {
   assert.equal(attempt.attempt.chapter_id, 101)
   assert.equal(attempt.current_run, undefined, 'StartChapterResponse só tem attempt')
   const updated = await post('/game/chapters/update', { progress: { stage: 3, state: 0 } }, token)
-  assert.ok('min_update_time' in updated, 'UpdateChapterResponse tem min_update_time')
+  // `min_update_time` é nullable e o handler devolve null — o wire OMITE a
+  // chave (AGENTS.md regra 6: campo sem valor nunca sai como null). O que o
+  // gate cobra aqui é justamente a ausência do null no fio.
+  assert.ok(!('min_update_time' in updated), 'campo sem valor é omitido, não null')
+  assert.equal(updated.code, 1000, 'UpdateChapter continua sucesso')
+  assert.ok(!JSON.stringify(updated).includes('null'), 'nenhum null no wire')
   const revived = await post('/game/chapters/revive', {}, token)
   assert.equal(revived.current_run, undefined, 'Revive responde envelope puro')
   const ended = await post('/game/chapters/end', { progress: { stage: 5, state: 1 } }, token)
@@ -388,6 +393,20 @@ try {
 
   const iap = await post('/game/iap/purchase', {}, token, 400)
   assert.equal(iap.iap_disabled, true)
+
+  // Histórico de compras é READ-ONLY e responde sucesso mesmo com IAP desligado.
+  // Regressão do defeito medido no rig em 2026-08-20 (request_log 323): o
+  // 400/2000 que esta rota devolvia derrubou o parse do cliente com
+  // `Malformed response payload` e abortou o restart.
+  // Contrato do metadata v29: IapHistoryPurchaseResponse
+  // { timeSinceLastPurchase, totalLifetimePurchase }.
+  const historico = await post('/game/iap/get-purchase-history-info', {}, token)
+  assert.equal(historico.code, 1000, 'consulta de histórico não é erro')
+  assert.equal(historico.total_lifetime_purchase, 0, 'sem compras: zero')
+  assert.equal(typeof historico.total_lifetime_purchase, 'number', 'numérico, nunca string')
+  assert.ok(!('time_since_last_purchase' in historico),
+    'numérico sem valor é OMITIDO, nunca null (DEAD-ENDS #3)')
+  assert.ok(!('iap_disabled' in historico), 'não é a resposta do catch-all')
 
   await post('/game/future/unknown-endpoint', { probe: 1 }, token)
 

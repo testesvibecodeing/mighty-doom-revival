@@ -59,7 +59,15 @@ export function handleTutorialRequest (path, body, userId, repo, runtime) {
   const rows = completedRows(repo, userId)
   const ids = completedIds(rows)
   if (ids.has(id)) {
-    return { error: [400, 2000, { reason: 'sequence-already-complete' }] }
+    // Idempotente de propósito. Medido no rig em 2026-08-20 (request_log 287):
+    // no RESTART o cliente reenvia complete-sequence para uma sequência que já
+    // consta em tutorialProgressionWire, e o 400/2000 que existia aqui derrubou
+    // o parse com `Malformed response payload` — o cliente trata esta rota como
+    // sucesso e não sabe desserializar o envelope de erro.
+    //
+    // Repetir não pode reconceder recompensa: `resources` volta vazio, que é o
+    // mesmo shape (array) do caminho de sucesso.
+    return { data: { resources: [] } }
   }
 
   const missing = dependencies(definition).filter(dependencyId => !ids.has(dependencyId))

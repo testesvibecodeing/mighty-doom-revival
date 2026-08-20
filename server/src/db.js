@@ -137,6 +137,11 @@ export class Repository {
         user_id INTEGER,
         path TEXT NOT NULL,
         body_json TEXT,
+        method TEXT,
+        status INTEGER,
+        code INTEGER,
+        response_json TEXT,
+        note TEXT,
         created_at INTEGER NOT NULL
       );
 
@@ -175,6 +180,14 @@ export class Repository {
     // até o primeiro acesso definir uma; contas existentes já tinham senha.
     if (!columns.has('password_set')) this.db.exec('ALTER TABLE users ADD COLUMN password_set INTEGER NOT NULL DEFAULT 1')
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(lower(email)) WHERE email IS NOT NULL AND email <> \'\'')
+    // request_log ganhou pairing request/response (2026-08-19): bancos antigos
+    // preservam as linhas existentes e recebem as colunas novas como NULL.
+    const logColumns = new Set(this.db.prepare('PRAGMA table_info(request_log)').all().map(row => row.name))
+    if (!logColumns.has('method')) this.db.exec('ALTER TABLE request_log ADD COLUMN method TEXT')
+    if (!logColumns.has('status')) this.db.exec('ALTER TABLE request_log ADD COLUMN status INTEGER')
+    if (!logColumns.has('code')) this.db.exec('ALTER TABLE request_log ADD COLUMN code INTEGER')
+    if (!logColumns.has('response_json')) this.db.exec('ALTER TABLE request_log ADD COLUMN response_json TEXT')
+    if (!logColumns.has('note')) this.db.exec('ALTER TABLE request_log ADD COLUMN note TEXT')
   }
 
   tx (fn) {
@@ -576,13 +589,48 @@ export class Repository {
     `).run(userId, namespace, key, JSON.stringify(value))
   }
 
-  logRequest (userId, path, body) {
-    this.db.prepare(`
-      INSERT INTO request_log (user_id, path, body_json, created_at) VALUES (?, ?, ?, ?)
-    `).run(userId || null, path, body === undefined ? null : JSON.stringify(body), Math.floor(Date.now() / 1000))
+  // meta (opcional, retrocompatível): { method, status, code, response, note }.
+  // O pairing request/response vive na MESMA linha — é o que permite ao
+  // harness provar que o response capturado é da chamada real observada.
+  logRequest (userId, path, body, meta = {}) {
+    const info = this.db.prepare(`
+      INSERT INTO request_log (user_id, path, body_json, method, status, code, response_json, note, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      userId || null,
+      path,
+      body === undefined || body === null ? null : JSON.stringify(body),
+      meta.method || null,
+      Number.isInteger(meta.status) ? meta.status : null,
+      Number.isInteger(meta.code) ? meta.code : null,
+      meta.response === undefined || meta.response === null ? null : JSON.stringify(meta.response),
+      meta.note || null,
+      Math.floor(Date.now() / 1000)
+    )
+    const id = Number(info.lastInsertRowid)
+    if (id % 50 === 0) this.trimRequestLog()
+    return id
+  }
+
+  // O log é evidência de captura recente, não histórico infinito: mantém só
+  // as `keep` linhas mais novas (o cursor incremental não depende do resto).
+  trimRequestLog (keep = 20000) {
+    this.db.prepare('DELETE FROM request_log WHERE id <= (SELECT COALESCE(MAX(id), 0) FROM request_log) - ?').run(keep)
   }
 
   requestLog (limit = 100) {
     return this.db.prepare('SELECT * FROM request_log ORDER BY id DESC LIMIT ?').all(Math.max(1, Math.min(1000, Number(limit) || 100)))
+  }
+
+  // Captura incremental determinística: só linhas com id > sinceId, em ordem
+  // crescente de chegada. É a sequência temporal real da execução.
+  requestsSince (sinceId, limit = 500) {
+    return this.db.prepare('SELECT * FROM request_log WHERE id > ? ORDER BY id ASC LIMIT ?')
+      .all(Math.max(0, Math.floor(Number(sinceId) || 0)), Math.max(1, Math.min(1000, Math.floor(Number(limit)) || 500)))
+  }
+
+  // Cursor para o baseline do harness: maior id já escrito (0 se vazio).
+  requestLogCursor () {
+    return this.db.prepare('SELECT COALESCE(MAX(id), 0) AS last_id FROM request_log').get().last_id
   }
 }

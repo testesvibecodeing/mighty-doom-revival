@@ -258,6 +258,17 @@ try {
   assert.equal(reopened.balance(second.id, 100), 7)
   reopened.close()
 
+  // FTUE real (rig local 2026-08-19, request_log 250→251): o cliente chama
+  // end-season e start-season da MESMA season no mesmo boot. Estado Ended
+  // não pode devolver season-already-started — o cliente cai em "playing
+  // offline". Restart recomeça com o state default (Active, zerado).
+  const third = new Repository(dbPath)
+  const restart = handleBattlePassRequest('/game/battle-pass/start-season', { season_id: season.id }, UID, third, runtime)
+  assert.equal(restart.data.state.season_id, season.id)
+  assert.equal(restart.data.state.active_state, 1, 'restart volta a Active')
+  assert.equal(restart.data.state.points, 0, 'restart zera pontos (state default)')
+  third.close()
+
   console.log('Mighty DOOM Revival battle pass test: PASS')
 } finally {
   try { repo.close() } catch {}
