@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
-import { instanceIdentity, sanitizeIdentityValue, bootId } from '../src/instance.js'
+import { CONTRACT_CAPABILITIES, CONTRACT_REVISION, bootId, instanceIdentity, productionReadiness, sanitizeIdentityValue } from '../src/instance.js'
 
 // A identidade da instância existe para provar ONDE o tráfego aterrissou.
 // Regras: nada secreto entra, a precedência é determinística e o campo diz de
@@ -72,7 +72,9 @@ import { instanceIdentity, sanitizeIdentityValue, bootId } from '../src/instance
   const repo = resolve(process.cwd(), '..')
   const id = instanceIdentity({}, repo)
   if (id.build_id_source === 'git') {
-    assert.match(id.build_id, /^[0-9a-f]{7,40}$/, 'commit curto em hexadecimal')
+    // `-dirty` faz parte do contrato: commit limpo nao pode representar
+    // arquivos alterados (ver o bloco de build_id honesto abaixo).
+    assert.match(id.build_id, /^[0-9a-f]{7,40}(-dirty)?$/, 'commit curto em hexadecimal')
   }
 }
 
@@ -103,9 +105,72 @@ import { instanceIdentity, sanitizeIdentityValue, bootId } from '../src/instance
   const id = instanceIdentity({}, process.cwd())
   assert.deepEqual(
     Object.keys(id).sort(),
-    ['boot_id', 'build_id', 'build_id_source', 'environment', 'instance_id'],
+    ['boot_id', 'build_dirty', 'build_id', 'build_id_source', 'contract_capabilities',
+      'contract_revision', 'environment', 'instance_id'],
     'nenhum campo extra pode entrar no health sem revisão'
   )
+}
+
+
+// --- build_id honesto: commit sujo NAO pode se passar por commit limpo -------
+// Um `git rev-parse HEAD` puro mentiria quando ha alteracao nao commitada: o
+// processo executa arquivos que nao sao os daquele commit.
+{
+  const idReal = instanceIdentity({}, process.cwd())
+  if (idReal.build_id_source === 'git') {
+    assert.match(idReal.build_id, /^[0-9a-f]{7,40}(-dirty)?$/, 'commit, opcionalmente sujo')
+    assert.equal(idReal.build_dirty, idReal.build_id.endsWith('-dirty'),
+      'build_dirty tem que refletir o sufixo')
+  }
+  // env de deploy sempre vence e nunca e marcada suja por conta propria
+  const porEnv = instanceIdentity({ REVIVAL_BUILD_ID: 'deadbeef1234' }, process.cwd())
+  assert.equal(porEnv.build_dirty, false)
+  assert.equal(porEnv.build_id_source, 'env')
+}
+
+// --- revisao de contrato publicavel ----------------------------------------
+{
+  const id = instanceIdentity({}, process.cwd())
+  assert.equal(typeof id.contract_revision, 'number')
+  assert.equal(id.contract_revision, CONTRACT_REVISION)
+  assert.ok(Array.isArray(id.contract_capabilities))
+  assert.ok(id.contract_capabilities.includes('idle-rewards-duration-wire'),
+    'a revisao 2 carrega o contrato de duracao do idle rewards')
+  for (const cap of CONTRACT_CAPABILITIES) {
+    assert.match(cap, /^[a-z0-9-]+$/, 'capability e publicavel, sem segredo')
+  }
+}
+
+// --- gate de producao: os cinco casos exigidos ------------------------------
+{
+  const compativel = { instance_id: 'vps', build_id: 'abc123', contract_revision: CONTRACT_REVISION, research_mode: false }
+  assert.equal(productionReadiness(compativel).ready, true, 'servidor compativel passa')
+
+  const antigo = { ok: true, client_version: '1.13.1', api_version: '24.0.0' }
+  const rAntigo = productionReadiness(antigo)
+  assert.equal(rAntigo.ready, false, 'health antigo sem identidade reprova')
+  assert.ok(rAntigo.reasons.join(' ').includes('identidade'))
+
+  const velho = { ...compativel, contract_revision: CONTRACT_REVISION - 1 }
+  const rVelho = productionReadiness(velho)
+  assert.equal(rVelho.ready, false, 'revisao insuficiente reprova')
+  assert.ok(rVelho.reasons.join(' ').includes('contract_revision'))
+
+  const pesquisa = { ...compativel, research_mode: true }
+  assert.equal(productionReadiness(pesquisa).ready, false, 'research_mode ligado reprova')
+
+  const sujo = { ...compativel, build_dirty: true }
+  const rSujo = productionReadiness(sujo)
+  assert.equal(rSujo.ready, false, 'build sujo reprova')
+  assert.ok(rSujo.reasons.join(' ').includes('sujo'))
+
+  assert.equal(productionReadiness(null).ready, false, 'health indisponivel reprova')
+  assert.equal(productionReadiness(undefined).reasons.length, 1)
+
+  // O motivo e acionavel: diz O QUE fazer, nao so que falhou.
+  for (const r of [rAntigo, rVelho, rSujo]) {
+    assert.ok(r.reasons.every(m => m.length > 20), 'motivo curto demais nao ajuda ninguem')
+  }
 }
 
 console.log('instance.mjs: OK')

@@ -88,15 +88,31 @@ function wire (data = {}, code = 1000) {
 // Chaves cujo VALOR nunca deve ficar em texto claro no request_log (corpo
 // persistido = mínimo necessário ao contrato; a fixture final é sanitizada
 // de novo pelo harness). Headers não são persistidos — nada de Authorization.
-const SECRET_LOG_KEYS = new Set(['token', 'password', 'recovery_code', 'push_token', 'device_id'])
+const SECRET_LOG_KEYS = new Set(['token', 'password', 'recovery_code', 'push_token', 'device_id', 'puuid'])
+
+/**
+ * Só STRING não vazia é redigida — o TIPO do wire é preservado.
+ *
+ * Medido em 2026-08-20: `device_id` tem dois significados. Em `game/auth/*` é a
+ * credencial (UUID de 36 caracteres); em `game/devices/describe` e
+ * `game/devices/unregister` é o id NUMÉRICO da linha de dispositivo. Trocar o
+ * inteiro por `"<device_id>"` mudaria número por string no request log e em toda
+ * fixture derivada — e tipo errado no wire é o que derruba o parse do cliente
+ * (DEAD-ENDS #3). Número não é credencial: fica como está.
+ */
+function redigivelNoLog (item) {
+  return typeof item === 'string' && item.length > 0
+}
 
 function redactForLog (value, depth = 0) {
   if (value === null || typeof value !== 'object' || depth > 8) return value
   if (Array.isArray(value)) return value.map(item => redactForLog(item, depth + 1))
   const out = {}
   for (const [key, item] of Object.entries(value)) {
-    // Nullabilidade/shape preservados: só valores truthy são redigidos.
-    out[key] = SECRET_LOG_KEYS.has(key) && item ? `<${key}>` : redactForLog(item, depth + 1)
+    // Nullabilidade/shape preservados: só string com valor é redigida.
+    out[key] = SECRET_LOG_KEYS.has(key) && redigivelNoLog(item)
+      ? `<${key}>`
+      : redactForLog(item, depth + 1)
   }
   return out
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { claimDailyReward, claimIdleReward, dailyRewardState, durationSeconds, formatDuration, idleRewardState } from '../src/rewards.js'
+import { claimDailyReward, claimIdleReward, dailyRewardState, durationSeconds, formatDuration, idleRewardState, proximoClaimEmSegundos } from '../src/rewards.js'
 
 class MemoryRepo {
   constructor () {
@@ -176,6 +176,51 @@ assert.equal(repo.balance(1, 100), 120)
   for (const s of [0, 1, 59, 300, 3600, 86399, 86400, 90061]) {
     assert.equal(durationSeconds(formatDuration(s)), s, `round-trip de ${s}s`)
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// `next_claim` e DURACAO EM SEGUNDOS ate o proximo claim, nunca epoch absoluto.
+//
+// CONFIRMADO por bisseccao no rig em 2026-08-20 (request_log 541 x 555):
+// IdleRewardsController.UpdateNextClaimEpoch monta `Timer(next_claim * 1000)`.
+// Epoch absoluto -> 1.787.259.906.000 ms, acima de int.MaxValue (2147483647),
+// e o cliente estoura com `ArgumentException: Invalid value ... 'interval'`,
+// matando o timer de idle rewards. Duracao (246 s) -> 246.000 ms, boot limpo.
+// ---------------------------------------------------------------------------
+{
+  const TETO_TIMER_MS = 2 ** 31 - 1
+
+  assert.equal(proximoClaimEmSegundos(1000, 300, 0, 1000), 300, 'primeiro periodo inteiro')
+  assert.equal(proximoClaimEmSegundos(1000, 300, 0, 1200), 100, 'desconta o tempo ja corrido')
+  assert.equal(proximoClaimEmSegundos(1000, 300, 1, 1200), 400, 'periodo seguinte')
+  assert.equal(proximoClaimEmSegundos(1000, 300, 0, 9999), 0, 'nunca negativo')
+  assert.equal(proximoClaimEmSegundos(1000, 0, 0, 1000), 0, 'sem periodo, sem timer')
+
+  const repoNC = new MemoryRepo()
+  const runtimeNC = {
+    gameData: {
+      idle_reward: {
+        generation_period: '0D00H05M00S',
+        chapter_idle_generation: [{ chapter_progress: 0, idle_generation: [{ rid: 100, amount: 4 }] }]
+      }
+    }
+  }
+  const agora = 1787259306
+  repoNC.setState(1, 'idle-rewards', 'last_claim', agora)
+  const estadoNC = idleRewardState(repoNC, 1, runtimeNC, agora + 54)
+
+  assert.equal(estadoNC.next_claim, 246, 'segundos restantes, o valor que o rig provou')
+  assert.ok(estadoNC.next_claim * 1000 <= TETO_TIMER_MS,
+    `next_claim*1000 (${estadoNC.next_claim * 1000}) tem que caber no System.Timers.Timer`)
+  assert.ok(estadoNC.next_claim < 86400 * 365,
+    'duracao plausivel: epoch absoluto seria da ordem de 1.7e9')
+  assert.equal(estadoNC.last_claim, agora, 'last_claim continua epoch absoluto')
+
+  // O caso que quebrava: muito tempo parado nao pode virar intervalo gigante.
+  const parado = idleRewardState(repoNC, 1, runtimeNC, agora + 86400 * 30)
+  assert.ok(parado.next_claim * 1000 <= TETO_TIMER_MS,
+    'mesmo apos 30 dias parado o intervalo continua valido')
 }
 
 console.log('Mighty DOOM Revival rewards test: PASS')

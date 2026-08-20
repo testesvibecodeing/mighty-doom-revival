@@ -21,6 +21,34 @@ import { resolve } from 'node:path'
 // É o que separa "reiniciaram o servidor" de "é outra máquina".
 const BOOT_ID = randomUUID()
 
+/**
+ * Revisão do CONTRATO DO WIRE que este servidor implementa.
+ *
+ * Sobe de 1 sempre que um contrato `/game/*` muda de forma que o cliente
+ * enxerga. Existe para o preflight do pipeline recusar publicar um APK contra
+ * um servidor velho demais para ele — antes, um build "verde" podia sair contra
+ * uma instância que devolve payload que o cliente não consegue parsear.
+ *
+ * Histórico (cada item foi medido no cliente real, não suposto):
+ *
+ *   1 — envelope `uts`/`code`, JWT com `aud`/`audience` como ARRAY.
+ *   2 — três contratos provados por bisseção em 2026-08-20:
+ *       tutorial/complete-sequence idempotente; iap/get-purchase-history-info
+ *       read-only com sucesso; idle-rewards `generation_period` como duração em
+ *       texto (`0D00H05M00S`) e `next_claim` como DURAÇÃO EM SEGUNDOS — epoch
+ *       absoluto estourava o `System.Timers.Timer` do cliente.
+ */
+export const CONTRACT_REVISION = 2
+
+/** Contratos desta revisão, publicáveis. Serve de diagnóstico acionável. */
+export const CONTRACT_CAPABILITIES = Object.freeze([
+  'envelope-uts-code',
+  'jwt-audience-array',
+  'tutorial-complete-sequence-idempotent',
+  'iap-purchase-history-readonly',
+  'idle-rewards-duration-wire',
+])
+
 const MAX_LEN = 64
 const SAFE_RE = /^[A-Za-z0-9._:@/+-]+$/
 
@@ -33,12 +61,33 @@ export function sanitizeIdentityValue (value) {
   return trimmed
 }
 
+/**
+ * Commit do checkout — MARCADO como sujo quando há alteração não commitada.
+ *
+ * Um `git rev-parse HEAD` puro mentiria: o processo pode estar executando
+ * arquivos que não são os daquele commit. Com `-dirty`, quem lê o health sabe
+ * que o commit não identifica os bytes em execução, e o preflight de produção
+ * recusa (ver `productionReadiness`).
+ */
 function fromGit (root) {
   try {
-    const out = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
+    const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
       cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000
-    })
-    return sanitizeIdentityValue(out)
+    }).trim()
+    if (!commit) return null
+    // `--porcelain` vazio = árvore limpa. Só o que o Git rastreia conta:
+    // arquivo ignorado (work/, output/) não torna o build sujo.
+    let sujo = false
+    try {
+      const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {
+        cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000
+      })
+      sujo = status.trim().length > 0
+    } catch {
+      // Sem conseguir medir a limpeza, assume sujo: errar para o lado seguro.
+      sujo = true
+    }
+    return sanitizeIdentityValue(sujo ? `${commit}-dirty` : commit)
   } catch {
     return null
   }
@@ -79,8 +128,44 @@ export function instanceIdentity (env = process.env, root = process.cwd()) {
     boot_id: BOOT_ID,
     build_id: buildId,
     build_id_source: source,
-    environment: sanitizeIdentityValue(env.REVIVAL_ENVIRONMENT) || 'local'
+    // `true` quando o commit publicado NÃO representa os arquivos em execução.
+    build_dirty: buildId.endsWith('-dirty'),
+    environment: sanitizeIdentityValue(env.REVIVAL_ENVIRONMENT) || 'local',
+    contract_revision: CONTRACT_REVISION,
+    contract_capabilities: CONTRACT_CAPABILITIES
   }
+}
+
+/**
+ * O servidor pode receber um APK novo em produção?
+ *
+ * Recusa, com motivo acionável: identidade ausente (build anterior a este
+ * módulo), revisão de contrato abaixo da exigida, `research_mode` ligado
+ * (endpoint desconhecido responde sucesso vazio e mascara rota faltante) e
+ * build sujo (o commit não identifica os bytes em execução).
+ */
+export function productionReadiness (health, { requiredRevision = CONTRACT_REVISION } = {}) {
+  if (!health || typeof health !== 'object') {
+    return { ready: false, reasons: ['health indisponível'], revision: null }
+  }
+  const problemas = []
+  const revisao = health.contract_revision
+  if (health.instance_id === undefined && health.build_id === undefined) {
+    problemas.push('health sem identidade de instância/build (servidor anterior a instance.js)')
+  }
+  if (typeof revisao !== 'number') {
+    problemas.push('health sem contract_revision')
+  } else if (revisao < requiredRevision) {
+    problemas.push(`contract_revision ${revisao} < ${requiredRevision} exigida — o servidor `
+      + 'não tem as correções de wire que este APK espera')
+  }
+  if (health.research_mode === true) {
+    problemas.push('research_mode ligado: rota desconhecida responde sucesso vazio')
+  }
+  if (health.build_dirty === true) {
+    problemas.push('build_id sujo: o commit publicado não identifica os bytes em execução')
+  }
+  return { ready: problemas.length === 0, reasons: problemas, revision: revisao ?? null }
 }
 
 export const bootId = () => BOOT_ID

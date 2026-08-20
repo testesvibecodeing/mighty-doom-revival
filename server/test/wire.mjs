@@ -2,94 +2,87 @@ import assert from 'node:assert/strict'
 
 import { stripNulls } from '../src/wire.js'
 
-// A regra que mais derruba o boot: campo sem valor é OMITIDO, nunca null
-// (AGENTS.md regra 6, DEAD-ENDS #3). Aqui ela é testada isolada, porque
-// importar o index.js subiria o servidor como efeito colateral.
+// Escopo ESTREITO por decisao auditada: o que nunca pode chegar ao wire e um
+// valor NAO-FINITO, porque `JSON.stringify(NaN)` emite `null` sem que ninguem
+// tenha escrito `null`. `null` EXPLICITO e preservado — onde o contrato nao o
+// admite, quem corrige e a origem (ver rewards.js), nao uma limpeza cega aqui.
 
-// --- omissão de null/undefined --------------------------------------------
-{
-  const out = stripNulls({ a: 1, b: null, c: 'x', d: undefined })
-  assert.deepEqual(out, { a: 1, c: 'x' })
-  assert.ok(!('b' in out), 'null é omitido, não convertido')
-  assert.ok(!('d' in out), 'undefined é omitido')
-  assert.ok(!JSON.stringify(out).includes('null'))
-}
-
-// --- NaN: o caso que passou despercebido -----------------------------------
-// `JSON.stringify(NaN)` emite **null**. Foi assim que `generation_period: null`
-// chegou ao wire (game-data traz '0D00H05M00S'; `Number(...)` disso é NaN).
+// --- o caso que motivou tudo: NaN vira null no JSON ------------------------
 {
   assert.equal(JSON.stringify({ x: NaN }), '{"x":null}', 'a armadilha existe mesmo')
   const out = stripNulls({ periodo: NaN, ok: 300 })
   assert.deepEqual(out, { ok: 300 })
   assert.ok(!JSON.stringify(out).includes('null'))
-  assert.equal(stripNulls({ inf: Infinity }).inf, undefined, 'Infinity também é omitido')
+  assert.equal(stripNulls({ inf: Infinity }).inf, undefined, 'Infinity tambem sai')
+  assert.equal(stripNulls({ neg: -Infinity }).neg, undefined)
 }
 
-// --- valores falsy LEGÍTIMOS são preservados -------------------------------
+// --- null EXPLICITO e preservado -------------------------------------------
+// Auditoria de 2026-08-20: estes campos aparecem como null em boots que
+// COMPLETARAM antes desta funcao existir, ou seja, o cliente os aceita.
+{
+  const reais = {
+    playfab_session_ticket: null,          // auth/register, auth/login-device
+    cosmetic: null,                        // player/user-data
+    current_run: null,
+    player_settings: null,
+    quota_id: null                         // store/get
+  }
+  const out = stripNulls({ ...reais, code: 1000 })
+  for (const chave of Object.keys(reais)) {
+    assert.ok(chave in out, `${chave} nao pode sumir: o cliente aceita null nele`)
+    assert.equal(out[chave], null)
+  }
+  assert.equal(out.code, 1000)
+}
+
+// --- undefined nao e valor de wire -----------------------------------------
+{
+  const out = stripNulls({ a: 1, b: undefined })
+  assert.deepEqual(out, { a: 1 }, 'undefined nao vira null nem chave vazia')
+}
+
+// --- valores falsy LEGITIMOS ficam -----------------------------------------
 {
   const out = stripNulls({ zero: 0, falso: false, vazio: '', lista: [], objeto: {} })
   assert.deepEqual(out, { zero: 0, falso: false, vazio: '', lista: [], objeto: {} })
-  assert.equal(out.zero, 0, '0 é valor, não ausência')
-  assert.equal(out.falso, false, 'false é valor, não ausência')
 }
 
-// --- profundidade ----------------------------------------------------------
+// --- profundidade -----------------------------------------------------------
 {
-  const out = stripNulls({
-    state: { last_claim: 10, generation_period: null, nested: { a: null, b: 2 } }
-  })
-  assert.deepEqual(out, { state: { last_claim: 10, nested: { b: 2 } } })
+  const out = stripNulls({ state: { last_claim: 10, periodo: NaN, nested: { a: null, b: 2 } } })
+  assert.deepEqual(out, { state: { last_claim: 10, nested: { a: null, b: 2 } } })
 }
 
-// --- ARRAY preserva posição ------------------------------------------------
-// Remover um elemento mudaria o índice de todos os seguintes.
+// --- ARRAY preserva posicao -------------------------------------------------
 {
-  const out = stripNulls({ itens: [1, null, 3] })
-  assert.deepEqual(out.itens, [1, null, 3], 'buraco de array não é fechado')
+  const out = stripNulls({ itens: [1, NaN, 3] })
+  assert.deepEqual(out.itens, [1, null, 3], 'remover deslocaria o indice dos seguintes')
   assert.equal(out.itens.length, 3)
+  assert.deepEqual(stripNulls({ i: [1, null, 3] }).i, [1, null, 3])
 }
 
-// --- objetos DENTRO de array são limpos ------------------------------------
+// --- objetos DENTRO de array --------------------------------------------
 {
-  const out = stripNulls({ itens: [{ x: null, y: 1 }, { z: 2 }] })
+  const out = stripNulls({ itens: [{ x: NaN, y: 1 }, { z: 2 }] })
   assert.deepEqual(out.itens, [{ y: 1 }, { z: 2 }])
-}
-
-// --- caso real medido: store/get -------------------------------------------
-{
-  const real = {
-    store_items: [{
-      id: 900001,
-      quota_id: null,
-      requirements: {
-        selector_format_version: 1,
-        player: { userId: null, playerLevel: null, chapterProgress: null }
-      },
-      cost: [{ rid: 1, amount: 2500 }]
-    }]
-  }
-  const out = stripNulls(real)
-  const texto = JSON.stringify(out)
-  assert.ok(!texto.includes('null'), `nenhum null sobrevive: ${texto}`)
-  assert.equal(out.store_items[0].id, 900001, 'o que tem valor continua')
-  assert.deepEqual(out.store_items[0].cost, [{ rid: 1, amount: 2500 }])
-  assert.deepEqual(out.store_items[0].requirements.player, {}, 'objeto vazio, não null')
-  assert.equal(out.store_items[0].requirements.selector_format_version, 1)
 }
 
 // --- caso real medido: idle-rewards/get-state ------------------------------
 {
   const out = stripNulls({
     state: {
-      last_claim: 1787254065, boost_available: 0, next_claim: 0,
+      last_claim: 1787254065,
+      boost_available: 0,
+      next_claim: 246,
       idle_generation: [{ rid: 1, amount: 32 }],
       generation_period: Number('0D00H05M00S'),   // NaN de verdade
       claimable_periods: 0
     }
   })
   assert.ok(!('generation_period' in out.state), 'NaN sai do wire')
-  assert.equal(out.state.boost_available, 0, 'zero legítimo permanece')
+  assert.equal(out.state.next_claim, 246, 'duracao em segundos permanece')
+  assert.equal(out.state.boost_available, 0, 'zero legitimo permanece')
   assert.ok(!JSON.stringify(out).includes('null'))
 }
 
@@ -98,9 +91,10 @@ import { stripNulls } from '../src/wire.js'
   assert.equal(stripNulls('texto'), 'texto')
   assert.equal(stripNulls(7), 7)
   assert.equal(stripNulls(true), true)
-  assert.equal(stripNulls(null), null, 'raiz null continua null: quem decide é o chamador')
+  assert.equal(stripNulls(null), null, 'raiz null continua null: quem decide e o chamador')
+  assert.equal(stripNulls(NaN), undefined, 'NaN na raiz nao vira null')
   const d = new Date(0)
-  assert.equal(stripNulls({ d }).d, d, 'Date não é desmontado')
+  assert.equal(stripNulls({ d }).d, d, 'Date nao e desmontado')
 }
 
 console.log('wire.mjs: OK')

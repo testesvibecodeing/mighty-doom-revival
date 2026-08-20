@@ -94,9 +94,9 @@ try {
   assert.equal(H('/game/events/update-game-mode-event-progress', { scheduled_event_id: 503, progress: { stage: 1 } }).error[2].reason, 'no-active-run')
   result = H('/game/events/update-game-mode-event-progress', { scheduled_event_id: 501, progress: { stage: 2, state: 0 } })
   assert.deepEqual(result.data, { min_update_time: null })
-  // No wire a chave é omitida: campo sem valor nunca sai como null
-  // (AGENTS.md regra 6). Equivalente para nullable, obrigatório para os demais.
-  assert.deepEqual(stripNulls(result.data), {})
+  // O null e PRESERVADO no wire: campo nullable que o cliente aceita nao pode
+  // sumir por limpeza global (escopo estreito do stripNulls).
+  assert.deepEqual(stripNulls(result.data), { min_update_time: null })
 
   // revive: envelope puro; exige run do evento.
   assert.equal(H('/game/events/game-mode-event-revive', { scheduled_event_id: 503 }).error[2].reason, 'no-active-run')

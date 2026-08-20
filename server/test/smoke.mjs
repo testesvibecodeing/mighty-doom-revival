@@ -365,12 +365,13 @@ try {
   assert.equal(attempt.attempt.chapter_id, 101)
   assert.equal(attempt.current_run, undefined, 'StartChapterResponse só tem attempt')
   const updated = await post('/game/chapters/update', { progress: { stage: 3, state: 0 } }, token)
-  // `min_update_time` é nullable e o handler devolve null — o wire OMITE a
-  // chave (AGENTS.md regra 6: campo sem valor nunca sai como null). O que o
-  // gate cobra aqui é justamente a ausência do null no fio.
-  assert.ok(!('min_update_time' in updated), 'campo sem valor é omitido, não null')
+  // `min_update_time` e nullable e o null sobreviveu ao cliente real, entao
+  // ele CHEGA ao wire. O que o gate cobra e o contrato medido, nao uma limpeza
+  // global: `stripNulls` so remove valor nao-finito (NaN/Infinity), que viraria
+  // `null` no JSON sem ninguem ter escrito null.
+  assert.ok('min_update_time' in updated, 'UpdateChapterResponse declara o campo')
+  assert.equal(updated.min_update_time, null, 'nullable preservado')
   assert.equal(updated.code, 1000, 'UpdateChapter continua sucesso')
-  assert.ok(!JSON.stringify(updated).includes('null'), 'nenhum null no wire')
   const revived = await post('/game/chapters/revive', {}, token)
   assert.equal(revived.current_run, undefined, 'Revive responde envelope puro')
   const ended = await post('/game/chapters/end', { progress: { stage: 5, state: 1 } }, token)

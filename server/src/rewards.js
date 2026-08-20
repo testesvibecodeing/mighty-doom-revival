@@ -154,6 +154,18 @@ export function formatDuration (segundos) {
     `${pad(Math.floor((total % 3600) / 60))}M${pad(total % 60)}S`
 }
 
+/**
+ * Segundos que faltam para o proximo claim. Nunca negativo, nunca epoch.
+ *
+ * Sem periodo configurado nao ha proximo claim agendado: devolve 0, que o
+ * cliente trata como "sem timer" (0 ms e valido para o Timer).
+ */
+export function proximoClaimEmSegundos (lastClaim, period, periods, epoch) {
+  if (!(period > 0)) return 0
+  const alvoEpoch = lastClaim + (periods + 1) * period
+  return Math.max(0, alvoEpoch - epoch)
+}
+
 /** Números crus do idle reward — o wire é montado a partir daqui. */
 function computeIdle (repo, userId, runtime, epoch) {
   const user = repo.userById(userId)
@@ -177,7 +189,19 @@ export function idleRewardState (repo, userId, runtime, epoch = nowEpoch()) {
   return {
     last_claim: lastClaim,
     boost_available: 0,
-    next_claim: period > 0 ? lastClaim + (periods + 1) * period : 0,
+    // SEGUNDOS ATE o proximo claim, nao epoch absoluto.
+    //
+    // CONFIRMADO por bisseccao no rig em 2026-08-20 (request_log 541 x 555):
+    // `Ubu.IdleRewards.IdleRewardsController.UpdateNextClaimEpoch` monta um
+    // `System.Timers.Timer(next_claim * 1000)`. Com epoch absoluto o intervalo
+    // vira 1.787.259.906.000 ms, muito acima do teto de int.MaxValue (~24,8
+    // dias), e o cliente estoura com
+    //   ArgumentException: Invalid value '1787259906000' for parameter 'interval'
+    // matando o timer inteiro de idle rewards. Com a duracao (246 s -> 246.000
+    // ms) o boot fica limpo: zero ArgumentException, zero Timer na stack.
+    //
+    // `last_claim` continua epoch absoluto — o cliente nao o usa como intervalo.
+    next_claim: proximoClaimEmSegundos(lastClaim, period, periods, epoch),
     idle_generation: generation.idle_generation,
     // Duração em TEXTO — inteiro aqui derruba o parse do cliente (ver
     // formatDuration). O valor em segundos continua interno.

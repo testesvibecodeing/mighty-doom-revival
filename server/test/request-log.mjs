@@ -161,7 +161,51 @@ try {
   assert.equal(registerResponse.token, '<token>', 'token JWT redigido no response persistido')
   assert.equal(registerResponse.password, '<password>', 'password redigido no response persistido')
   assert.equal(registerResponse.recovery_code, '<recovery_code>', 'recovery code redigido no response persistido')
-  assert.ok(registerResponse.uts && registerResponse.puuid, 'shape do response preservado além dos redigidos')
+  assert.ok(registerResponse.uts, 'shape do response preservado além dos redigidos')
+  assert.equal(registerResponse.puuid, '<puuid>', 'puuid redigido: identificador estável de conta')
+
+  // ---------------------------------------------------------------------
+  // TIPO do wire preservado: `device_id` e credencial (UUID string) em
+  // game/auth/*, mas id NUMERICO da linha de dispositivo em game/devices/*.
+  // Redigir o inteiro trocaria numero por string no log e em toda fixture
+  // derivada — tipo errado no wire e o que derruba o parse do cliente.
+  // Este bloco vai do request_log ATE a fixture sanitizada.
+  // ---------------------------------------------------------------------
+  const tokenAuth = { 'x-ubu-token': registered.body.token }
+  await game('/game/devices/register', { device_id: 'device-abc-123', platform_id: 4 }, tokenAuth)
+  await game('/game/devices/describe', { device_id: 1 }, tokenAuth)
+  await game('/game/devices/unregister', { device_id: 1 }, tokenAuth)
+
+  const aposDevices = await adminGet(`/revival/requests?since_id=${cursor}&limit=200`)
+  const linhasDevices = aposDevices.body.requests.filter(row => row.path.startsWith('/game/devices/'))
+  assert.ok(linhasDevices.length >= 2, 'as rotas de devices entraram no request_log')
+
+  for (const linha of linhasDevices.filter(l => l.path !== '/game/devices/register')) {
+    const corpo = parseJsonColumn(linha, 'body_json')
+    assert.equal(typeof corpo.device_id, 'number',
+      `${linha.path}: device_id numerico tem que continuar numero no log`)
+    assert.equal(corpo.device_id, 1)
+  }
+  const linhaRegister = linhasDevices.find(l => l.path === '/game/devices/register')
+  if (linhaRegister) {
+    assert.equal(parseJsonColumn(linhaRegister, 'body_json').device_id, '<device_id>',
+      'device_id STRING de autenticacao continua redigido')
+  }
+
+  // E a fixture derivada (sanitizador do harness) tem que chegar na mesma
+  // conclusao: numero permanece numero, credencial vira placeholder.
+  {
+    const { sanitize } = await import('../../scripts/fixture_sanitize.mjs')
+    const numerico = sanitize({ device_id: 1, user_id: 8 })
+    assert.equal(numerico.device_id, 1, 'fixture preserva o device_id numerico')
+    assert.equal(typeof numerico.device_id, 'number')
+    const credencial = sanitize({ device_id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301' })
+    assert.equal(credencial.device_id, '<device-id>', 'fixture redige a credencial')
+    for (const chave of ['password', 'token', 'recovery_code', 'puuid']) {
+      const saida = sanitize({ [chave]: 'valor-real-que-nao-pode-vazar' })
+      assert.match(String(saida[chave]), /^<[a-z-]+>$/, `${chave} continua redigido na fixture`)
+    }
+  }
 
   const loginRow = rows.find(row => row.path === '/game/auth/login-device')
   assert.ok(loginRow, 'login-device registrado')
