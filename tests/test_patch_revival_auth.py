@@ -121,6 +121,79 @@ class TestFonteDaActivity(unittest.TestCase):
                               client_version="1.13.1", unity_activity=UNITY_ACTIVITY)
         self.assertIn('"https://exemplo.br/collections/doom"', fonte)
 
+    def test_ui_login_por_email_e_portal_de_cadastro(self):
+        fonte = render_source(base_url="https://doom.exemplo.br/collections/doom",
+                              api_version="24.0.0", client_version="1.13.1",
+                              unity_activity=UNITY_ACTIVITY)
+        self.assertIn('emailField.setHint("E-mail")', fonte)
+        self.assertIn('body.put("email", email)', fonte)
+        self.assertIn('postAccount("/account/login", body)', fonte)
+        self.assertIn('"/account?mode=" + mode', fonte)
+        self.assertIn('server.setText("Servidor: " + portalDomain())', fonte)
+        self.assertNotIn('userIdField.setHint("ID da conta', fonte)
+
+    def test_recuperacao_depende_do_endpoint_smtp(self):
+        fonte = render_source(base_url="https://doom.exemplo.br/collections/doom",
+                              api_version="24.0.0", client_version="1.13.1",
+                              unity_activity=UNITY_ACTIVITY)
+        self.assertIn('postAccount("/account/forgot-password", body)', fonte)
+        self.assertIn('"smtp-not-configured".equals(api.error)', fonte)
+        self.assertNotIn('post("/game/auth/register"', fonte)
+
+    def test_boot_verifica_a_credencial_antes_de_abrir_a_unity(self):
+        """O dead-end da credencial obsoleta: o boot MEDE antes de confiar.
+
+        Se a senha mudou no site, o `credentials.json` local fica velho. Sem
+        preflight, o boot pularia a tela e a Unity morreria no `login-device`
+        com 2101 sem caminho de volta. A verificacao usa a MESMA rota do
+        cliente — nada de rota inventada — e os tres desfechos ficam
+        explicitos na fonte.
+        """
+        fonte = render_source(base_url="https://doom.exemplo.br/collections/doom",
+                              api_version="24.0.0", client_version="1.13.1",
+                              unity_activity=UNITY_ACTIVITY)
+        self.assertIn("preflightStoredCredentials()", fonte)
+        self.assertIn('postGame("/game/auth/login-device", body)', fonte)
+        self.assertIn("deleteCredentials()", fonte)
+        # onCreate nao pode mais abrir a Unity direto a partir do arquivo.
+        self.assertNotIn("hasValidCredentials()", fonte)
+        self.assertIn("credentialRejected(error)", fonte)
+
+    def test_senha_temporaria_nunca_e_persistida(self):
+        """Gravar a temporaria criaria o dead-end de proposito: ela expira."""
+        fonte = render_source(base_url="https://doom.exemplo.br/collections/doom",
+                              api_version="24.0.0", client_version="1.13.1",
+                              unity_activity=UNITY_ACTIVITY)
+        self.assertIn('optBoolean("temporary_password_used", false)', fonte)
+        self.assertIn("showNewPasswordScreen(creds, cookie)", fonte)
+        self.assertIn('postAccount("/account/password", body, cookie)', fonte)
+        self.assertIn("saveCredentials(creds.withPassword(escolhida))", fonte)
+        # A tela antiga exibia ID + senha gerados pelo servidor: fluxo aposentado.
+        self.assertNotIn("showCredentialsToKeep", fonte)
+        self.assertNotIn("GUARDE ESTES DADOS", fonte)
+
+    def test_campos_da_tela_tem_rotulo_para_o_uiautomator(self):
+        fonte = render_source(base_url="https://doom.exemplo.br/collections/doom",
+                              api_version="24.0.0", client_version="1.13.1",
+                              unity_activity=UNITY_ACTIVITY)
+        for descricao in ("Campo E-mail", "Campo Senha", "Campo Nova senha"):
+            self.assertIn(f'setContentDescription("{descricao}")', fonte)
+        for rotulo in ("ENTRAR", "ESQUECI MINHA SENHA", "CRIAR CONTA NO SITE"):
+            self.assertIn(f'setText("{rotulo}")', fonte)
+
+    def test_nenhum_vestigio_de_google_play_games_na_ui(self):
+        """gpg.config e escrito para SUPRIMIR o gate; nada aparece na tela."""
+        fonte = render_source(base_url="https://doom.exemplo.br/collections/doom",
+                              api_version="24.0.0", client_version="1.13.1",
+                              unity_activity=UNITY_ACTIVITY)
+        visiveis = [linha for linha in fonte.splitlines()
+                    if ".setText(" in linha or ".setHint(" in linha
+                    or ".setContentDescription(" in linha]
+        for linha in visiveis:
+            baixo = linha.lower()
+            for proibido in ("google", "play games", "gpg", "sign in", "sign-in"):
+                self.assertNotIn(proibido, baixo, linha.strip())
+
 
 class TestPrecondicoes(unittest.TestCase):
     def setUp(self):

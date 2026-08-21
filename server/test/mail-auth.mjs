@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { DatabaseSync } from 'node:sqlite'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const work = mkdtempSync(resolve(tmpdir(), 'mighty-doom-mail-'))
@@ -14,6 +15,7 @@ writeFileSync(resolve(work, 'config/packs.json'), '{"packs":[]}')
 writeFileSync(resolve(work, 'config/events.json'), '{"events":[]}')
 writeFileSync(resolve(work, 'config/site.json'), '{}')
 const smtpPath = resolve(work, 'config/smtp.json')
+const dbPath = resolve(work, 'runtime/db.sqlite3')
 
 const SMTP_USER = 'tester'
 const SMTP_PASS = 'segredo-do-app'
@@ -83,7 +85,7 @@ const port = await freePort()
 const base = `http://127.0.0.1:${port}`
 const child = spawn(process.execPath, ['src/index.js'], {
   cwd: root,
-  env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), DB_PATH: resolve(work, 'runtime/db.sqlite3'), REVIVAL_CONFIG_PATH: resolve(work, 'config/revival.json'), PACKS_CONFIG_PATH: resolve(work, 'config/packs.json'), EVENTS_CONFIG_PATH: resolve(work, 'config/events.json'), SITE_CONFIG_PATH: resolve(work, 'config/site.json'), SMTP_CONFIG_PATH: smtpPath, RESEARCH_MODE: 'true', REVIVAL_ADMIN_EMAIL: ADMIN_EMAIL, REVIVAL_ADMIN_PASSWORD: ADMIN_PASSWORD },
+  env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), DB_PATH: dbPath, REVIVAL_CONFIG_PATH: resolve(work, 'config/revival.json'), PACKS_CONFIG_PATH: resolve(work, 'config/packs.json'), EVENTS_CONFIG_PATH: resolve(work, 'config/events.json'), SITE_CONFIG_PATH: resolve(work, 'config/site.json'), SMTP_CONFIG_PATH: smtpPath, RESEARCH_MODE: 'true', REVIVAL_ADMIN_EMAIL: ADMIN_EMAIL, REVIVAL_ADMIN_PASSWORD: ADMIN_PASSWORD },
   stdio: ['ignore', 'pipe', 'pipe']
 })
 let logs = ''
@@ -105,66 +107,123 @@ async function request (path, options = {}, expected = 200) {
   return { body, response }
 }
 
-function codeFromLastMail () {
+// Guard de toda rota /game/*: POST + x-ubu-apiversion + content-type JSON.
+async function gameRequest (path, payload) {
+  const response = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-ubu-apiversion': '24.0.0' },
+    body: JSON.stringify(payload)
+  })
+  return { status: response.status, body: await response.json() }
+}
+
+function temporaryPasswordFromLastMail () {
   const mail = captured[captured.length - 1]
   assert.ok(mail, 'nenhum e-mail capturado')
   // subject tem acento e vai codificado RFC 2047; corpo é 8bit UTF-8
   assert.match(mail.data, /^Subject: /m)
-  const match = /acesso [eé]: (\d{6})/.exec(mail.data)
-  assert.ok(match, `código não encontrado em: ${mail.data.slice(0, 400)}`)
+  const match = /senha temporária [eé]: (RV-[A-Za-z0-9_-]{12})/.exec(mail.data)
+  assert.ok(match, `senha temporária não encontrada em: ${mail.data.slice(0, 400)}`)
   return match[1]
 }
 
 try {
   await waitForServer()
 
-  // --- 1º acesso por e-mail: conta criada + código enviado ---------------
+  // --- cadastro/login exigem e-mail + senha -------------------------------
   const email = 'jogador@exemplo.com'
-  const first = await request('/account/email-code/request', { method: 'POST', body: JSON.stringify({ email }) })
-  assert.equal(first.body.code_sent, true)
-  assert.equal(first.body.account_created, true)
-  const code = codeFromLastMail()
+  const originalPassword = 'senha-original-123'
+  const first = await request('/account/register', { method: 'POST', body: JSON.stringify({ display_name: 'Jogador', email, password: originalPassword }) }, 201)
+  assert.equal(first.body.account.email, email)
+  assert.equal('recovery_code' in first.body, false, 'cadastro público não deve criar atalho sem SMTP')
+  assert.equal(captured.length, 0, 'cadastro normal não envia código nem senha')
+
+  const db = new DatabaseSync(dbPath, { readOnly: true })
+  const stored = db.prepare('SELECT password_hash FROM users WHERE lower(email) = ?').get(email)
+  db.close()
+  assert.match(stored.password_hash, /^scrypt\$[0-9a-f]{32}\$[0-9a-f]{64}$/)
+  assert.equal(stored.password_hash.includes(originalPassword), false, 'banco não pode guardar senha em claro')
+
+  await request('/account/login', { method: 'POST', body: JSON.stringify({ email, password: 'errada-123' }) }, 401)
+  const byPassword = await request('/account/login', { method: 'POST', body: JSON.stringify({ email, password: originalPassword }) })
+  assert.equal(byPassword.body.account.email, email)
+  assert.equal(byPassword.body.temporary_password_used, false)
+
+  // Rotas antigas de login sem senha permanecem explicitamente aposentadas.
+  await request('/account/email-code/request', { method: 'POST', body: JSON.stringify({ email }) }, 410)
+  await request('/account/email-code/login', { method: 'POST', body: JSON.stringify({ email, code: '000000' }) }, 410)
+
+  // --- esqueci a senha: temporária por SMTP, hash e uso único ------------
+  const second = await request('/account/register', { method: 'POST', body: JSON.stringify({ display_name: 'Segundo', email: 'segundo@exemplo.com', password: 'senha-antiga-123' }) }, 201)
+  const forgot = await request('/account/forgot-password', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com' }) })
+  assert.equal(forgot.body.temporary_password_sent, true)
+  const temporary = temporaryPasswordFromLastMail()
   const sent = captured[captured.length - 1]
-  assert.ok(sent.data.includes('To: <jogador@exemplo.com>'), sent.data.slice(0, 200))
+  assert.ok(sent.data.includes('To: <segundo@exemplo.com>'), sent.data.slice(0, 200))
   assert.ok(sent.data.includes('From: Revival <painel@revival.local>'), sent.data.slice(0, 200))
   assert.ok(sent.commands.includes(Buffer.from(SMTP_USER).toString('base64')), 'usuário SMTP não enviado')
 
-  // código errado não loga; código certo loga sem senha
-  await request('/account/email-code/login', { method: 'POST', body: JSON.stringify({ email, code: '000000' }) }, 401)
-  const login = await request('/account/email-code/login', { method: 'POST', body: JSON.stringify({ email, code }) })
-  const cookie = login.response.headers.get('set-cookie').split(';')[0]
-  assert.equal(login.body.password_set, false)
-  assert.equal(login.body.account.email, email)
-  const me = await request('/account/me', { headers: { cookie } })
-  assert.equal(me.body.account.email, email)
+  // Pedir recuperação não derruba a senha atual; a troca ocorre ao usar a
+  // temporária corretamente. Depois disso, a anterior deixa de valer.
+  await request('/account/login', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', password: 'senha-antiga-123' }) })
+  await request('/account/login', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', password: 'RV-invalida000' }) }, 401)
+  const temporaryLogin = await request('/account/login', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', password: temporary }) })
+  assert.equal(temporaryLogin.body.temporary_password_used, true)
+  await request('/account/login', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', password: 'senha-antiga-123' }) }, 401)
+  const promoted = await request('/account/login', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', password: temporary }) })
+  assert.equal(promoted.body.temporary_password_used, false, 'depois do uso vira a senha ativa, não reutiliza o reset')
 
-  // pedido imediato de outro código: rate limit
-  await request('/account/email-code/request', { method: 'POST', body: JSON.stringify({ email }) }, 429)
+  const dbAfterReset = new DatabaseSync(dbPath, { readOnly: true })
+  const resetRows = dbAfterReset.prepare('SELECT password_hash, used_at FROM password_resets WHERE user_id = ?').all(second.body.account.id)
+  dbAfterReset.close()
+  assert.equal(resetRows.length, 1)
+  assert.ok(resetRows[0].used_at > 0)
+  assert.equal(resetRows[0].password_hash.includes(temporary), false, 'senha temporária não pode ficar em claro')
 
-  // primeira senha sem current_password (conta sem senha)
-  await request('/account/password', { method: 'POST', headers: { cookie }, body: JSON.stringify({ new_password: 'senha-nova-123' }) })
-  await request('/account/logout', { method: 'POST', headers: { cookie }, body: '{}' })
-  const byPassword = await request('/account/login', { method: 'POST', body: JSON.stringify({ login: email, password: 'senha-nova-123' }) })
-  assert.equal(byPassword.body.account.email, email)
+  // O endpoint antigo de redefinição/fallback local não contorna o SMTP.
+  await request('/account/reset-password', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', recovery_code: 'RV-QUALQUER', new_password: 'senha-troca-456' }) }, 410)
 
-  // --- esqueci a senha via código de e-mail ------------------------------
-  const second = await request('/account/register', { method: 'POST', body: JSON.stringify({ display_name: 'Segundo', email: 'segundo@exemplo.com', password: 'senha-antiga-123' }) }, 201)
-  await request('/account/forgot-password', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com' }) })
-  const resetCode = codeFromLastMail()
-  await request('/account/reset-password', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', code: '000000', new_password: 'senha-troca-456' }) }, 400)
-  await request('/account/reset-password', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', code: resetCode, new_password: 'senha-troca-456' }) })
-  await request('/account/login', { method: 'POST', body: JSON.stringify({ login: 'segundo@exemplo.com', password: 'senha-antiga-123' }) }, 401)
-  await request('/account/login', { method: 'POST', body: JSON.stringify({ login: 'segundo@exemplo.com', password: 'senha-troca-456' }) })
+  // --- credencial obsoleta no APK: o contrato que a Activity depende ------
+  //
+  // O `credentials.json` do cliente guarda user_id + SENHA, e é com ela que a
+  // Unity chama `game/auth/login-device`. Se a senha muda no site, o arquivo
+  // local fica velho. Aqui provamos o que a Activity mede no preflight: a
+  // senha antiga passa a ser REJEITADA de forma determinística (403/2101) e a
+  // nova funciona — não existe estado em que as duas valham, e não existe
+  // estado em que o servidor aceite silenciosamente a credencial morta.
+  const gameId = second.body.account.id
+  const comTemporaria = await gameRequest('/game/auth/login-device', { client_version: '1.13.1', user_id: gameId, password: temporary })
+  assert.equal(comTemporaria.status, 200)
+  assert.equal(comTemporaria.body.code, 1000, 'a temporária promovida é a senha ativa do jogo')
+
+  // A troca para a permanente é exatamente a chamada que a Activity faz com o
+  // cookie da sessão recém-criada, usando a temporária como current_password.
+  const sessaoTemporaria = promoted.response.headers.get('set-cookie').split(';')[0]
+  const permanente = 'senha-permanente-789'
+  await request('/account/password', { method: 'POST', headers: { cookie: sessaoTemporaria }, body: JSON.stringify({ current_password: temporary, new_password: permanente }) })
+
+  const credencialVelha = await gameRequest('/game/auth/login-device', { client_version: '1.13.1', user_id: gameId, password: temporary })
+  assert.equal(credencialVelha.status, 403, 'credencial obsoleta não pode continuar entrando')
+  assert.equal(credencialVelha.body.code, 2101)
+  const credencialNova = await gameRequest('/game/auth/login-device', { client_version: '1.13.1', user_id: gameId, password: permanente })
+  assert.equal(credencialNova.status, 200)
+  assert.equal(credencialNova.body.code, 1000)
+  assert.equal('password' in credencialNova.body, false, 'login-device nunca devolve senha')
+
+  // Depois da permanente, o login do site também só aceita a nova.
+  await request('/account/login', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', password: temporary }) }, 401)
+  const comPermanente = await request('/account/login', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com', password: permanente }) })
+  assert.equal(comPermanente.body.temporary_password_used, false)
 
   // e-mail inexistente no esqueci: resposta neutra (anti-enumerção)
   const ghost = await request('/account/forgot-password', { method: 'POST', body: JSON.stringify({ email: 'ninguem@exemplo.com' }) })
-  assert.equal(ghost.body.code_sent, true)
+  assert.equal(ghost.body.temporary_password_sent, true)
   assert.equal(captured.filter(m => m.data.includes('ninguem@exemplo.com')).length, 0)
 
   // --- admin: SMTP settings mascarados ------------------------------------
-  const playerCookie = second.response.headers.get('set-cookie').split(';')[0]
+  const playerCookie = comPermanente.response.headers.get('set-cookie').split(';')[0]
   await request('/account/admin/smtp', { headers: { cookie: playerCookie } }, 403)
-  const adminLogin = await request('/account/login', { method: 'POST', body: JSON.stringify({ login: ADMIN_EMAIL, password: ADMIN_PASSWORD }) })
+  const adminLogin = await request('/account/login', { method: 'POST', body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }) })
   const adminCookie = adminLogin.response.headers.get('set-cookie').split(';')[0]
   const smtpView = await request('/account/admin/smtp', { headers: { cookie: adminCookie } })
   assert.equal(smtpView.body.smtp.configured, true)
@@ -174,18 +233,16 @@ try {
   const patched = await request('/account/admin/smtp', { method: 'PATCH', headers: { cookie: adminCookie }, body: JSON.stringify({ host: '127.0.0.1', port: smtpPort, user: SMTP_USER, pass: '', from: 'painel@revival.local' }) })
   assert.equal(patched.body.smtp.has_pass, true)
 
-  // PATCH com senha em branco preservou a salva? o próximo envio (e-mail
-  // novo, sem rate limit) só chega ao 250 se o AUTH LOGIN continuar válido.
-  const afterPatch = await request('/account/email-code/request', { method: 'POST', body: JSON.stringify({ email: ADMIN_EMAIL }) })
-  assert.equal(afterPatch.body.code_sent, true)
+  // PATCH com senha em branco preservou a salva? o próximo e-mail só chega ao
+  // 250 se o AUTH LOGIN do SMTP continuar válido.
+  const afterPatch = await request('/account/forgot-password', { method: 'POST', body: JSON.stringify({ email: ADMIN_EMAIL }) })
+  assert.equal(afterPatch.body.temporary_password_sent, true)
   assert.ok(captured[captured.length - 1].data.includes(`To: <${ADMIN_EMAIL}>`))
 
-  // --- sem SMTP configurado: 503 claro + fallback de recovery ------------
+  // --- sem SMTP configurado: 503 claro e nenhum fallback local -----------
   unlinkSync(smtpPath)
-  const noSmtp = await request('/account/email-code/request', { method: 'POST', body: JSON.stringify({ email: 'outra@exemplo.com' }) }, 503)
+  const noSmtp = await request('/account/forgot-password', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com' }) }, 503)
   assert.equal(noSmtp.body.error, 'smtp-not-configured')
-  const legacy = await request('/account/forgot-password', { method: 'POST', body: JSON.stringify({ email: 'segundo@exemplo.com' }) })
-  assert.equal(legacy.body.recovery_required, true)
 
   console.log('mail-auth: todos os testes passaram')
 } finally {

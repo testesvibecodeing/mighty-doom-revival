@@ -10,7 +10,7 @@ const js = readFileSync(resolve(root, 'public/assets/js/slayer.js'), 'utf8')
 // Regression for the empty Admin screen: secondary panels start hidden in the
 // HTML, so navigation must synchronize the native hidden attribute as well as
 // the CSS class.
-for (const section of ['overview', 'users', 'packs', 'events', 'notices', 'site', 'smtp']) {
+for (const section of ['overview', 'users', 'packs', 'events', 'notices', 'site', 'smtp', 'routes']) {
   assert.match(html, new RegExp(`id="admin-${section}"`))
 }
 assert.match(js, /sub\.hidden\s*=\s*!active/)
@@ -22,6 +22,15 @@ assert.match(js, /\/account\/admin\/events/)
 assert.match(js, /\/account\/admin\/notifications/)
 assert.match(js, /\/account\/admin\/site/)
 assert.match(js, /\/account\/admin\/smtp/)
+assert.match(js, /\/account\/admin\/routes/)
+assert.match(js, /eventEditorForm/)
+assert.match(js, /progress_template/)
+assert.match(js, /event_type/)
+assert.match(js, /routeGateFilter/)
+assert.match(html, /admin-command-hero/)
+assert.match(html, /eventEditorModal/)
+assert.match(html, /slayer\.css\?v=/)
+assert.match(html, /slayer\.js\?v=/)
 assert.match(js, /\/account\/admin\/users\/\$\{userId\}\/profile/)
 assert.match(js, /data-profile-grant/)
 assert.match(js, /data-profile-refresh/)

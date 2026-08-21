@@ -56,7 +56,7 @@ try {
   await waitForServer()
   const created = await request('/account/register', { method: 'POST', body: JSON.stringify({ display_name: 'Test Slayer', email: 'test@example.com', password: 'password-123' }) }, 201)
   const cookie = created.response.headers.get('set-cookie').split(';')[0]
-  assert.match(created.body.recovery_code, /^RV-/)
+  assert.equal('recovery_code' in created.body, false, 'cadastro público não expõe fallback de recuperação')
   assert.equal(created.body.account.email, 'test@example.com')
   const me = await request('/account/me', { headers: { cookie } })
   assert.equal(me.body.account.display_name, 'Test Slayer')
@@ -90,8 +90,10 @@ try {
   plainCookie = relogin.response.headers.get('set-cookie').split(';')[0]
 
   // --- novo código de recuperação emitido pelo admin ---
-  const recovery = await request(`/account/admin/users/${plainId}/recovery-code`, { method: 'POST', headers: { cookie: adminCookie }, body: '{}' })
-  assert.match(recovery.body.recovery_code, /^RV-/)
+  // O código RV- deixou de autenticar qualquer coisa (reset-password responde
+  // 410): a rota do painel que o emitia saiu junto, para não entregar ao
+  // jogador um segredo que não abre porta nenhuma.
+  await request(`/account/admin/users/${plainId}/recovery-code`, { method: 'POST', headers: { cookie: adminCookie }, body: '{}' }, 404)
 
   // --- conceder recurso a um jogador ---
   const grant = await request(`/account/admin/users/${plainId}/grant`, { method: 'POST', headers: { cookie: adminCookie }, body: JSON.stringify({ resource: 7, amount: 5 }) })
@@ -125,9 +127,22 @@ try {
   await request('/account/admin/packs', { method: 'POST', headers: { cookie: adminCookie }, body: JSON.stringify({ tag: 'bad_pack', price: 9.99 }) }, 400)
 
   // --- eventos: criar, desativar, excluir ---
-  const event = await request('/account/admin/events', { method: 'POST', headers: { cookie: adminCookie }, body: JSON.stringify({ tag: 'revival_test_event', active: true, always: true }) }, 201)
+  const routes = await request('/account/admin/routes', { headers: { cookie: adminCookie } })
+  assert.equal(routes.body.ok, true)
+  assert.ok(routes.body.compatibility.route_count >= 100)
+  assert.ok(routes.body.compatibility.endpoints.some(row => row.path === 'game/events/get-schedule'))
+  assert.ok(Array.isArray(routes.body.compatibility.modules))
+
+  const event = await request('/account/admin/events', { method: 'POST', headers: { cookie: adminCookie }, body: JSON.stringify({ tag: 'revival_test_event', active: true, always: true, event_type: 1, channel: 'game_mode', availability: 1, args: { event_id: 991001, difficulty: 2 }, progress_template: { event_id: 991001, stage: 0 } }) }, 201)
   assert.equal(event.body.event.always, true)
-  await request(`/account/admin/events/${event.body.event.id}`, { method: 'PATCH', headers: { cookie: adminCookie }, body: JSON.stringify({ active: false }) })
+  assert.equal(event.body.event.event_type, 1)
+  assert.deepEqual(event.body.event.args, { event_id: 991001, difficulty: 2 })
+  const eventPatch = await request(`/account/admin/events/${event.body.event.id}`, { method: 'PATCH', headers: { cookie: adminCookie }, body: JSON.stringify({ active: false, always: false, start_time: '2030-01-01T12:00:00Z', end_time: '2030-01-02T12:00:00Z', args: { event_id: 991001, difficulty: 3 } }) })
+  assert.equal(eventPatch.body.event.active, false)
+  assert.equal(eventPatch.body.event.args.difficulty, 3)
+  const eventClear = await request(`/account/admin/events/${event.body.event.id}`, { method: 'PATCH', headers: { cookie: adminCookie }, body: JSON.stringify({ start_time: null, end_time: null }) })
+  assert.equal('start_time' in eventClear.body.event, false)
+  assert.equal('end_time' in eventClear.body.event, false)
   await request(`/account/admin/events/${event.body.event.id}`, { method: 'DELETE', headers: { cookie: adminCookie } })
 
   // --- personalização do site público ---
