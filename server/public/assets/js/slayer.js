@@ -46,7 +46,6 @@ async function boot () {
     $('#panel-admin').hidden = false
     $('#adminBadge').hidden = false
   }
-  showRecoveryBanner()
   showPasswordHint()
   loadClaimable().catch(() => {})
 }
@@ -165,22 +164,13 @@ function renderPlayer () {
   $('#profileEmail').value = account.email || ''
 }
 
-function showRecoveryBanner () {
-  let code = ''
-  try { code = sessionStorage.getItem('revival_recovery_code') || '' } catch {}
-  if (!code) return
-  sessionStorage.removeItem('revival_recovery_code')
-  $('#recoveryCode').textContent = code
-  $('#recoveryBanner').hidden = false
-}
-
-// Quem entrou por código de e-mail ainda não tem senha: convida a criar uma.
+// Quem entrou com senha temporária deve trocá-la depois do primeiro acesso.
 function showPasswordHint () {
   let hint = false
-  try { hint = sessionStorage.getItem('revival_password_hint') === '1' } catch {}
+  try { hint = sessionStorage.getItem('revival_temporary_password') === '1' } catch {}
   if (!hint) return
-  sessionStorage.removeItem('revival_password_hint')
-  toast('Sua conta não tem senha ainda. Defina uma em Minha conta → Segurança.')
+  sessionStorage.removeItem('revival_temporary_password')
+  toast('Você entrou com uma senha temporária. Troque-a agora em Minha conta → Segurança.')
 }
 
 /* ============ avisos ============ */
@@ -277,10 +267,6 @@ async function logout () {
 }
 $('#logoutButton').addEventListener('click', logout)
 $('#logoutTop').addEventListener('click', logout)
-$('#copyRecovery').addEventListener('click', () => {
-  navigator.clipboard?.writeText($('#recoveryCode').textContent).then(() => toast('Código copiado.'))
-})
-
 /* ============ modais ============ */
 function showResult ({ title, text = '', code = '', copyable = false }) {
   $('#resultTitle').textContent = title
@@ -328,13 +314,14 @@ $$('#adminSubnav .chip').forEach(chip => chip.addEventListener('click', () => {
 
 function loadAdminSection (name) {
   if (!me?.account?.is_admin) return
-  if (name === 'overview') loadAdminOverview().catch(error => toast(error.message))
-  if (name === 'users') loadAdminUsers().catch(error => toast(error.message))
-  if (name === 'packs') loadAdminPacks().catch(error => toast(error.message))
-  if (name === 'events') loadAdminEvents().catch(error => toast(error.message))
-  if (name === 'notices') loadAdminNotices().catch(error => toast(error.message))
-  if (name === 'site') loadAdminSite().catch(error => toast(error.message))
-  if (name === 'smtp') loadAdminSmtp().catch(error => toast(error.message))
+  if (name === 'overview') return loadAdminOverview().catch(error => toast(error.message))
+  if (name === 'users') return loadAdminUsers().catch(error => toast(error.message))
+  if (name === 'packs') return loadAdminPacks().catch(error => toast(error.message))
+  if (name === 'events') return loadAdminEvents().catch(error => toast(error.message))
+  if (name === 'notices') return loadAdminNotices().catch(error => toast(error.message))
+  if (name === 'site') return loadAdminSite().catch(error => toast(error.message))
+  if (name === 'smtp') return loadAdminSmtp().catch(error => toast(error.message))
+  if (name === 'routes') return loadAdminRoutes().catch(error => toast(error.message))
 }
 
 async function loadAdminOverview () {
@@ -353,7 +340,27 @@ async function loadAdminOverview () {
     <div class="kv-row"><span>Publicado</span><strong>${apk.available ? 'Sim' : 'Não'}</strong></div>
     <div class="kv-row"><span>Tamanho</span><strong>${apk.size ? `${(apk.size / 1048576).toFixed(1)} MB` : '--'}</strong></div>
     <div class="kv-row"><span>Enviado em</span><strong>${formatDate(apk.uploaded_at)}</strong></div>`
+  const compatibility = overview.compatibility || {}
+  const healthPill = $('#adminHealthPill')
+  healthPill.className = `health-pill ${overview.game_data_loaded ? 'healthy' : 'warning'}`
+  healthPill.innerHTML = `<i class="fa-solid ${overview.game_data_loaded ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i> ${overview.game_data_loaded ? 'instância saudável' : 'game-data ausente'}`
+  $('#adminCommandMeta').innerHTML = `<span><i class="fa-solid fa-server"></i> ${escapeHtml(overview.server_name || 'Revival')}</span><span><i class="fa-solid fa-users"></i> ${formatNumber(overview.players)} jogadores</span><span><i class="fa-solid fa-clock"></i> ${Math.floor((overview.uptime_seconds || 0) / 3600)}h uptime</span>`
+  $('#adminHealthGrid').innerHTML = [
+    ['Game data', overview.game_data_loaded ? 'Carregado' : 'Ausente', overview.game_data_loaded ? 'healthy' : 'warning'],
+    ['Loja', `${overview.packs_active}/${overview.packs_total} ativos`, overview.packs_total ? 'healthy' : 'warning'],
+    ['Eventos', `${overview.events_active}/${overview.events_total} ativos`, overview.events_total ? 'healthy' : 'neutral'],
+    ['APK', apk.available ? 'Publicado' : 'Não publicado', apk.available ? 'healthy' : 'warning']
+  ].map(([label, value, tone]) => `<div class="health-cell ${tone}"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`).join('')
+  $('#adminCoverageSummary').innerHTML = `<div class="coverage-meter"><div class="coverage-meter-head"><span>Implementação</span><strong>${compatibility.implemented || 0}/${compatibility.route_count || 0}</strong></div><div class="progress-track"><i style="width:${compatibility.route_count ? Math.round((compatibility.implemented || 0) / compatibility.route_count * 100) : 0}%"></i></div><small>${compatibility.validated || 0} validadas no cliente · ${compatibility.regression_test || 0} com regressão</small></div><button class="mini-action wide" type="button" data-open-admin="routes"><i class="fa-solid fa-diagram-project"></i> Abrir mapa de rotas</button>`
+  $('#adminCoverageSummary').querySelector('[data-open-admin]')?.addEventListener('click', () => {
+    const chip = $('#adminSubnav .chip[data-sub="routes"]')
+    chip?.click()
+  })
 }
+$('#adminRefresh').addEventListener('click', async () => {
+  const active = $('#adminSubnav .chip.active')?.dataset.sub || 'overview'
+  try { await loadAdminSection(active); toast('Painel atualizado.') } catch (error) { toast(error.message) }
+})
 
 async function loadAdminUsers (query = '') {
   const { users } = await api(`/account/admin/users?query=${encodeURIComponent(query)}`)
@@ -374,7 +381,6 @@ async function loadAdminUsers (query = '') {
       <div class="action-row">
         <button class="mini-action" data-act="profile"><i class="fa-solid fa-id-card"></i> Ver perfil</button>
         <button class="mini-action" data-act="reset"><i class="fa-solid fa-key"></i> Nova senha</button>
-        <button class="mini-action" data-act="recovery"><i class="fa-solid fa-rotate"></i> Recovery</button>
         <button class="mini-action" data-act="grant"><i class="fa-solid fa-gift"></i> Conceder</button>
         <button class="mini-action" data-act="admin"><i class="fa-solid fa-shield-halved"></i> ${user.is_admin ? 'Remover admin' : 'Tornar admin'}</button>
         <button class="mini-action danger" data-act="delete"><i class="fa-solid fa-trash"></i> Excluir</button>
@@ -425,10 +431,6 @@ $('#userList').addEventListener('click', async event => {
     if (act === 'reset') {
       const result = await api(`/account/admin/users/${userId}/reset-password`, { method: 'POST', body: '{}' })
       showResult({ title: 'Senha redefinida', text: `Nova senha do usuário #${userId}. As sessões ativas dele foram encerradas.`, code: result.password, copyable: true })
-    }
-    if (act === 'recovery') {
-      const result = await api(`/account/admin/users/${userId}/recovery-code`, { method: 'POST', body: '{}' })
-      showResult({ title: 'Novo código de recuperação', text: `Entregue este código ao jogador #${userId} com segurança.`, code: result.recovery_code, copyable: true })
     }
     if (act === 'grant') openGrantModal(userId)
     if (act === 'admin') {
@@ -618,8 +620,10 @@ $('#packList').addEventListener('click', async event => {
   } catch (error) { toast(error.message) }
 })
 
-/* --- eventos --- */
-const STATUS_LABELS = { running: 'Rodando', always: 'Sempre ativo', scheduled: 'Agendado', ended: 'Encerrado', inactive: 'Inativo' }
+/* --- eventos: editor completo do contrato + filtros operacionais --- */
+const STATUS_LABELS = { running: 'Rodando agora', always: 'Sempre ativo', scheduled: 'Agendado', ended: 'Encerrado', inactive: 'Inativo' }
+const EVENT_TYPE_LABELS = { 0: 'None', 1: 'Game mode', 2: 'Store offer', 3: 'Battle pass' }
+let adminEvents = []
 
 function toLocalInput (value) {
   if (!value) return ''
@@ -628,63 +632,137 @@ function toLocalInput (value) {
   const pad = n => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
-
-async function loadAdminEvents () {
-  const { events } = await api('/account/admin/events')
-  $('#eventList').innerHTML = events.length ? events.map(event => `
-    <article class="admin-card" data-event="${event.id}">
-      <div class="admin-card-head">
-        <h3>#${event.id} ${escapeHtml(event.tag || '')}</h3>
-        <span class="status-chip ${event.status}">${STATUS_LABELS[event.status] || event.status}</span>
-      </div>
-      <div class="switch-row"><span>Ativo</span><input type="checkbox" class="switch" data-field="active" ${event.active !== false ? 'checked' : ''}></div>
-      <div class="switch-row"><span>Sempre disponível (ignora datas)</span><input type="checkbox" class="switch" data-field="always" ${event.always === true ? 'checked' : ''}></div>
-      <div class="quota-row" style="margin-top:10px">
-        <label>Início<input data-field="start_time" type="datetime-local" value="${toLocalInput(event.start_time)}"></label>
-        <label>Fim<input data-field="end_time" type="datetime-local" value="${toLocalInput(event.end_time)}"></label>
-      </div>
-      <div class="action-row">
-        <button class="mini-action" data-act="save"><i class="fa-solid fa-floppy-disk"></i> Salvar evento</button>
-        <button class="mini-action danger" data-act="delete"><i class="fa-solid fa-trash"></i> Excluir</button>
-      </div>
-    </article>`).join('') : '<p class="empty">Nenhum evento configurado.</p>'
+function eventDateLabel (value) {
+  if (!value) return 'sem data'
+  const date = typeof value === 'number' ? new Date(value * 1000) : new Date(Date.parse(value))
+  return Number.isNaN(date.getTime()) ? 'data inválida' : date.toLocaleString('pt-BR', { dateStyle: 'medium', timeStyle: 'short' })
 }
-
-$('#newEventButton').addEventListener('click', async () => {
+function jsonPretty (value, fallback = {}) { return JSON.stringify(value && typeof value === 'object' ? value : fallback, null, 2) }
+function eventMatchesFilters (event) {
+  const query = ($('#eventSearch')?.value || '').trim().toLowerCase()
+  const statusFilter = $('#eventStatusFilter')?.value || 'all'
+  const channelFilter = $('#eventChannelFilter')?.value || 'all'
+  const haystack = `${event.id} ${event.tag || ''} ${event.channel || ''} ${EVENT_TYPE_LABELS[event.event_type] || ''}`.toLowerCase()
+  return (!query || haystack.includes(query)) && (statusFilter === 'all' || event.status === statusFilter) && (channelFilter === 'all' || event.channel === channelFilter)
+}
+function renderEventCard (event) {
+  const active = event.active !== false
+  const argCount = Object.keys(event.args || {}).length
+  const progressCount = Object.keys(event.progress_template || {}).length
+  return `<article class="event-command-card ${active ? 'is-active' : 'is-muted'}" data-event="${event.id}">
+    <div class="event-card-rail"><span class="event-id">#${event.id}</span><span class="status-chip ${event.status}"><i class="fa-solid ${event.status === 'running' || event.status === 'always' ? 'fa-circle-play' : event.status === 'scheduled' ? 'fa-clock' : 'fa-circle'}"></i> ${STATUS_LABELS[event.status] || event.status}</span></div>
+    <div class="event-card-main"><div class="event-card-head"><div><span class="event-kicker">${escapeHtml(event.channel || 'game_mode')} · ${escapeHtml(EVENT_TYPE_LABELS[event.event_type] || 'None')}</span><h3>${escapeHtml(event.tag || `Evento ${event.id}`)}</h3></div><span class="event-live-dot ${active ? 'on' : ''}"></span></div>
+      <div class="event-card-meta"><span><i class="fa-regular fa-calendar"></i> ${event.always ? 'Disponível sem janela' : `${eventDateLabel(event.start_time)} → ${eventDateLabel(event.end_time)}`}</span><span><i class="fa-solid fa-code"></i> ${argCount} args</span><span><i class="fa-solid fa-chart-line"></i> ${progressCount} campos de progresso</span></div>
+      <div class="event-card-footer"><span class="tag ${active ? 'success' : ''}">${active ? 'publicação habilitada' : 'rascunho desativado'}</span><div class="action-row"><button class="mini-action" data-act="edit"><i class="fa-solid fa-pen-to-square"></i> Editar</button><button class="mini-action" data-act="duplicate"><i class="fa-solid fa-copy"></i> Duplicar</button><button class="mini-action danger" data-act="delete"><i class="fa-solid fa-trash"></i> Excluir</button></div></div>
+    </div>
+  </article>`
+}
+function renderEventMetrics () {
+  const counts = { total: adminEvents.length, running: 0, scheduled: 0, drafts: 0 }
+  for (const event of adminEvents) { if (event.status === 'running' || event.status === 'always') counts.running += 1; if (event.status === 'scheduled') counts.scheduled += 1; if (event.active === false) counts.drafts += 1 }
+  $('#eventMetrics').innerHTML = [['TOTAL', counts.total, 'configurados'], ['AO VIVO', counts.running, 'disponíveis agora'], ['AGENDA', counts.scheduled, 'próximos eventos'], ['RASCUNHOS', counts.drafts, 'fora do ar']].map(([label, value, hint]) => `<div class="event-metric"><span>${label}</span><strong>${value}</strong><small>${hint}</small></div>`).join('')
+}
+function renderAdminEvents () {
+  renderEventMetrics()
+  const rows = adminEvents.filter(eventMatchesFilters)
+  $('#eventList').innerHTML = rows.length ? rows.map(renderEventCard).join('') : '<div class="empty-state-large"><i class="fa-solid fa-calendar-xmark"></i><strong>Nenhum evento neste filtro</strong><span>Crie um evento ou ajuste a busca para continuar.</span></div>'
+}
+async function loadAdminEvents () {
+  const result = await api('/account/admin/events')
+  adminEvents = Array.isArray(result.events) ? result.events : []
+  renderAdminEvents()
+}
+function setEventFormValue (form, name, value) { const field = form.elements[name]; if (field) field.value = value ?? '' }
+function openEventEditor (event = null) {
+  const modal = $('#eventEditorModal'); const form = $('#eventEditorForm')
+  form.reset()
+  setEventFormValue(form, 'id', event?.id || '')
+  setEventFormValue(form, 'tag', event?.tag || `revival_event_${Date.now()}`)
+  setEventFormValue(form, 'event_definition_id', event?.event_definition_id || event?.id || 990001)
+  setEventFormValue(form, 'channel', event?.channel || 'game_mode')
+  setEventFormValue(form, 'event_type', event?.event_type ?? 0)
+  setEventFormValue(form, 'availability', event?.availability ?? 1)
+  setEventFormValue(form, 'start_time', toLocalInput(event?.start_time))
+  setEventFormValue(form, 'end_time', toLocalInput(event?.end_time))
+  setEventFormValue(form, 'min_api_version', event?.min_api_version || '')
+  setEventFormValue(form, 'max_api_version', event?.max_api_version || '')
+  form.elements.active.checked = event ? event.active !== false : false
+  form.elements.always.checked = event?.always === true
+  setEventFormValue(form, 'args', jsonPretty(event?.args, { event_id: Number(event?.event_definition_id || event?.id || 990001) }))
+  setEventFormValue(form, 'progress_template', jsonPretty(event?.progress_template, { event_id: Number(event?.event_definition_id || event?.id || 990001) }))
+  $('#eventEditorTitle').textContent = event ? `Editar evento #${event.id}` : 'Novo evento'
+  $('#eventEditorHint').textContent = event ? 'Alterações são gravadas no runtime e entram no próximo reload do servidor.' : 'O evento nasce inativo até você revisar e publicar.'
+  status('eventEditorStatus', '')
+  modal.hidden = false
+  updateEventPreview()
+  form.elements.tag.focus()
+}
+function closeEventEditor () { $('#eventEditorModal').hidden = true }
+function eventFormPayload (form) {
+  const parseObject = name => { const raw = String(form.elements[name].value || '').trim(); if (!raw) return {}; try { const value = JSON.parse(raw); if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('precisa ser um objeto JSON'); return value } catch (error) { throw new Error(`${name === 'args' ? 'Args' : 'Progress template'} inválido: ${error.message}`) } }
+  return { tag: form.elements.tag.value.trim(), event_definition_id: Number(form.elements.event_definition_id.value), active: form.elements.active.checked, always: form.elements.always.checked, channel: form.elements.channel.value, event_type: Number(form.elements.event_type.value), availability: Number(form.elements.availability.value), start_time: form.elements.start_time.value || null, end_time: form.elements.end_time.value || null, min_api_version: form.elements.min_api_version.value.trim() || null, max_api_version: form.elements.max_api_version.value.trim() || null, args: parseObject('args'), progress_template: parseObject('progress_template') }
+}
+function updateEventPreview () {
+  const preview = $('#eventEditorPreview code'); if (!preview) return
+  try { preview.textContent = JSON.stringify(eventFormPayload($('#eventEditorForm')), null, 2) } catch (error) { preview.textContent = error.message }
+}
+$('#newEventButton').addEventListener('click', () => openEventEditor())
+$('#eventEditorClose').addEventListener('click', closeEventEditor)
+$('#eventEditorCancel').addEventListener('click', closeEventEditor)
+$('#eventEditorModal').addEventListener('click', event => { if (event.target === $('#eventEditorModal')) closeEventEditor() })
+$('#eventEditorForm').addEventListener('input', updateEventPreview)
+$('#eventEditorForm').addEventListener('submit', async event => {
+  event.preventDefault(); const form = event.target
   try {
-    await api('/account/admin/events', { method: 'POST', body: JSON.stringify({ tag: 'revival_novo_evento', active: false, always: false }) })
-    toast('Evento criado (inativo). Configure as datas e ative.')
-    loadAdminEvents().catch(() => {})
-  } catch (error) { toast(error.message) }
+    const payload = eventFormPayload(form); status('eventEditorStatus', 'Salvando…')
+    const id = Number(form.elements.id.value)
+    const result = await api(id ? `/account/admin/events/${id}` : '/account/admin/events', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
+    closeEventEditor(); toast(id ? 'Evento atualizado.' : 'Evento criado como rascunho.')
+    if (result.event) adminEvents = id ? adminEvents.map(row => row.id === id ? { ...result.event, status: row.status } : row) : [...adminEvents, { ...result.event, status: 'inactive' }]
+    await loadAdminEvents()
+  } catch (error) { status('eventEditorStatus', error.message) }
 })
-
+for (const selector of ['#eventSearch', '#eventStatusFilter', '#eventChannelFilter']) { $(selector).addEventListener('input', renderAdminEvents); $(selector).addEventListener('change', renderAdminEvents) }
 $('#eventList').addEventListener('click', async event => {
-  const button = event.target.closest('[data-act]')
-  if (!button) return
-  const card = button.closest('[data-event]')
-  const eventId = card.dataset.event
-  if (button.dataset.act === 'delete') {
-    showConfirm('Excluir evento', `Remover o evento #${eventId}?`, async () => {
-      try {
-        await api(`/account/admin/events/${eventId}`, { method: 'DELETE' })
-        toast('Evento excluído.')
-        loadAdminEvents().catch(() => {})
-      } catch (error) { toast(error.message) }
-    })
+  const button = event.target.closest('[data-act]'); if (!button) return
+  const eventId = Number(button.closest('[data-event]').dataset.event); const current = adminEvents.find(row => row.id === eventId)
+  if (!current) return
+  if (button.dataset.act === 'edit') { openEventEditor(current); return }
+  if (button.dataset.act === 'duplicate') {
+    try { const copy = { ...current, id: undefined, tag: `${current.tag || 'revival_event'}_copy`, active: false }; delete copy.status; await api('/account/admin/events', { method: 'POST', body: JSON.stringify(copy) }); toast('Evento duplicado como rascunho.'); await loadAdminEvents() } catch (error) { toast(error.message) }
     return
   }
-  const payload = {
-    active: card.querySelector('[data-field="active"]').checked,
-    always: card.querySelector('[data-field="always"]').checked,
-    start_time: card.querySelector('[data-field="start_time"]').value || null,
-    end_time: card.querySelector('[data-field="end_time"]').value || null
-  }
-  try {
-    await api(`/account/admin/events/${eventId}`, { method: 'PATCH', body: JSON.stringify(payload) })
-    toast('Evento salvo.')
-    loadAdminEvents().catch(() => {})
-  } catch (error) { toast(error.message) }
+  showConfirm('Excluir evento', `Remover definitivamente o evento #${eventId}?`, async () => { try { await api(`/account/admin/events/${eventId}`, { method: 'DELETE' }); toast('Evento excluído.'); await loadAdminEvents() } catch (error) { toast(error.message) } })
 })
+
+/* --- mapa completo das rotas extraídas do APK --- */
+let routeCatalog = null
+function routeGateBadges (row) {
+  const gates = [['schema_extracted', 'schema'], ['implemented', 'impl'], ['request_observed', 'req'], ['response_observed', 'res'], ['client_validated', 'cliente'], ['persistence_validated', 'persist'], ['regression_test', 'teste']]
+  return gates.map(([field, label]) => `<span class="route-gate ${row[field] ? 'pass' : ''}" title="${field}">${row[field] ? '<i class="fa-solid fa-check"></i>' : '<i class="fa-solid fa-minus"></i>'} ${label}</span>`).join('')
+}
+function renderRouteCatalog () {
+  if (!routeCatalog) return
+  const query = ($('#routeSearch')?.value || '').trim().toLowerCase(); const module = $('#routeModuleFilter')?.value || 'all'; const gate = $('#routeGateFilter')?.value || 'all'
+  const rows = routeCatalog.endpoints.filter(row => {
+    const haystack = `${row.path} ${row.module} ${row.evidence || ''}`.toLowerCase()
+    const gateOk = gate === 'all' || (gate === 'missing' && !row.client_validated) || (gate === 'validated' && row.client_validated) || (gate === 'implemented' && row.implemented)
+    return (!query || haystack.includes(query)) && (module === 'all' || row.module === module) && gateOk
+  })
+  $('#routeList').innerHTML = rows.length ? rows.map(row => `<article class="route-row ${row.client_validated ? 'validated' : ''}"><div class="route-row-main"><span class="route-method">POST</span><div><code>${escapeHtml(row.path)}</code><small>${escapeHtml(row.module)}${row.uses_fallback ? ' · fallback ativo' : ''}</small></div></div><div class="route-gates">${routeGateBadges(row)}</div></article>`).join('') : '<div class="empty-state-large"><i class="fa-solid fa-filter-circle-xmark"></i><strong>Nenhuma rota neste filtro</strong><span>Refine a busca ou selecione outro módulo.</span></div>'
+}
+function renderRouteSummary () {
+  const totals = routeCatalog.gate_totals || {}; const total = routeCatalog.route_count || routeCatalog.endpoints.length
+  $('#routeSummary').innerHTML = [['ROTAS EXTRAÍDAS', total, 'contrato do APK', 'accent'], ['IMPLEMENTADAS', totals.implemented || 0, 'handlers no servidor', ''], ['OBSERVADAS', totals.request_observed || 0, 'requests reais', ''], ['VALIDADAS', totals.client_validated || 0, 'cliente confirmou', 'success']].map(([label, value, hint, tone]) => `<div class="route-summary-card ${tone}"><span>${label}</span><strong>${value}</strong><small>${hint}</small></div>`).join('')
+}
+async function loadAdminRoutes () {
+  const result = await api('/account/admin/routes'); routeCatalog = result.compatibility || { endpoints: [], modules: [], gate_totals: {} }
+  const moduleSelect = $('#routeModuleFilter'); const current = moduleSelect.value
+  moduleSelect.innerHTML = '<option value="all">Todos os módulos</option>' + (routeCatalog.modules || []).map(row => `<option value="${escapeHtml(row.module)}">${escapeHtml(row.module)} (${row.total})</option>`).join(''); moduleSelect.value = current || 'all'
+  renderRouteSummary(); renderRouteCatalog()
+}
+$('#routesRefresh').addEventListener('click', () => loadAdminRoutes().then(() => toast('Mapa de rotas atualizado.')).catch(error => toast(error.message)))
+for (const selector of ['#routeSearch', '#routeModuleFilter', '#routeGateFilter']) { $(selector).addEventListener('input', renderRouteCatalog); $(selector).addEventListener('change', renderRouteCatalog) }
 
 /* --- avisos --- */
 async function loadAdminNotices () {
@@ -755,7 +833,7 @@ async function loadClaimable () {
   }))
 }
 
-/* --- SMTP: login/esqueci-senha por código de e-mail --- */
+/* --- SMTP: recuperação por senha temporária --- */
 async function loadAdminSmtp () {
   const { smtp } = await api('/account/admin/smtp')
   const form = $('#smtpForm')
@@ -766,7 +844,18 @@ async function loadAdminSmtp () {
   form.querySelector('[name="from"]').value = smtp.from || ''
   form.querySelector('[name="from_name"]').value = smtp.from_name || ''
   form.querySelector('[name="secure"]').checked = Boolean(smtp.secure)
-  status('smtpStatus', smtp.configured ? 'Configurado. O login por e-mail está ativo.' : 'Sem configuração: o login por e-mail fica desativado (503).', smtp.configured)
+  form.querySelector('[name="allow_invalid_cert"]').checked = Boolean(smtp.allow_invalid_cert)
+  renderSmtpPill(smtp)
+  status('smtpStatus', smtp.configured ? 'Configurado. A recuperação por e-mail está ativa.' : 'Sem configuração: “Esqueci minha senha” fica indisponível (503).', smtp.configured)
+}
+
+// Estado visível sem revelar segredo: só o fato de haver ou não senha salva.
+function renderSmtpPill (smtp) {
+  const pill = $('#smtpStatePill')
+  if (!pill) return
+  pill.className = `health-pill ${smtp.configured ? 'healthy' : 'warning'}`
+  const cert = smtp.allow_invalid_cert ? ' · certificado não validado' : ''
+  pill.innerHTML = `<i class="fa-solid ${smtp.configured ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i> ${smtp.configured ? 'configurado' : 'não configurado'}${cert}`
 }
 
 $('#smtpForm').addEventListener('submit', async event => {
@@ -778,7 +867,8 @@ $('#smtpForm').addEventListener('submit', async event => {
     user: form.querySelector('[name="user"]').value.trim(),
     from: form.querySelector('[name="from"]').value.trim(),
     from_name: form.querySelector('[name="from_name"]').value.trim(),
-    secure: form.querySelector('[name="secure"]').checked
+    secure: form.querySelector('[name="secure"]').checked,
+    allow_invalid_cert: form.querySelector('[name="allow_invalid_cert"]').checked
   }
   const pass = form.querySelector('[name="pass"]').value
   if (pass) payload.pass = pass
@@ -786,7 +876,8 @@ $('#smtpForm').addEventListener('submit', async event => {
   try {
     const { smtp } = await api('/account/admin/smtp', { method: 'PATCH', body: JSON.stringify(payload) })
     form.querySelector('[name="pass"]').value = ''
-    status('smtpStatus', smtp.configured ? 'Salvo. Login por e-mail ativo.' : 'Salvo, mas incompleto: falta servidor ou remetente.', smtp.configured)
+    renderSmtpPill(smtp)
+    status('smtpStatus', smtp.configured ? 'Salvo. Recuperação por senha temporária ativa.' : 'Salvo, mas incompleto: falta servidor ou remetente.', smtp.configured)
     toast('Configuração de e-mail salva.')
   } catch (error) { status('smtpStatus', error.message) }
 })

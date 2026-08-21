@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-  <link rel="stylesheet" href="assets/css/slayer.css">
+  <link rel="stylesheet" href="assets/css/slayer.css?v=20260820-command-center">
 </head>
 <body>
   <div class="app-glow"></div>
@@ -34,16 +34,6 @@
           <p class="hero-meta">ID <strong id="heroId">--</strong> · membro desde <strong id="heroCreated">--</strong></p>
         </div>
         <span class="admin-badge" id="adminBadge" hidden><i class="fa-solid fa-shield-halved"></i> SUPER ADMIN</span>
-      </div>
-
-      <div class="recovery-banner" id="recoveryBanner" hidden>
-        <i class="fa-solid fa-key"></i>
-        <div class="recovery-copy">
-          <b>Guarde seu código de recuperação</b>
-          <code id="recoveryCode">--</code>
-          <small>Ele não é exibido novamente depois de fechar esta mensagem.</small>
-        </div>
-        <button class="mini-action" id="copyRecovery"><i class="fa-solid fa-copy"></i> Copiar</button>
       </div>
 
       <h2 class="section-title"><i class="fa-solid fa-bullhorn"></i> Avisos do servidor</h2>
@@ -90,6 +80,19 @@
     <section class="tab-panel" id="panel-admin" hidden>
       <div class="panel-heading">
         <div><span class="eyebrow">// SUPER ADMIN</span><h2>Administração</h2></div>
+        <div class="admin-heading-actions">
+          <span class="health-pill pending" id="adminHealthPill"><i class="fa-solid fa-circle-notch fa-spin"></i> verificando</span>
+          <button class="secondary-action compact" id="adminRefresh" type="button"><i class="fa-solid fa-rotate"></i><span>Atualizar</span></button>
+        </div>
+      </div>
+
+      <div class="admin-command-hero">
+        <div>
+          <span class="eyebrow">// COMMAND CENTER</span>
+          <h3>Controle operacional do Revival</h3>
+          <p>Gerencie progressão, conteúdo, jogadores e os contratos extraídos do cliente em um único lugar.</p>
+        </div>
+        <div class="admin-command-meta" id="adminCommandMeta"><span>Sincronizando métricas…</span></div>
       </div>
 
       <nav class="chip-nav" id="adminSubnav" aria-label="Seções de administração">
@@ -100,10 +103,21 @@
         <button class="chip" data-sub="notices"><i class="fa-solid fa-bullhorn"></i> Avisos</button>
         <button class="chip" data-sub="site"><i class="fa-solid fa-palette"></i> Site</button>
         <button class="chip" data-sub="smtp"><i class="fa-solid fa-envelope"></i> E-mail</button>
+        <button class="chip" data-sub="routes"><i class="fa-solid fa-diagram-project"></i> API do cliente</button>
       </nav>
 
       <div class="admin-sub active" id="admin-overview">
         <div class="metric-grid" id="adminTiles"></div>
+        <div class="admin-overview-grid">
+          <div class="card admin-health-card">
+            <div class="card-title"><span>Saúde da instância</span><i class="fa-solid fa-heart-pulse"></i></div>
+            <div class="health-grid" id="adminHealthGrid"><p class="empty">Carregando diagnóstico…</p></div>
+          </div>
+          <div class="card admin-coverage-card">
+            <div class="card-title"><span>Cobertura do contrato</span><i class="fa-solid fa-code-branch"></i></div>
+            <div id="adminCoverageSummary"><p class="empty">Carregando cobertura…</p></div>
+          </div>
+        </div>
         <div class="card" id="apkCard">
           <div class="card-title"><span>APK publicado</span><i class="fa-brands fa-android"></i></div>
           <div class="kv-list" id="apkInfo"></div>
@@ -125,8 +139,35 @@
       </div>
 
       <div class="admin-sub" id="admin-events" hidden>
-        <button class="secondary-action wide" id="newEventButton"><i class="fa-solid fa-plus"></i> Criar novo evento</button>
+        <div class="admin-section-toolbar">
+          <div>
+            <span class="eyebrow">// LIVE CONTENT</span>
+            <h3>Orquestrador de eventos</h3>
+            <p>Programe, teste e publique eventos usando somente os campos do contrato do cliente.</p>
+          </div>
+          <button class="primary-action" id="newEventButton"><i class="fa-solid fa-plus"></i> Novo evento</button>
+        </div>
+        <div class="admin-event-metrics" id="eventMetrics"></div>
+        <div class="admin-filter-bar">
+          <label class="filter-search"><i class="fa-solid fa-magnifying-glass"></i><input id="eventSearch" placeholder="Buscar por ID, tag ou canal…" autocomplete="off"></label>
+          <select id="eventStatusFilter" aria-label="Filtrar eventos"><option value="all">Todos os estados</option><option value="running">Rodando agora</option><option value="scheduled">Agendados</option><option value="always">Sempre ativos</option><option value="ended">Encerrados</option><option value="inactive">Inativos</option></select>
+          <select id="eventChannelFilter" aria-label="Filtrar canal"><option value="all">Todos os canais</option><option value="game_mode">Game mode</option><option value="store_offer">Store offer</option><option value="battle_pass">Battle pass</option></select>
+        </div>
         <div class="event-list" id="eventList"></div>
+      </div>
+
+      <div class="admin-sub" id="admin-routes" hidden>
+        <div class="admin-section-toolbar">
+          <div><span class="eyebrow">// CLIENT CONTRACT</span><h3>Mapa das 116 rotas</h3><p>Uma visão operacional do que o APK conhece, do que o servidor implementa e do que já foi validado.</p></div>
+          <button class="secondary-action" id="routesRefresh" type="button"><i class="fa-solid fa-rotate"></i> Atualizar mapa</button>
+        </div>
+        <div class="route-summary-grid" id="routeSummary"></div>
+        <div class="admin-filter-bar">
+          <label class="filter-search"><i class="fa-solid fa-magnifying-glass"></i><input id="routeSearch" placeholder="Buscar rota, módulo ou evidência…" autocomplete="off"></label>
+          <select id="routeModuleFilter" aria-label="Filtrar módulo"><option value="all">Todos os módulos</option></select>
+          <select id="routeGateFilter" aria-label="Filtrar gate"><option value="all">Todos os estados</option><option value="missing">Com gaps</option><option value="validated">Validadas no cliente</option><option value="implemented">Implementadas</option></select>
+        </div>
+        <div class="route-list" id="routeList"><p class="empty">Carregando catálogo do APK…</p></div>
       </div>
 
       <div class="admin-sub" id="admin-notices" hidden>
@@ -171,9 +212,9 @@
       </div>
 
       <div class="admin-sub" id="admin-smtp" hidden>
-        <p class="hint">Configure o SMTP para habilitar o login por código de e-mail: o jogador digita só o e-mail, recebe um código de 6 dígitos e entra — sem senha. Serve também para o "esqueci minha senha".</p>
+        <p class="hint">O SMTP habilita <strong>apenas</strong> a recuperação por senha temporária. O login normal do site e do APK é sempre e-mail + senha e funciona com ou sem SMTP. Na recuperação, o jogador recebe por e-mail uma senha temporária de uso único, válida por 30 minutos, que só substitui a senha antiga quando é usada. Sem SMTP completo, “Esqueci minha senha” responde 503 e nenhum e-mail é gerado — não existe atalho local.</p>
         <div class="card" style="margin-top:0">
-          <div class="card-title"><span>Servidor de e-mail (SMTP)</span><i class="fa-solid fa-envelope"></i></div>
+          <div class="card-title"><span>Servidor de e-mail (SMTP)</span><span class="health-pill pending" id="smtpStatePill"><i class="fa-solid fa-circle-notch fa-spin"></i> verificando</span></div>
           <form class="stack-form" id="smtpForm">
             <label>Servidor<input name="host" placeholder="smtp.gmail.com" required></label>
             <label>Porta<input name="port" type="number" min="1" max="65535" value="587"></label>
@@ -181,7 +222,8 @@
             <label>Senha do SMTP<input name="pass" type="password" autocomplete="new-password" placeholder="deixe vazio para manter a salva"></label>
             <label>E-mail remetente<input name="from" type="email" placeholder="nao-responda@dominio.com" required></label>
             <label>Nome do remetente<input name="from_name" maxlength="64" placeholder="Mighty DOOM Revival"></label>
-            <div class="switch-row"><span>Conexão direta TLS (porta 465)</span><input type="checkbox" class="switch" name="secure"></div>
+            <div class="switch-row"><span><strong>Conexão direta TLS (porta 465)</strong><small>Desmarcado usa STARTTLS na porta 587 quando o servidor oferece.</small></span><input type="checkbox" class="switch" name="secure"></div>
+            <div class="switch-row"><span><strong>Aceitar certificado TLS inválido</strong><small>Deixe desligado. Ligar aceita certificado não confiável e expõe a senha de aplicativo a interceptação — só para servidor interno de teste.</small></span><input type="checkbox" class="switch" name="allow_invalid_cert"></div>
             <button class="primary-action" type="submit"><i class="fa-solid fa-floppy-disk"></i> Salvar configuração</button>
             <p class="form-status" id="smtpStatus"></p>
           </form>
@@ -212,7 +254,7 @@
           <button class="secondary-action" type="submit">Trocar senha</button>
           <p class="form-status" id="passwordStatus"></p>
         </form>
-        <div class="security-note"><i class="fa-solid fa-circle-info"></i> Contas criadas por código de e-mail definem a senha aqui na primeira visita. Esqueceu a senha? Peça um código por e-mail em "Esqueci minha senha" na tela de login.</div>
+        <div class="security-note"><i class="fa-solid fa-circle-info"></i> As senhas são armazenadas no servidor como hash scrypt com salt. Se entrar com uma senha temporária recebida por e-mail, troque-a aqui.</div>
       </div>
       <div class="card">
         <div class="card-title"><span>Conta do jogo</span><i class="fa-solid fa-gamepad"></i></div>
@@ -277,8 +319,33 @@
     <div class="modal admin-profile-modal" role="dialog" aria-modal="true" aria-labelledby="adminProfileTitle"></div>
   </div>
 
+  <div class="modal-overlay" id="eventEditorModal" hidden>
+    <div class="modal event-editor-modal" role="dialog" aria-modal="true" aria-labelledby="eventEditorTitle">
+      <div class="modal-headline"><div><span class="eyebrow">// EVENT STUDIO</span><h3 id="eventEditorTitle">Novo evento</h3><p class="modal-text" id="eventEditorHint">O evento nasce inativo até você revisar e publicar.</p></div><button class="icon-link" type="button" id="eventEditorClose" aria-label="Fechar editor"><i class="fa-solid fa-xmark"></i></button></div>
+      <form class="stack-form" id="eventEditorForm">
+        <input type="hidden" name="id">
+        <div class="editor-form-grid two">
+          <label>Tag interna<input name="tag" maxlength="64" required placeholder="revival_halloween_2026"></label>
+          <label>ID da definição<input name="event_definition_id" type="number" min="1" step="1" required></label>
+        </div>
+        <div class="editor-form-grid three">
+          <label>Canal<select name="channel"><option value="game_mode">Game mode</option><option value="store_offer">Store offer</option><option value="battle_pass">Battle pass</option></select></label>
+          <label>Tipo do evento<select name="event_type"><option value="0">None</option><option value="1">Game mode</option><option value="2">Store offer</option><option value="3">Battle pass</option></select></label>
+          <label>Disponibilidade<select name="availability"><option value="0">Archived</option><option value="1" selected>Available</option><option value="2">Unpublished</option></select></label>
+        </div>
+        <div class="switch-grid"><label class="switch-row"><span><strong>Ativo</strong><small>Disponível para o cliente</small></span><input type="checkbox" class="switch" name="active"></label><label class="switch-row"><span><strong>Sempre ativo</strong><small>Ignora janela de datas</small></span><input type="checkbox" class="switch" name="always"></label></div>
+        <div class="editor-form-grid two"><label>Início<input name="start_time" type="datetime-local"></label><label>Fim<input name="end_time" type="datetime-local"></label></div>
+        <div class="editor-form-grid two"><label>Versão mínima<input name="min_api_version" maxlength="32" placeholder="24.0.0"></label><label>Versão máxima<input name="max_api_version" maxlength="32" placeholder="24.9.9"></label></div>
+        <div class="json-editor-grid"><label>Args (JSON enviado no evento)<textarea name="args" rows="8" spellcheck="false" placeholder='{"event_id": 990001}'></textarea></label><label>Progress template (semente por jogador)<textarea name="progress_template" rows="8" spellcheck="false" placeholder='{"event_id": 990001}'></textarea></label></div>
+        <div class="event-editor-preview" id="eventEditorPreview"><span class="eyebrow">PREVIEW DO CONTRATO</span><code>{}</code></div>
+        <div class="modal-actions"><button class="secondary-action" type="button" id="eventEditorCancel">Cancelar</button><button class="primary-action" type="submit"><i class="fa-solid fa-floppy-disk"></i> Salvar evento</button></div>
+        <p class="form-status" id="eventEditorStatus"></p>
+      </form>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
-  <script src="assets/js/slayer.js"></script>
+  <script src="assets/js/slayer.js?v=20260820-command-center"></script>
   <script src="assets/js/revival-items.js?v=20260817-unique-icons"></script>
 </body>
 </html>

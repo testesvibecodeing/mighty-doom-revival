@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 
 import { classifyResource, giveGameResource, inventoryWire } from './game-data-model.js'
 import { resolveResource } from './config.js'
@@ -10,6 +10,52 @@ import { playerStatsWire } from './stats.js'
 
 // Kinds aceitos numa concessão explícita de recurso (giveGameResource).
 const GRANT_KINDS = new Set(['currency', 'energy', 'cosmetic', 'entitlement', 'weapon', 'equipment', 'launcher', 'ultimate', 'slayer'])
+const EVENT_CHANNELS = new Set(['game_mode', 'store_offer', 'battle_pass'])
+const EVENT_TYPES = new Set([0, 1, 2, 3])
+const EVENT_AVAILABILITIES = new Set([0, 1, 2])
+
+const COMPATIBILITY_PATH = resolve(import.meta.dirname, '../../compatibility.json')
+
+function readCompatibilityCatalog () {
+  try {
+    const raw = JSON.parse(readFileSync(COMPATIBILITY_PATH, 'utf8'))
+    const endpoints = Object.entries(raw.endpoints || {}).map(([path, value]) => ({
+      path,
+      module: String(value.module || 'other'),
+      schema_extracted: value.schema_extracted === true,
+      implemented: value.implemented === true,
+      request_observed: value.request_observed === true,
+      response_observed: value.response_observed === true,
+      client_validated: value.client_validated === true,
+      persistence_validated: value.persistence_validated === true,
+      regression_test: value.regression_test === true,
+      uses_fallback: value.uses_fallback === true,
+      evidence: String(value.evidence || '')
+    }))
+    const modules = {}
+    for (const endpoint of endpoints) {
+      const bucket = modules[endpoint.module] || (modules[endpoint.module] = { module: endpoint.module, total: 0, implemented: 0, validated: 0, tested: 0 })
+      bucket.total += 1
+      if (endpoint.implemented) bucket.implemented += 1
+      if (endpoint.client_validated) bucket.validated += 1
+      if (endpoint.regression_test) bucket.tested += 1
+    }
+    const gates = ['schema_extracted', 'implemented', 'request_observed', 'response_observed', 'client_validated', 'persistence_validated', 'regression_test']
+    const gateTotals = Object.fromEntries(gates.map(gate => [gate, endpoints.filter(endpoint => endpoint[gate] === true).length]))
+    return {
+      client: raw._meta?.client || 'com.bethsoft.ubu',
+      metadata_version: raw._meta?.metadata_version ?? null,
+      route_count: Number(raw._meta?.route_count || endpoints.length),
+      updated: raw._meta?.updated || null,
+      gates,
+      gate_totals: gateTotals,
+      modules: Object.values(modules).sort((a, b) => a.module.localeCompare(b.module)),
+      endpoints: endpoints.sort((a, b) => a.path.localeCompare(b.path))
+    }
+  } catch (error) {
+    return { client: 'unknown', metadata_version: null, route_count: 0, updated: null, gates: [], gate_totals: {}, modules: [], endpoints: [], error: 'compatibility-unavailable' }
+  }
+}
 
 // Super Admin do painel web (/slayer) e API de administração em
 // /account/admin/*.
@@ -364,20 +410,40 @@ function sanitizePack (input, base = {}) {
 
 function sanitizeEvent (input, base = {}) {
   const id = Math.floor(Number(input.id ?? base.id))
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error('ID do evento inválido')
+  const eventDefinitionId = Math.floor(Number(input.event_definition_id ?? base.event_definition_id ?? id))
+  if (!Number.isSafeInteger(eventDefinitionId) || eventDefinitionId <= 0) throw new Error('ID de definição inválido')
+  const availability = Math.floor(Number(input.availability ?? base.availability ?? 1))
+  if (!EVENT_AVAILABILITIES.has(availability)) throw new Error('Disponibilidade de evento inválida')
+  const channel = String(input.channel ?? base.channel ?? 'game_mode')
+  if (!EVENT_CHANNELS.has(channel)) throw new Error('Canal de evento inválido')
+  const eventType = Math.floor(Number(input.event_type ?? base.event_type ?? 0))
+  if (!EVENT_TYPES.has(eventType)) throw new Error('Tipo de evento inválido')
+  const objectOrBase = (value, fallback) => {
+    if (value !== undefined) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('O JSON do evento precisa ser um objeto')
+      return structuredClone(value)
+    }
+    return fallback && typeof fallback === 'object' && !Array.isArray(fallback) ? structuredClone(fallback) : {}
+  }
   const event = {
     id,
-    event_definition_id: Math.floor(Number(input.event_definition_id ?? base.event_definition_id ?? id)),
+    event_definition_id: eventDefinitionId,
     active: input.active !== undefined ? input.active !== false : base.active !== false,
     always: input.always !== undefined ? input.always === true : base.always === true,
-    availability: Math.max(0, Math.floor(Number(input.availability ?? base.availability ?? 1)) || 1),
-    channel: input.channel ?? base.channel ?? 'game_mode',
-    args: base.args && input.args === undefined ? base.args : (input.args && typeof input.args === 'object' && !Array.isArray(input.args) ? input.args : {}),
-    progress_template: base.progress_template || { event_id: id }
+    availability,
+    event_type: eventType,
+    channel,
+    args: objectOrBase(input.args, base.args),
+    progress_template: objectOrBase(input.progress_template, base.progress_template || { event_id: id })
   }
   if (input.tag !== undefined || base.tag !== undefined) event.tag = String(input.tag ?? base.tag).slice(0, 64)
-  for (const field of ['start_time', 'end_time']) {
+  for (const field of ['start_time', 'end_time', 'stop_time']) {
     if (input[field] !== undefined) {
-      if (input[field] === null || input[field] === '') continue
+      if (input[field] === null || input[field] === '') {
+        delete event[field]
+        continue
+      }
       const parsed = Date.parse(String(input[field]))
       if (Number.isNaN(parsed)) throw new Error(`Data inválida: ${input[field]}`)
       event[field] = input[field]
@@ -385,7 +451,15 @@ function sanitizeEvent (input, base = {}) {
       event[field] = base[field]
     }
   }
-  event.progress_template.event_id = event.id
+  for (const field of ['min_api_version', 'max_api_version']) {
+    if (input[field] !== undefined) {
+      if (input[field] === null || input[field] === '') delete event[field]
+      else event[field] = String(input[field]).trim().slice(0, 32)
+    } else if (base[field] !== undefined) {
+      event[field] = String(base[field]).trim().slice(0, 32)
+    }
+  }
+  event.progress_template = { ...event.progress_template, event_id: event.id }
   return event
 }
 
@@ -422,6 +496,7 @@ export function handleAdminApi (req, res, path, body, { repo, runtime, reloadRun
   if (route === 'overview') {
     const now = nowSeconds()
     const users = repo.listUsers('', 500)
+    const compatibility = readCompatibilityCatalog()
     return json(res, 200, {
       ok: true,
       overview: {
@@ -435,12 +510,27 @@ export function handleAdminApi (req, res, path, body, { repo, runtime, reloadRun
         notifications: repo.listNotifications(100).length,
         game_data_loaded: Boolean(runtime.gameData),
         uptime_seconds: Math.floor(process.uptime()),
-        apk: site.apkInfo()
+        apk: site.apkInfo(),
+        compatibility: {
+          route_count: compatibility.route_count,
+          implemented: compatibility.gate_totals.implemented || 0,
+          validated: compatibility.gate_totals.client_validated || 0,
+          regression_test: compatibility.gate_totals.regression_test || 0,
+          updated: compatibility.updated
+        }
       }
     })
   }
 
-  // --- SMTP do painel: habilita login/códigos por e-mail ---
+  // --- catálogo completo das rotas extraídas do APK -----------------------
+  // A UI usa este endpoint para tornar o estado real do contrato visível sem
+  // inventar uma rota /game/* nem expor fixtures ou segredos.
+  if (route === 'routes' || route === 'routes/') {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'method-not-allowed' })
+    return json(res, 200, { ok: true, compatibility: readCompatibilityCatalog() })
+  }
+
+  // --- SMTP do painel: habilita recuperação por senha temporária ---
   if (route === 'smtp' || route === 'smtp/') {
     if (req.method === 'GET') return json(res, 200, { ok: true, smtp: smtpPublic(readSmtpConfig()) })
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
@@ -450,7 +540,7 @@ export function handleAdminApi (req, res, path, body, { repo, runtime, reloadRun
     return json(res, 405, { ok: false, error: 'method-not-allowed' })
   }
 
-  // --- usuários: buscar, resetar senha, recovery, promover, conceder item ---
+  // --- usuários: buscar, resetar senha, promover, conceder item -----------
   let profileMatch = /^users\/(\d+)\/profile$/.exec(route)
   if (profileMatch) {
     if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'method-not-allowed' })
@@ -470,9 +560,6 @@ export function handleAdminApi (req, res, path, body, { repo, runtime, reloadRun
       repo.updatePassword(userId, password)
       repo.revokeUserSessions(userId)
       return json(res, 200, { ok: true, password, message: 'Senha redefinida; sessões ativas foram encerradas.' })
-    }
-    if (match[2] === 'recovery-code') {
-      return json(res, 200, { ok: true, recovery_code: repo.resetRecoveryCode(userId) })
     }
     if (match[2] === 'grant') {
       try {
