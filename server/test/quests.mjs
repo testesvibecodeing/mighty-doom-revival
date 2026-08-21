@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { Repository } from '../src/db.js'
-import { claimDailyQuest, claimDailyQuestMilestone, dailyQuestState } from '../src/quests.js'
+import { claimDailyQuest, claimDailyQuestMilestone, dailyQuestState, dailyQuestWire } from '../src/quests.js'
 import { incrementPlayerStats } from '../src/stats.js'
 
 const dir = mkdtempSync(resolve(tmpdir(), 'mighty-doom-quests-'))
@@ -70,6 +70,27 @@ try {
   assert.equal(milestone.ok, true)
   assert.equal(repo.balance(user.id, 1), 40)
   assert.equal(claimDailyQuestMilestone(repo, user.id, runtime, 201, epoch).reason, 'already-claimed')
+
+  // O wire leva SOMENTE o contrato do metadata v29:
+  //   GetDailyQuestsResponse { dayStartEpoch, dayEndEpoch, milestones, quests }
+  //   DailyQuestModel          { id, questId, progress, claimed, points, goTo }
+  //   DailyQuestMilestoneModel { id, milestoneId, pointsRequired, claimed, rewards }
+  // O estado interno continua rico (target/completed alimentam o claim), mas
+  // campo fora do DTO não pode vazar para a resposta — medido em 2026-08-21:
+  // extra dentro de DTO aninhado derruba o parse do cliente.
+  const wire = dailyQuestWire(dailyQuestState(repo, user.id, runtime, epoch))
+  assert.deepEqual(Object.keys(wire).sort(),
+    ['day_end_epoch', 'day_start_epoch', 'milestones', 'quests'])
+  for (const quest of wire.quests) {
+    assert.deepEqual(Object.keys(quest).sort(),
+      ['claimed', 'go_to', 'id', 'points', 'progress', 'quest_id'])
+  }
+  for (const milestone of wire.milestones) {
+    assert.deepEqual(Object.keys(milestone).sort(),
+      ['claimed', 'id', 'milestone_id', 'points_required', 'rewards'])
+  }
+  assert.equal(Array.isArray(wire.quests), true)
+  assert.equal(Array.isArray(wire.milestones), true)
 
   repo.close()
   const reopened = new Repository(dbPath)

@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import patch_lab_http as lab  # noqa: E402
+from revival_editor.axml import parse_axml_elements  # noqa: E402
 
 HOST_PUBLICO = "doom.exemplo.br"
 URL_METADATA = b"https://u0000000000@doom.exemplo.br/collections/doom"
@@ -191,7 +192,11 @@ class TestCrcDoCatalogo(unittest.TestCase):
             z.writestr(NOME_BUNDLE, bundle_sintetico(URL_BUNDLE))
             z.writestr("assets/aa/catalog.json", catalogo_sintetico(4023233417))
             z.writestr("AndroidManifest.xml", b"\x03\x00\x08\x00fake")
-        self.saida = lab.LAB_DIR / "crc-LAB-HTTP.apk"
+        # Diretório PRÓPRIO: LAB_DIR é compartilhada com o rig e com os
+        # outros testes, e artefato compartilhado vira ZIP truncado.
+        self.lab = self.dir / "lab"
+        self.lab.mkdir()
+        self.saida = self.lab / "crc-LAB-HTTP.apk"
 
     def tearDown(self):
         if self.saida.exists():
@@ -204,7 +209,8 @@ class TestCrcDoCatalogo(unittest.TestCase):
 
     def test_patch_zera_e_prova_o_crc(self):
         rel = lab.patch_apk(apk_in=self.apk, apk_out=self.saida, host="10.0.2.2",
-                            from_host=HOST_PUBLICO, allow_insecure_lab=True)
+                            from_host=HOST_PUBLICO, allow_insecure_lab=True,
+                            lab_dir=self.lab)
         self.assertEqual(rel["bundles_alterados"], [NOME_BUNDLE])
         self.assertTrue(rel["catalog_crc_verified"], "a pos-condicao tem que ter rodado")
         self.assertTrue(all(c["zeroed"] for c in rel["catalog_crc"]),
@@ -217,11 +223,12 @@ class TestCrcDoCatalogo(unittest.TestCase):
         with zipfile.ZipFile(sem, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr(lab.METADATA_ENTRY, metadata_sintetico([URL_METADATA]))
             z.writestr(NOME_BUNDLE, bundle_sintetico(URL_BUNDLE))
-        alvo = lab.LAB_DIR / "sem-catalogo-LAB.apk"
+        alvo = self.lab / "sem-catalogo-LAB.apk"
         try:
             with self.assertRaises(lab.LabPatchError) as ctx:
                 lab.patch_apk(apk_in=sem, apk_out=alvo, host="10.0.2.2",
-                              from_host=HOST_PUBLICO, allow_insecure_lab=True)
+                              from_host=HOST_PUBLICO, allow_insecure_lab=True,
+                              lab_dir=self.lab)
             self.assertIn("catalog", str(ctx.exception).lower())
             self.assertFalse(alvo.exists(), "nada e escrito numa recusa")
         finally:
@@ -233,10 +240,11 @@ class TestCrcDoCatalogo(unittest.TestCase):
         so_meta = self.dir / "so-metadata.apk"
         with zipfile.ZipFile(so_meta, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr(lab.METADATA_ENTRY, metadata_sintetico([URL_METADATA]))
-        alvo = lab.LAB_DIR / "so-meta-LAB.apk"
+        alvo = self.lab / "so-meta-LAB.apk"
         try:
             rel = lab.patch_apk(apk_in=so_meta, apk_out=alvo, host="10.0.2.2",
-                                from_host=HOST_PUBLICO, allow_insecure_lab=True)
+                                from_host=HOST_PUBLICO, allow_insecure_lab=True,
+                                lab_dir=self.lab)
             self.assertEqual(rel.get("bundles_alterados", []), [])
             self.assertNotIn("catalog_crc_verified", rel)
         finally:
@@ -250,7 +258,9 @@ class TestGatesDeSeguranca(unittest.TestCase):
         self.apk = apk_sintetico(self.dir / "entrada.apk",
                                  metadata=metadata_sintetico([URL_METADATA]),
                                  bundle=bundle_sintetico(URL_BUNDLE))
-        self.saida = lab.LAB_DIR / "teste-LAB-HTTP.apk"
+        self.lab = self.dir / "lab"
+        self.lab.mkdir()
+        self.saida = self.lab / "teste-LAB-HTTP.apk"
 
     def tearDown(self):
         if self.saida.exists():
@@ -258,7 +268,8 @@ class TestGatesDeSeguranca(unittest.TestCase):
 
     def _patch(self, **over):
         base = dict(apk_in=self.apk, apk_out=self.saida, host="10.0.2.2",
-                    from_host=HOST_PUBLICO, allow_insecure_lab=True)
+                    from_host=HOST_PUBLICO, allow_insecure_lab=True,
+                    lab_dir=self.lab)
         return lab.patch_apk(**{**base, **over})
 
     def test_recusa_sem_a_flag(self):
@@ -280,9 +291,17 @@ class TestGatesDeSeguranca(unittest.TestCase):
         with self.assertRaises(lab.LabPatchError):
             self._patch(apk_out=self.dir / "qualquer-LAB.apk")
 
+    def test_lab_dir_proprio_nao_afrouxa_a_recusa_de_output(self):
+        # O diretório é parametrizável para isolar jobs, NÃO para liberar
+        # output/: apontar lab_dir para lá continua sendo recusado.
+        with self.assertRaises(lab.LabPatchError) as ctx:
+            self._patch(apk_out=ROOT / "output" / "x-LAB.apk",
+                        lab_dir=ROOT / "output")
+        self.assertIn("output/", str(ctx.exception))
+
     def test_recusa_nome_sem_marca_de_laboratorio(self):
         with self.assertRaises(lab.LabPatchError) as ctx:
-            self._patch(apk_out=lab.LAB_DIR / "mighty-doom-revival.apk")
+            self._patch(apk_out=self.lab / "mighty-doom-revival.apk")
         self.assertIn("laboratório", str(ctx.exception))
 
     def test_analyze_nao_escreve_nada(self):
@@ -299,9 +318,12 @@ class TestArtefatoDeLaboratorio(unittest.TestCase):
         self.apk = apk_sintetico(self.dir / "entrada.apk",
                                  metadata=metadata_sintetico([URL_METADATA]),
                                  bundle=bundle_sintetico(URL_BUNDLE))
-        self.saida = lab.LAB_DIR / "teste-LAB-HTTP.apk"
+        self.lab = self.dir / "lab"
+        self.lab.mkdir()
+        self.saida = self.lab / "teste-LAB-HTTP.apk"
         self.rel = lab.patch_apk(apk_in=self.apk, apk_out=self.saida, host="10.0.2.2",
-                                 from_host=HOST_PUBLICO, allow_insecure_lab=True)
+                                 from_host=HOST_PUBLICO, allow_insecure_lab=True,
+                                 lab_dir=self.lab)
 
     def tearDown(self):
         if self.saida.exists():
@@ -334,11 +356,12 @@ class TestArtefatoDeLaboratorio(unittest.TestCase):
 
     def test_segunda_execucao_falha_com_seguranca(self):
         # Idempotência: reprocessar o artefato já rebaixado não corrompe nada.
-        segunda = lab.LAB_DIR / "teste2-LAB-HTTP.apk"
+        segunda = self.lab / "teste2-LAB-HTTP.apk"
         try:
             with self.assertRaises(lab.LabPatchError):
                 lab.patch_apk(apk_in=self.saida, apk_out=segunda, host="10.0.2.2",
-                              from_host=HOST_PUBLICO, allow_insecure_lab=True)
+                              from_host=HOST_PUBLICO, allow_insecure_lab=True,
+                              lab_dir=self.lab)
             self.assertFalse(segunda.exists(), "nada é escrito numa recusa")
         finally:
             if segunda.exists():
@@ -352,8 +375,129 @@ class TestArtefatoDeLaboratorio(unittest.TestCase):
         final = ROOT / "output" / "mighty-doom-revival.apk"
         self.assertNotEqual(self.saida.resolve(), final.resolve())
         self.assertIn("LAB", self.saida.name.upper())
-        self.assertIn("work", self.saida.as_posix())
+        self.assertNotIn((ROOT / "output").resolve(), self.saida.resolve().parents)
+        # O `lab_dir` deste teste e temporario de proposito; o PADRAO de
+        # producao continua tendo que morar em work/, fora de output/.
+        self.assertIn("work", lab.LAB_DIR.relative_to(ROOT).as_posix())
+        self.assertNotIn((ROOT / "output").resolve(), lab.LAB_DIR.resolve().parents)
 
+
+
+def nsc_sintetico(dominio: str = HOST_PUBLICO) -> bytes:
+    """Monta um `network_security_config.xml` binario igual ao que o aapt gera.
+
+    Reproduz a forma exata medida no APK real: pool UTF-8, resource map vazio e
+    `cleartextTrafficPermitted` como booleano tipado (0x12), sem string crua.
+    """
+    strings = ["certificates", "cleartextTrafficPermitted", "domain", "domain-config",
+               dominio, "includeSubdomains", "network-security-config", "src",
+               "system", "trust-anchors"]
+    corpo = bytearray()
+    offsets = []
+    for s in strings:
+        offsets.append(len(corpo))
+        bruto = s.encode("utf-8")
+        corpo += bytes([len(bruto), len(bruto)]) + bruto + b"\x00"
+    while len(corpo) % 4:
+        corpo += b"\x00"
+    tabela = b"".join(struct.pack("<I", o) for o in offsets)
+    inicio = 28 + len(tabela)
+    pool_tam = inicio + len(corpo)
+    pool = (struct.pack("<HHIIIIII", 0x0001, 28, pool_tam, len(strings), 0, 0x100, inicio, 0)
+            + tabela + bytes(corpo))
+    resmap = struct.pack("<HHI", 0x0180, 8, 8)
+
+    def elem(nome_idx: int, attrs: list[tuple[int, int, int]]) -> bytes:
+        # 36 bytes de cabecalho (8 do chunk + linha/comentario + ns/nome +
+        # attrIni/attrTam/attrCnt/id/class/style) e 20 bytes por atributo.
+        cab = struct.pack("<HHIIIIIHHHHHH", 0x0102, 16, 36 + 20 * len(attrs),
+                          0, 0xFFFFFFFF, 0xFFFFFFFF, nome_idx,
+                          20, 20, len(attrs), 0, 0, 0)
+        corpo_attr = b""
+        for nome, vtipo, dado in attrs:
+            raw = 0xFFFFFFFF if vtipo == 0x12 else dado
+            corpo_attr += struct.pack("<IIIHBBI", 0xFFFFFFFF, nome, raw, 8, 0, vtipo, dado)
+        return cab + corpo_attr
+
+    def fim(nome_idx: int) -> bytes:
+        return struct.pack("<HHIIIII", 0x0103, 16, 24, 0, 0xFFFFFFFF, 0xFFFFFFFF, nome_idx)
+
+    def cdata(idx: int) -> bytes:
+        return struct.pack("<HHIIIIHBBI", 0x0104, 16, 28, 0, 0xFFFFFFFF, idx, 8, 0, 0x03, idx)
+
+    doc = (elem(6, []) + elem(3, [(1, 0x12, 0)]) + elem(2, [(5, 0x12, 0xFFFFFFFF)])
+           + cdata(4) + fim(2) + elem(9, []) + elem(0, [(7, 0x03, 8)])
+           + fim(0) + fim(9) + fim(3) + fim(6))
+    total = 8 + len(pool) + len(resmap) + len(doc)
+    return struct.pack("<HHI", 0x0003, 8, total) + pool + resmap + doc
+
+
+class TestCleartextDeLaboratorio(unittest.TestCase):
+    """A Activity usa HttpURLConnection; sem liberar cleartext o rig fica mudo."""
+
+    def setUp(self):
+        self.dados = nsc_sintetico()
+
+    def test_ida_e_volta_troca_dominio_e_libera_cleartext(self):
+        antes = lab.read_network_security_axml(self.dados)
+        self.assertEqual(antes[1][1]["cleartextTrafficPermitted"], "false")
+        self.assertEqual(antes[2][2], HOST_PUBLICO)
+        novo, rel = lab.patch_network_security_axml(self.dados, "10.0.2.2",
+                                                    allow_insecure_lab=True,
+                                                    revival_host=HOST_PUBLICO)
+        depois = lab.read_network_security_axml(novo)
+        self.assertEqual(depois[1][1]["cleartextTrafficPermitted"], "true")
+        self.assertEqual(depois[2][2], "10.0.2.2")
+        self.assertEqual(rel["cleartext_host"], "10.0.2.2")
+        self.assertEqual(rel["marker"], lab.MARKER)
+
+    def test_tamanho_preservado_e_offsets_intactos(self):
+        novo, _ = lab.patch_network_security_axml(self.dados, "10.0.2.2",
+                                                  allow_insecure_lab=True,
+                                                    revival_host=HOST_PUBLICO)
+        self.assertEqual(len(novo), len(self.dados))
+        # As demais strings do pool continuam legiveis no mesmo lugar.
+        depois = lab.read_network_security_axml(novo)
+        self.assertEqual([e[0] for e in depois],
+                         ["network-security-config", "domain-config", "domain",
+                          "trust-anchors", "certificates"])
+        self.assertEqual(depois[4][1]["src"], "system")
+
+    def test_host_publico_nunca_ganha_cleartext(self):
+        with self.assertRaises(lab.LabPatchError):
+            lab.patch_network_security_axml(self.dados, HOST_PUBLICO,
+                                            allow_insecure_lab=True,
+                                                    revival_host=HOST_PUBLICO)
+        with self.assertRaises(lab.LabPatchError):
+            lab.patch_network_security_axml(self.dados, "8.8.8.8",
+                                            allow_insecure_lab=True,
+                                                    revival_host=HOST_PUBLICO)
+
+    def test_sem_flag_de_laboratorio_recusa(self):
+        with self.assertRaises(lab.LabPatchError):
+            lab.patch_network_security_axml(self.dados, "10.0.2.2",
+                                            allow_insecure_lab=False,
+                                            revival_host=HOST_PUBLICO)
+
+    def test_axml_sem_o_atributo_e_recusado(self):
+        quebrado = self.dados.replace(b"cleartextTrafficPermitted", b"cleartextTrafficPermittex")
+        with self.assertRaises(lab.LabPatchError):
+            lab.patch_network_security_axml(quebrado, "10.0.2.2", allow_insecure_lab=True,
+                                                    revival_host=HOST_PUBLICO)
+
+    def test_host_maior_que_o_dominio_e_recusado(self):
+        # A troca e feita POR CIMA da string antiga: so encurtar e seguro.
+        with self.assertRaises(lab.LabPatchError):
+            lab.patch_network_security_axml(self.dados, "10.0.2.2.exemplo.interno.muito.longo",
+                                            allow_insecure_lab=True,
+                                                    revival_host=HOST_PUBLICO)
+
+    def test_parser_canonico_do_projeto_le_o_resultado(self):
+        novo, _ = lab.patch_network_security_axml(self.dados, "10.0.2.2",
+                                                  allow_insecure_lab=True,
+                                                    revival_host=HOST_PUBLICO)
+        elementos = parse_axml_elements(novo)
+        self.assertEqual(elementos[1][1]["cleartextTrafficPermitted"], "true")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

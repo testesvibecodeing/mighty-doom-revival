@@ -200,9 +200,53 @@ function requestedMilestoneId (body) {
   return body?.milestone_id ?? body?.milestone ?? body?.id ?? body?.rid
 }
 
+/**
+ * Recorta o estado interno para EXATAMENTE o contrato do cliente.
+ *
+ * Medido no rig em 2026-08-21 (request_log 646): a resposta antiga levava o
+ * `...row` inteiro da game data — `tag`, `category`, `prerequisite`, `goal`,
+ * mais os extras `target`/`completed` — e o cliente derrubou o parse com
+ *
+ *   Network response (17): Malformed response payload
+ *     Ubu.<SendRequestAsync>d__18:MoveNext()
+ *
+ * logo depois de `game/quests/get-daily-quests`, abrindo NETWORK ERROR sobre o
+ * menu já carregado. O comentário anterior ("extras que o cliente ignora") era
+ * uma suposição; a medição a desmentiu.
+ *
+ * Contrato do global-metadata.dat v29:
+ *   QuestsApi.GetDailyQuestsResponse { dayStartEpoch, dayEndEpoch, milestones, quests }
+ *   DailyQuestModel          { id, questId, progress, claimed, points, goTo }
+ *   DailyQuestMilestoneModel { id, milestoneId, pointsRequired, claimed, rewards }
+ *
+ * `target`/`completed` continuam no estado interno — claimDailyQuest depende
+ * deles — mas não vão para o wire.
+ */
+export function dailyQuestWire (state) {
+  return {
+    day_start_epoch: state.day_start_epoch,
+    day_end_epoch: state.day_end_epoch,
+    quests: state.quests.map(row => ({
+      id: row.id,
+      quest_id: row.quest_id,
+      progress: row.progress,
+      claimed: row.claimed,
+      points: row.points,
+      go_to: row.go_to
+    })),
+    milestones: state.milestones.map(row => ({
+      id: row.id,
+      milestone_id: row.milestone_id,
+      points_required: row.points_required,
+      claimed: row.claimed,
+      rewards: row.rewards
+    }))
+  }
+}
+
 export function handleQuestRequest (path, body, userId, repo, runtime) {
   if (path === '/game/quests/get-daily-quests') {
-    return { data: dailyQuestState(repo, userId, runtime) }
+    return { data: dailyQuestWire(dailyQuestState(repo, userId, runtime)) }
   }
 
   if (path === '/game/quests/claim-daily-quest') {

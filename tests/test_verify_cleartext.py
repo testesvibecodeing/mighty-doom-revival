@@ -14,6 +14,7 @@ usado em tests/revival_editor/test_axml.py.
 """
 from __future__ import annotations
 
+import os
 import struct
 import sys
 import tempfile
@@ -23,9 +24,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 
+import patch_lab_http as lab  # noqa: E402
 from revival_editor.axml import AxmlError, parse_axml_elements  # noqa: E402
 from verify_patched_apk import read_cleartext_policy, scan_insecure_lab_markers  # noqa: E402
+from test_patch_lab_http import (  # noqa: E402
+    HOST_PUBLICO, URL_METADATA, metadata_sintetico, nsc_sintetico,
+)
+
+HOST_LAB = "10.0.2.2"
 
 TYPE_STRING = 0x03
 TYPE_BOOL = 0x12
@@ -150,24 +158,119 @@ class TestGateDoEntregavel(unittest.TestCase):
         self.assertFalse(achados["insecure"], "sem medição não se acusa")
 
 
-class TestArtefatosReais(unittest.TestCase):
-    """Quando os APKs reais existem em work//output (ignorados pelo Git)."""
+class TestArtefatoDeLaboratorioIsolado(unittest.TestCase):
+    """Constrói os DOIS artefatos aqui dentro, e mede os dois.
 
-    ENTREGAVEL = ROOT / "output" / "mighty-doom-revival.apk"
-    LAB = ROOT / "work" / "audit-opus" / "rig" / "mighty-doom-revival-LAB-HTTP.apk"
+    Antes esta classe abria `work/audit-opus/rig/mighty-doom-revival-LAB-HTTP.apk`
+    e `output/mighty-doom-revival.apk` por caminho fixo. Os dois são artefatos
+    compartilhados e não versionados: quando o rig regerava um com outro nome,
+    o teste passava a medir uma geração antiga (foi o que aconteceu — o arquivo
+    daquele caminho era anterior ao patch de NSC e media `false`), e quando o
+    rig estava gravando, o ZIP vinha truncado (`BadZipFile`).
 
-    def test_entregavel_tem_cleartext_false_medido(self):
-        if not self.ENTREGAVEL.is_file():
-            self.skipTest("APK entregável ausente (output/ não é versionado)")
-        self.assertIs(read_cleartext_policy(self.ENTREGAVEL)["cleartext_permitted"], False)
+    Agora o teste é dono do que mede: monta o APK HTTPS de entrada, deriva o de
+    laboratório pelo `patch_lab_http` real, num diretório temporário só dele, e
+    exige os dois desfechos opostos no MESMO par de arquivos. Nada de `output/`,
+    nada de nome compartilhado, nenhuma dependência de ordem entre jobs.
+    """
 
-    def test_laboratorio_tem_cleartext_true_medido(self):
-        if not self.LAB.is_file():
-            self.skipTest("APK de laboratório ausente (work/ não é versionado)")
-        r = read_cleartext_policy(self.LAB)
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.lab_dir = self.dir / "lab"
+        self.lab_dir.mkdir()
+        # Entrada = o formato do ENTREGÁVEL: wire HTTPS e NSC com cleartext
+        # false para o domínio público.
+        self.https = self.dir / "entregavel.apk"
+        with zipfile.ZipFile(self.https, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr(lab.METADATA_ENTRY, metadata_sintetico([URL_METADATA]))
+            z.writestr("AndroidManifest.xml", axml_manifest_minimo())
+            z.writestr(lab.NSC_ENTRY, nsc_sintetico("doom.sualoja.app.br"))
+
+    def _derivar_lab(self) -> Path:
+        saida = self.lab_dir / "isolado-LAB-HTTP.apk"
+        lab.patch_apk(apk_in=self.https, apk_out=saida, host=HOST_LAB,
+                      from_host=HOST_PUBLICO, allow_insecure_lab=True,
+                      lab_dir=self.lab_dir)
+        return saida
+
+    def test_entregavel_https_mede_cleartext_false(self):
+        r = read_cleartext_policy(self.https)
+        self.assertIs(r["cleartext_permitted"], False)
+        self.assertIn("network_security_config", r["cleartext_source"])
+        self.assertEqual(r["cleartext_unreadable"], [])
+        achados = scan_insecure_lab_markers(self.https, "doom.sualoja.app.br")
+        self.assertFalse(achados["insecure"], achados["reason"])
+
+    def test_derivado_de_laboratorio_mede_cleartext_true(self):
+        lab_apk = self._derivar_lab()
+        r = read_cleartext_policy(lab_apk)
+        self.assertIs(r["cleartext_permitted"], True,
+                      "o APK de laboratório existe justamente para permitir cleartext")
+        self.assertIn("network_security_config", r["cleartext_source"])
+
+    def test_derivado_de_laboratorio_nunca_passa_como_entregavel(self):
+        lab_apk = self._derivar_lab()
+        achados = scan_insecure_lab_markers(lab_apk, HOST_LAB)
+        self.assertTrue(achados["insecure"], "artefato de laboratório tem que reprovar")
+        self.assertIs(achados["cleartext_permitted"], True)
+
+    def test_os_dois_artefatos_sao_arquivos_diferentes(self):
+        # A prova só vale se as duas medições vierem de bytes distintos.
+        lab_apk = self._derivar_lab()
+        self.assertNotEqual(self.https.read_bytes(), lab_apk.read_bytes())
+        self.assertIn("LAB", lab_apk.name.upper())
+        self.assertNotIn((ROOT / "output").resolve(), lab_apk.resolve().parents)
+
+
+class TestFalhaFechada(unittest.TestCase):
+    """AXML que não abre nunca vira `false` nem aprovação silenciosa."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+
+    def test_config_ilegivel_e_listado_como_nao_medido(self):
+        apk = apk_com_config(self.dir / "opaco.apk", b"\x03\x00\x08\x00lixo")
+        r = read_cleartext_policy(apk)
+        self.assertIsNone(r["cleartext_permitted"])
+        self.assertIn("res/xml/network_security_config.xml", r["cleartext_unreadable"],
+                      "um res/xml ilegível não pode ser pulado em silêncio")
+
+    def test_zip_truncado_levanta_em_vez_de_responder_false(self):
+        # Um APK sendo gravado por outro job é ZIP truncado. O verificador tem
+        # que quebrar aqui, não devolver uma medição inventada.
+        completo = apk_com_config(self.dir / "inteiro.apk", axml_network_config(cleartext=False))
+        truncado = self.dir / "truncado.apk"
+        truncado.write_bytes(completo.read_bytes()[: len(completo.read_bytes()) // 2])
+        with self.assertRaises(zipfile.BadZipFile):
+            read_cleartext_policy(truncado)
+
+
+class TestArtefatosReaisSobDemanda(unittest.TestCase):
+    """Só roda contra um arquivo que o CHAMADOR nomeou explicitamente.
+
+    Nenhum caminho fixo, nenhum default compartilhado: quem quiser medir um
+    artefato real aponta a variável de ambiente para ele. Sem a variável o
+    teste é pulado, e por isso não existe mais o modo de falha em que a suíte
+    mede um arquivo que outro job acabou de trocar.
+    """
+
+    def test_entregavel_apontado_por_env(self):
+        alvo = os.environ.get("REVIVAL_VERIFY_APK")
+        if not alvo:
+            self.skipTest("defina REVIVAL_VERIFY_APK para medir um entregável real")
+        r = read_cleartext_policy(Path(alvo))
+        self.assertIs(r["cleartext_permitted"], False)
+        self.assertEqual(r["cleartext_unreadable"], [])
+
+    def test_laboratorio_apontado_por_env(self):
+        alvo = os.environ.get("REVIVAL_LAB_APK")
+        if not alvo:
+            self.skipTest("defina REVIVAL_LAB_APK para medir um APK de laboratório real")
+        host = os.environ.get("REVIVAL_LAB_HOST", HOST_LAB)
+        r = read_cleartext_policy(Path(alvo))
         self.assertIs(r["cleartext_permitted"], True)
-        achados = scan_insecure_lab_markers(self.LAB, "doom.sualoja.app.br")
-        self.assertTrue(achados["insecure"], "o artefato de laboratório nunca passa como final")
+        self.assertTrue(scan_insecure_lab_markers(Path(alvo), host)["insecure"],
+                        "o artefato de laboratório nunca passa como final")
 
 
 class TestParserGenerico(unittest.TestCase):

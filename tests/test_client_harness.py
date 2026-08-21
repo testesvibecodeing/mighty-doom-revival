@@ -308,11 +308,19 @@ class TestLanding(unittest.TestCase):
         return hch.landing_evidence(**{**self.BASE, **over})
 
     def test_sucesso_cursor_andou_com_requests(self):
-        land = self.landing(cursor_before=10, cursor_after=22, requests_in_window=12)
+        # Com o APK provado, a lista fecha. SEM ele, sobra o que falta provar —
+        # é o que a auditoria pegou: cursor andando não diz QUAL artefato falou.
+        provado = {"proven": True, "expected_sha256": "a" * 64, "match": True}
+        land = self.landing(cursor_before=10, cursor_after=22, requests_in_window=12,
+                            apk_proof=provado)
         self.assertTrue(land["cursor_advanced"])
         self.assertIn("aterrissou nesta instância", land["proves"])
         self.assertEqual(land["does_not_prove"], [])
         self.assertIsNone(hch.landing_verdict(land))
+
+        sem_apk = self.landing(cursor_before=10, cursor_after=22, requests_in_window=12)
+        self.assertTrue(any("APK verificado" in m for m in sem_apk["does_not_prove"]),
+                        "sem prova do APK a lista NUNCA fica vazia")
 
     def test_cursor_imovel_vira_no_observed_traffic(self):
         land = self.landing(cursor_before=264, cursor_after=264, requests_in_window=0)
@@ -328,7 +336,9 @@ class TestLanding(unittest.TestCase):
         self.assertFalse(validado)
 
     def test_cursor_imovel_nao_escolhe_entre_H1_e_H2(self):
-        land = self.landing(cursor_before=264, cursor_after=264, requests_in_window=0)
+        provado = {"proven": True, "expected_sha256": "a" * 64, "match": True}
+        land = self.landing(cursor_before=264, cursor_after=264, requests_in_window=0,
+                            apk_proof=provado)
         self.assertIn("nenhum tráfego observado", land["proves"])
         # As três hipóteses ficam explicitamente NÃO provadas.
         self.assertEqual(len(land["does_not_prove"]), 3)
@@ -379,36 +389,182 @@ class TestLanding(unittest.TestCase):
 
 
 class TestApkProof(unittest.TestCase):
-    def _relatorio(self, dados):
+    """`proven=true` exige o relatório E o hash do APK REALMENTE instalado.
+
+    Antes esta prova lia só o relatório de `verify_patched_apk.py`: provava o que
+    havia num ARQUIVO, não o que rodava no dispositivo. O E2E podia afirmar um
+    artefato e exercitar outro — foi o que a auditoria pegou
+    (`apk_proof.proven=false, reason="sem --apk-verify-report"`).
+    """
+
+    SHA_OK = "a" * 64
+    SHA_OUTRO = "b" * 64
+    CAMINHO = "/data/app/~~abc==/com.bethsoft.ubu-xyz==/base.apk"
+
+    def _relatorio(self, **over):
+        dados = {"verified": True, "server_host": "doom.exemplo.br", "sha256": self.SHA_OK,
+                 "target_occurrences": 14, "official_occurrences": 0, **over}
         arq = Path(tempfile.mkdtemp()) / "verify.json"
         arq.write_text(json.dumps(dados), encoding="utf-8")
         return arq
 
-    def test_relatorio_verificado_vira_prova(self):
-        p = self._relatorio({"verified": True, "server_host": "doom.exemplo.br",
-                             "sha256": "a" * 64, "target_occurrences": 14,
-                             "official_occurrences": 0})
-        prova = hch.apk_proof(p)
+    def _instalado(self, sha="MESMO", **over):
+        return {"package": "com.bethsoft.ubu", "path": self.CAMINHO,
+                "sha256": self.SHA_OK if sha == "MESMO" else sha,
+                "version_code": 84862, "last_update_time": "2026-08-20 23:00:00",
+                "source": "sha256sum no dispositivo", **over}
+
+    def test_match_prova(self):
+        prova = hch.apk_proof(self._relatorio(), self._instalado())
         self.assertTrue(prova["proven"])
-        self.assertEqual(prova["host"], "doom.exemplo.br")
-        self.assertEqual(prova["apk_sha256"], "a" * 64)
+        self.assertTrue(prova["match"])
+        self.assertEqual(prova["expected_sha256"], self.SHA_OK)
+        self.assertEqual(prova["installed_sha256"], self.SHA_OK)
+        self.assertEqual(prova["installed_version_code"], 84862)
+        self.assertEqual(prova["installed_last_update_time"], "2026-08-20 23:00:00")
+        self.assertIn("base.apk", prova["installed_path"])
 
-    def test_host_oficial_presente_invalida_a_prova(self):
-        p = self._relatorio({"verified": True, "server_host": "doom.exemplo.br",
-                             "official_occurrences": 2})
-        prova = hch.apk_proof(p)
+    def test_mismatch_reprova_e_mostra_os_dois_hashes(self):
+        prova = hch.apk_proof(self._relatorio(), self._instalado(self.SHA_OUTRO))
         self.assertFalse(prova["proven"])
-        self.assertIn("oficial", prova["reason"])
+        self.assertFalse(prova["match"])
+        self.assertIn("INSTALADO", prova["reason"])
+        self.assertIn(self.SHA_OUTRO[:16], prova["reason"])
+        self.assertIn(self.SHA_OK[:16], prova["reason"])
 
-    def test_sem_relatorio_nao_ha_prova_nem_erro(self):
-        prova = hch.apk_proof(None)
+    def test_sem_relatorio_nao_ha_prova(self):
+        prova = hch.apk_proof(None, self._instalado())
         self.assertFalse(prova["proven"])
         self.assertIn("sem --apk-verify-report", prova["reason"])
 
     def test_relatorio_ilegivel_e_declarado(self):
-        prova = hch.apk_proof(Path(tempfile.mkdtemp()) / "nao-existe.json")
+        prova = hch.apk_proof(Path(tempfile.mkdtemp()) / "nao-existe.json", self._instalado())
         self.assertFalse(prova["proven"])
         self.assertIn("ilegível", prova["reason"])
+
+    def test_sha256sum_indisponivel_nao_vira_prova(self):
+        prova = hch.apk_proof(self._relatorio(),
+                              self._instalado(None, error="sha256sum indisponível e pull falhou",
+                                              source="não medido"))
+        self.assertFalse(prova["proven"])
+        self.assertIn("não medido", prova["reason"])
+        self.assertIsNone(prova["match"])
+
+    def test_apk_nao_medido_nao_vira_prova(self):
+        prova = hch.apk_proof(self._relatorio(), None)
+        self.assertFalse(prova["proven"])
+        self.assertIn("não foi medido", prova["reason"])
+
+    def test_relatorio_nao_verificado_reprova(self):
+        prova = hch.apk_proof(self._relatorio(verified=False), self._instalado())
+        self.assertFalse(prova["proven"])
+        self.assertIn("verified=true", prova["reason"])
+
+    def test_host_oficial_presente_invalida_a_prova(self):
+        prova = hch.apk_proof(self._relatorio(official_occurrences=2), self._instalado())
+        self.assertFalse(prova["proven"])
+        self.assertIn("oficial", prova["reason"])
+
+    def test_prova_ausente_sempre_aparece_em_does_not_prove(self):
+        # A contradição que a auditoria pegou: cursor avançando zerava a lista
+        # mesmo com apk_proof falso, e o relatório afirmava aterrissagem sem
+        # saber QUAL artefato a produziu.
+        land = hch.landing_evidence(
+            apk_host="doom.exemplo.br", expected_host="doom.exemplo.br",
+            cursor_before=10, cursor_after=22, requests_in_window=12,
+            launched=True, window_seconds=120.0,
+            instance={"identified": True, "instance_id": "rig"},
+            apk_proof=hch.apk_proof(None, None))
+        self.assertTrue(land["cursor_advanced"])
+        self.assertTrue(land["does_not_prove"], "lista não pode ficar vazia sem prova do APK")
+        self.assertTrue(any("APK verificado" in m for m in land["does_not_prove"]))
+
+    def test_com_prova_e_cursor_a_lista_fica_vazia(self):
+        land = hch.landing_evidence(
+            apk_host="doom.exemplo.br", expected_host="doom.exemplo.br",
+            cursor_before=10, cursor_after=22, requests_in_window=12,
+            launched=True, window_seconds=120.0,
+            instance={"identified": True, "instance_id": "rig"},
+            apk_proof=hch.apk_proof(self._relatorio(), self._instalado()))
+        self.assertEqual(land["does_not_prove"], [])
+
+
+class TestFatosDoApkInstalado(unittest.TestCase):
+    """`installed_apk_facts` mede no dispositivo — com fallback honesto."""
+
+    CAMINHO = "/data/app/~~abc==/com.bethsoft.ubu-xyz==/base.apk"
+
+    def _runner(self, respostas):
+        def executar(*args, **kw):
+            for chave, resposta in respostas.items():
+                if chave in args:
+                    return resposta
+            return (1, "comando não esperado")
+        return executar
+
+    def test_le_caminho_hash_versao_e_instalacao(self):
+        fatos = hch.installed_apk_facts("adb", None, "com.bethsoft.ubu", runner=self._runner({
+            "pm": (0, "package:" + self.CAMINHO + "\n"),
+            "sha256sum": (0, "c" * 64 + "  " + self.CAMINHO + "\n"),
+            "dumpsys": (0, "  versionCode=84862 minSdk=29\n  lastUpdateTime=2026-08-20 23:00:00\n"),
+        }))
+        self.assertEqual(fatos["path"], self.CAMINHO)
+        self.assertEqual(fatos["sha256"], "c" * 64)
+        self.assertEqual(fatos["source"], "sha256sum no dispositivo")
+        self.assertEqual(fatos["version_code"], 84862)
+        self.assertEqual(fatos["last_update_time"], "2026-08-20 23:00:00")
+        self.assertNotIn("error", fatos)
+
+    def test_pacote_ausente_e_erro_declarado(self):
+        fatos = hch.installed_apk_facts("adb", None, "com.bethsoft.ubu",
+                                        runner=self._runner({"pm": (1, "Failure")}))
+        self.assertIsNone(fatos["sha256"])
+        self.assertIn("pm path falhou", fatos["error"])
+
+    def test_sha256sum_indisponivel_cai_para_pull(self):
+        temporario = Path(tempfile.mkdtemp())
+
+        def executar(*args, **kw):
+            if "pm" in args:
+                return (0, "package:" + self.CAMINHO + "\n")
+            if "sha256sum" in args:
+                return (127, "sha256sum: inaccessible or not found")
+            if "pull" in args:
+                Path(args[-1]).write_bytes(b"conteudo do apk")
+                return (0, "1 file pulled")
+            if "dumpsys" in args:
+                return (0, "versionCode=84862\n")
+            return (1, "")
+
+        fatos = hch.installed_apk_facts("adb", None, "com.bethsoft.ubu",
+                                        pull_dir=temporario, runner=executar)
+        import hashlib
+        self.assertEqual(fatos["sha256"], hashlib.sha256(b"conteudo do apk").hexdigest())
+        self.assertIn("pull", fatos["source"])
+        self.assertEqual(list(temporario.iterdir()), [],
+                         "o APK puxado não pode ficar no disco")
+
+    def test_sem_sha256sum_e_sem_pull_nao_inventa_hash(self):
+        fatos = hch.installed_apk_facts("adb", None, "com.bethsoft.ubu",
+                                        pull_dir=Path(tempfile.mkdtemp()),
+                                        runner=self._runner({
+                                            "pm": (0, "package:" + self.CAMINHO + "\n"),
+                                            "sha256sum": (127, "not found"),
+                                            "pull": (1, "adb: error"),
+                                        }))
+        self.assertIsNone(fatos["sha256"])
+        self.assertIn("medido", fatos["source"])
+        self.assertIn("pull falhou", fatos["error"])
+
+    def test_hash_invalido_do_dispositivo_nao_e_aceito(self):
+        fatos = hch.installed_apk_facts("adb", None, "com.bethsoft.ubu",
+                                        pull_dir=Path(tempfile.mkdtemp()),
+                                        runner=self._runner({
+                                            "pm": (0, "package:" + self.CAMINHO + "\n"),
+                                            "sha256sum": (0, "lixo-que-nao-e-hash\n"),
+                                            "pull": (1, "adb: error"),
+                                        }))
+        self.assertIsNone(fatos["sha256"], "saída fora do formato não vira hash")
 
 
 class TestVerdict(unittest.TestCase):

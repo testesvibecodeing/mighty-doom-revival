@@ -206,7 +206,8 @@ def scan_insecure_lab_markers(apk: Path, target_host: str) -> dict[str, object]:
     # relatório afirmar mais do que sabia.
     achados = {"insecure": False, "reason": "", "http_base_urls": 0,
                "marker_entries": [], "cleartext_permitted": None,
-               "cleartext_source": "não medido", "cleartext_domains": []}
+               "cleartext_source": "não medido", "cleartext_domains": [],
+               "cleartext_unreadable": []}
     with zipfile.ZipFile(apk, "r") as archive:
         for name in archive.namelist():
             if not (name == "assets/bin/Data/Managed/Metadata/global-metadata.dat"
@@ -251,6 +252,12 @@ def read_cleartext_policy(apk: Path) -> dict[str, object]:
       - `False` : o atributo existe e é `false` em toda ocorrência;
       - `None`  : não deu para medir (arquivo ausente, AXML ilegível). O
                   chamador trata como inconclusivo — nunca como `false`.
+
+    `cleartext_unreadable` lista as entradas AXML que NÃO puderam ser lidas.
+    Antes, um `res/xml/*.xml` ilegível era pulado em silêncio: o relatório saía
+    sem nenhum sinal de que a política podia estar num arquivo que ninguém
+    conseguiu abrir. Com a lista, o gate do entregável falha fechado em vez de
+    aprovar um APK cuja configuração de rede é opaca.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
@@ -258,11 +265,12 @@ def read_cleartext_policy(apk: Path) -> dict[str, object]:
     except ImportError as exc:
         return {"cleartext_permitted": None,
                 "cleartext_source": f"parser AXML indisponível: {exc}",
-                "cleartext_domains": []}
+                "cleartext_domains": [], "cleartext_unreadable": ["<parser ausente>"]}
 
     permitido: bool | None = None
     dominios: list[str] = []
     origens: list[str] = []
+    ilegiveis: list[str] = []
     with zipfile.ZipFile(apk, "r") as archive:
         alvos = [n for n in archive.namelist()
                  if n == "AndroidManifest.xml" or (n.startswith("res/xml/") and n.endswith(".xml"))]
@@ -270,8 +278,8 @@ def read_cleartext_policy(apk: Path) -> dict[str, object]:
             try:
                 elementos = parse_axml_elements(archive.read(nome))
             except (AxmlError, Exception):  # noqa: BLE001 - qualquer falha é "não medido"
-                if nome == "AndroidManifest.xml":
-                    origens.append(f"{nome}: AXML ilegível")
+                origens.append(f"{nome}: AXML ilegível")
+                ilegiveis.append(nome)
                 continue
             # No AXML o `<domain>` é FILHO do `<domain-config>`, então aparece
             # DEPOIS do atributo na ordem do documento. Por isso o escopo aberto
@@ -300,6 +308,7 @@ def read_cleartext_policy(apk: Path) -> dict[str, object]:
         "cleartext_permitted": permitido,
         "cleartext_source": ", ".join(origens) or "nenhum atributo encontrado",
         "cleartext_domains": sorted(set(dominios)),
+        "cleartext_unreadable": ilegiveis,
     }
 
 
@@ -336,6 +345,7 @@ def main() -> int:
         bool(result["target_occurrences"])
         and not bool(result["official_occurrences"])
         and not lab_findings["insecure"]
+        and not lab_findings["cleartext_unreadable"]
     )
     payload = json.dumps(result, indent=2, ensure_ascii=False)
     print(payload)
@@ -364,6 +374,17 @@ def main() -> int:
             file=sys.stderr,
         )
         return 6
+    # Falha FECHADA: um AXML que não abre pode conter exatamente a permissão de
+    # cleartext que este gate existe para barrar. Aprovar sem ter lido seria
+    # afirmar mais do que se mediu.
+    if lab_findings["cleartext_unreadable"]:
+        print(
+            "ERRO: não foi possível ler a política de cleartext de "
+            f"{', '.join(lab_findings['cleartext_unreadable'])} — sem essa "
+            "medição o APK não pode ser aprovado como entregável.",
+            file=sys.stderr,
+        )
+        return 7
 
     print("APK final validado: endpoint Revival presente e API Gear oficial ausente nas áreas verificadas.")
     return 0

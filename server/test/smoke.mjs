@@ -224,6 +224,24 @@ try {
   const afterDaily = await post('/game/player/user-data', {}, token)
   assert.equal(afterDaily.user_data.inventory.currencies[0].amount, 2025)
 
+  // Boot do cliente: as duas rotas abaixo derrubavam o carregamento antes de
+  // 2026-08-21 — ads sem `state` (NullReferenceException em ProcessAdState) e
+  // daily quests carregando campo fora do DTO. Cobertura no nível da ROTA,
+  // que é o que o cliente chama.
+  const adsState = await post('/game/ads/get-state', {}, token)
+  assert.equal(typeof adsState.state, 'object', 'AdApi.GetStateResponse exige state')
+  assert.equal(typeof adsState.state.allotment.start_epoch, 'number')
+  assert.equal(typeof adsState.state.allotment.end_epoch, 'number')
+  assert.deepEqual(adsState.state.reward_tokens, [])
+
+  const daily = await post('/game/quests/get-daily-quests', {}, token)
+  assert.deepEqual(Object.keys(daily).filter(k => k !== 'uts' && k !== 'code').sort(),
+    ['day_end_epoch', 'day_start_epoch', 'milestones', 'quests'])
+  for (const quest of daily.quests) {
+    assert.deepEqual(Object.keys(quest).sort(),
+      ['claimed', 'go_to', 'id', 'points', 'progress', 'quest_id'])
+  }
+
   const talentBuy = await post('/game/talents/buy', { talent: 500 }, token)
   assert.equal(talentBuy.talent, 500)
   // TalentsApi só tem Buy no cliente 1.13.1; a leitura é o talent_progression

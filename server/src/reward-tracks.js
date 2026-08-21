@@ -6,9 +6,12 @@ import { playerStatTotals } from './stats.js'
 //   get-track -> GetTrackResponse{track}   claim -> ClaimRewardTrackResponse{resources}
 // Wire por RewardTrackModel/RewardTrackEntryModel (snake_case do nome C#):
 //   {id, track_id, entries_claimed, next_claim_epoch, entries: [{resources}]}
-// A VERIFICAR até captura do cliente: entries_claimed como array de ids
-// (pode ser contagem) e a presença de id nos entries (EntryModel só declara
-// resources; id é extra tolerado como unknown field).
+// VERIFICADO no cliente em 2026-08-21 (bisseção no emulador, 8 execuções):
+// `entries_claimed` como ARRAY de ids é aceito; `entries` aceita SOMENTE
+// `{resources}` — o `id` extra dentro do EntryModel derruba o parse com
+// `Malformed response payload`. Campo desconhecido na RAIZ do envelope é
+// tolerado (uts/code convivem com os campos da rota); dentro de DTO aninhado,
+// não é.
 
 const NS = 'reward-tracks'
 
@@ -154,10 +157,11 @@ export function rewardTrackWire (track) {
     id: track.id,
     track_id: track.id,
     entries_claimed: track.tiers.filter(tier => tier.claimed).map(tier => tier.id),
-    entries: track.tiers.map(tier => ({
-      id: tier.id,
-      resources: rewardRows(tier)
-    }))
+    // RewardTrackEntryModel declara SOMENTE `resources`. O `id` que ficava
+    // aqui era suposição ("extra tolerado como unknown field") e a bisseção no
+    // emulador em 2026-08-21 a derrubou: com `{id, resources}` o cliente
+    // respondeu `Malformed response payload`; com `{resources}` o boot passou.
+    entries: track.tiers.map(tier => ({ resources: rewardRows(tier) }))
   }
   if (Number.isFinite(Number(track.next_claim_epoch)) && Number(track.next_claim_epoch) > 0) {
     wire.next_claim_epoch = Math.floor(Number(track.next_claim_epoch))

@@ -349,7 +349,7 @@ def instance_fingerprint(health: dict | None) -> dict:
 def landing_evidence(*, apk_host: str | None, expected_host: str | None,
                      cursor_before, cursor_after, requests_in_window: int,
                      launched: bool, window_seconds: float,
-                     instance: dict) -> dict:
+                     instance: dict, apk_proof: dict | None = None) -> dict:
     """Correlaciona APK, instância, cursor e janela — sem concluir causa.
 
     Regra dura: cursor parado prova SÓ "nenhum tráfego observado nesta
@@ -362,6 +362,20 @@ def landing_evidence(*, apk_host: str | None, expected_host: str | None,
     host_declarado_bate = None
     if apk_host and expected_host:
         host_declarado_bate = apk_host.lower() == expected_host.lower()
+
+    # `does_not_prove` nunca pode ficar vazio quando falta prova. Antes, um
+    # cursor que avançou zerava a lista mesmo com `apk_proof.proven=false` —
+    # o relatório afirmava aterrissagem sem saber QUAL artefato a produziu.
+    nao_prova: list[str] = []
+    if not avancou:
+        nao_prova += [
+            "rig de interceptação quebrado",
+            "tráfego atendido por outra instância",
+            "sessão persistida sem chamada de rede",
+        ]
+    if not (apk_proof or {}).get("proven"):
+        motivo = (apk_proof or {}).get("reason") or "APK instalado não provado"
+        nao_prova.append(f"que o tráfego veio do APK verificado ({motivo})")
     return {
         "apk_host": apk_host,
         "expected_game_host": expected_host,
@@ -379,39 +393,125 @@ def landing_evidence(*, apk_host: str | None, expected_host: str | None,
             if avancou and requests_in_window > 0 else
             "nenhum tráfego observado nesta instância durante esta janela"
         ),
-        "does_not_prove": [
-            "rig de interceptação quebrado",
-            "tráfego atendido por outra instância",
-            "sessão persistida sem chamada de rede",
-        ] if not avancou else [],
+        "does_not_prove": nao_prova,
     }
 
 
-def apk_proof(report_path: Path | None) -> dict:
-    """Host PROVADO dentro do APK, lido do relatório de verify_patched_apk.py.
+def installed_apk_facts(adb_path: str, serial: str | None, package: str,
+                        *, pull_dir: Path | None = None, runner=None) -> dict:
+    """Fatos do APK REALMENTE instalado: caminho, SHA-256, versão, instalação.
 
-    Um relatório com `verified=false` (ou com host oficial ainda presente) não
-    vira prova: o campo `proven` fica falso e o motivo é registrado.
+    O hash é calculado NO DISPOSITIVO (`sha256sum`, que o toybox traz). Quando o
+    binário não existe, cai para um `pull` temporário e calcula aqui — mais
+    lento, mas é a diferença entre provar e supor. `pull_dir` fica em `work/`
+    (ignorado pelo Git) e o arquivo é apagado depois.
+
+    Nada aqui é segredo: caminho do pacote, hash e metadados de instalação.
+    """
+    executar = runner or (lambda *args, **kw: adb(adb_path, serial, *args, **kw))
+    fatos: dict = {"package": package, "path": None, "sha256": None,
+                   "version_code": None, "last_update_time": None, "source": None}
+
+    code, saida = executar("shell", "pm", "path", package)
+    if code != 0 or "package:" not in saida:
+        fatos["error"] = f"pm path falhou: {saida.strip()[:200]}"
+        return fatos
+    caminho = saida.split("package:", 1)[1].strip().splitlines()[0].strip()
+    fatos["path"] = caminho
+
+    code, saida = executar("shell", "sha256sum", caminho, timeout=600)
+    hexdigest = saida.strip().split()[0] if code == 0 and saida.strip() else ""
+    if re.fullmatch(r"[0-9a-f]{64}", hexdigest or ""):
+        fatos["sha256"] = hexdigest
+        fatos["source"] = "sha256sum no dispositivo"
+    else:
+        # Fallback: puxa e calcula aqui. Nunca deixa o arquivo para trás.
+        destino = Path(pull_dir or (ROOT / "work" / "harness" / "installed"))
+        destino.mkdir(parents=True, exist_ok=True)
+        local = destino / f"{package}-base.apk"
+        code, saida = executar("pull", caminho, str(local), timeout=1800)
+        if code == 0 and local.is_file():
+            import hashlib  # noqa: PLC0415
+            h = hashlib.sha256()
+            with local.open("rb") as arquivo:
+                for bloco in iter(lambda: arquivo.read(1 << 20), b""):
+                    h.update(bloco)
+            fatos["sha256"] = h.hexdigest()
+            fatos["source"] = "pull temporário"
+            try:
+                local.unlink()
+            except OSError:
+                pass
+        else:
+            fatos["error"] = f"sha256sum indisponível e pull falhou: {saida.strip()[:200]}"
+            fatos["source"] = "não medido"
+
+    code, saida = executar("shell", "dumpsys", "package", package, timeout=120)
+    if code == 0:
+        versao = re.search(r"versionCode=(\d+)", saida)
+        atualizado = re.search(r"lastUpdateTime=([\d\- :]+)", saida)
+        fatos["version_code"] = int(versao.group(1)) if versao else None
+        fatos["last_update_time"] = atualizado.group(1).strip() if atualizado else None
+    return fatos
+
+
+def apk_proof(report_path: Path | None, installed: dict | None = None) -> dict:
+    """O APK INSTALADO é o mesmo que foi verificado? Só isso vira prova.
+
+    Antes esta função só lia o relatório de `verify_patched_apk.py` — provava o
+    que havia num ARQUIVO, não o que estava rodando no dispositivo. O E2E podia
+    então afirmar um artefato e exercitar outro.
+
+    `proven=true` exige as DUAS coisas:
+      1. o relatório declara `verified=true`, sem host oficial;
+      2. o SHA-256 do `base.apk` instalado é idêntico ao do relatório.
     """
     if report_path is None:
-        return {"proven": False, "reason": "sem --apk-verify-report"}
+        return {"proven": False, "reason": "sem --apk-verify-report",
+                "installed": installed or {}}
     try:
         data = json.loads(Path(report_path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return {"proven": False, "reason": f"relatório ilegível: {exc}"}
+        return {"proven": False, "reason": f"relatório ilegível: {exc}",
+                "installed": installed or {}}
+
     host = data.get("server_host")
     oficiais = data.get("official_occurrences")
-    if not data.get("verified") or not host:
-        return {"proven": False, "reason": "relatório não declara verified=true", "host": host}
-    if isinstance(oficiais, int) and oficiais > 0:
-        return {"proven": False, "reason": f"{oficiais} ocorrência(s) do host oficial no APK", "host": host}
-    return {
-        "proven": True,
+    esperado = data.get("sha256")
+    base = {
         "host": host,
-        "apk_sha256": data.get("sha256"),
+        "expected_sha256": esperado,
         "target_occurrences": data.get("target_occurrences"),
         "official_occurrences": oficiais,
+        "report": Path(report_path).name,
+        "installed_sha256": (installed or {}).get("sha256"),
+        "installed_path": (installed or {}).get("path"),
+        "installed_version_code": (installed or {}).get("version_code"),
+        "installed_last_update_time": (installed or {}).get("last_update_time"),
+        "installed_hash_source": (installed or {}).get("source"),
+        "match": None,
     }
+
+    if not data.get("verified") or not host:
+        return {**base, "proven": False, "reason": "relatório não declara verified=true"}
+    if isinstance(oficiais, int) and oficiais > 0:
+        return {**base, "proven": False,
+                "reason": f"{oficiais} ocorrência(s) do host oficial no APK"}
+    if installed is None:
+        return {**base, "proven": False,
+                "reason": "APK instalado não foi medido (sem dispositivo?)"}
+    if installed.get("error") or not installed.get("sha256"):
+        return {**base, "proven": False,
+                "reason": f"SHA-256 do APK instalado não medido: {installed.get('error') or 'sem hash'}"}
+
+    igual = installed["sha256"] == esperado
+    base["match"] = igual
+    if not igual:
+        return {**base, "proven": False,
+                "reason": ("o APK INSTALADO não é o verificado: instalado "
+                           f"{installed['sha256'][:16]}… != relatório "
+                           f"{(esperado or '')[:16]}…")}
+    return {**base, "proven": True, "apk_sha256": esperado}
 
 
 def landing_verdict(landing: dict) -> str | None:
@@ -657,6 +757,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="host que o APK deve chamar (guard secundário; não prova aterrissagem)")
     parser.add_argument("--apk-verify-report", type=Path,
                         help="JSON de scripts/verify_patched_apk.py do APK realmente instalado")
+    parser.add_argument("--require-apk-proof", action="store_true",
+                        help="exige que o SHA-256 do APK INSTALADO bata com o do relatório; "
+                             "sem isso a execução não prova qual artefato foi exercitado")
     args = parser.parse_args(argv)
 
     token = args.admin_token or os.environ.get("REVIVAL_ADMIN_TOKEN", "")
@@ -809,8 +912,15 @@ def main(argv: list[str] | None = None) -> int:
     cursor_after = (requests_state or {}).get("last_id") if isinstance(requests_state, dict) else None
     if cursor_after is None and isinstance(cursor, int):
         cursor_after = cursor + len(rows)
-    apk = apk_proof(args.apk_verify_report)
+    instalado = installed_apk_facts(adb_path, serial, args.package)
+    report["installed_apk"] = instalado
+    apk = apk_proof(args.apk_verify_report, instalado)
     report["apk_proof"] = apk
+    if apk.get("proven"):
+        print(f"[apk] instalado == verificado ({apk['expected_sha256'][:16]}…, "
+              f"{apk.get('installed_hash_source')})")
+    else:
+        print(f"[apk] PROVA AUSENTE: {apk.get('reason')}")
     landing = landing_evidence(
         apk_host=apk.get("host") if apk.get("proven") else None,
         expected_host=args.expected_game_host,
@@ -820,6 +930,7 @@ def main(argv: list[str] | None = None) -> int:
         launched=bool(report.get("launched")),
         window_seconds=(datetime.now(timezone.utc) - started).total_seconds(),
         instance=instance_fingerprint(health),
+        apk_proof=apk,
     )
     landing["apk_proof"] = apk
     report["landing"] = landing
@@ -893,6 +1004,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERRO DE GATE: fluxo validado usando fallback: {', '.join(validated_fallbacks)}")
     for finding in fatal[:10]:
         print(f"  [fatal] {finding['description']}: {finding['line'][:160]}")
+
+    if args.require_apk_proof and not apk.get("proven"):
+        print("GATE: --require-apk-proof e o APK instalado NÃO foi provado — "
+              f"{apk.get('reason')}", file=sys.stderr)
+        print("  Esta execução não prova qual artefato produziu o tráfego.", file=sys.stderr)
+        return 1
 
     if verdict == "no_observed_traffic":
         print("A instância observada NÃO registrou tráfego nesta janela, embora o app "

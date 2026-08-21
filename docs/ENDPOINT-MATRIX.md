@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-20T23:46:47Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-21T02:08:30Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -37,7 +37,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | [codes](#codes) | 21 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
 | [xbox](#xbox) | 22 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
 | [bnet](#bnet) | 23 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
-| [ads ⛔](#ads) | 99 | 4 | 0 | 4 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
+| [ads ⛔](#ads) | 99 | 4 | 0 | 4 | 0 | 1 | ⛔ fora de escopo (dependência externa) |
 | [iap ⛔](#iap) | 99 | 6 | 0 | 6 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
 
 ## Detalhe por módulo
@@ -89,14 +89,14 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/quests/claim-daily-quest` | ✅ | ✅ | · | · | · | — | · | · | — | schema extraído |
 | `game/quests/claim-milestone` | ✅ | ✅ | · | · | · | — | · | · | — | schema extraído |
-| `game/quests/get-daily-quests` | ✅ | ✅ | · | · | · | — | · | ✅ | — | schema extraído |
+| `game/quests/get-daily-quests` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GetDailyQuestsResponse{dayStartEpoch, dayEndEpoch, milestones, quests}; DailyQuestModel{id, questId, progress, claimed, points, goTo}; DailyQuestMilestoneModel{id, milestoneId, pointsRequired, claimed, rewards}. Wire recortado ao DTO em 2026-08-21 — o estado interno (target/completed) nao vai para a resposta. |
 
 ### reward-tracks
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/reward-tracks/claim` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
-| `game/reward-tracks/get-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
+| `game/reward-tracks/get-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | RewardTrackEntryModel declara SOMENTE resources. Bisseção no emulador em 2026-08-21 (8 execucoes): entries com {id, resources} -> Malformed response payload e boot parado; entries com {resources} -> boot segue ate o menu. entries_claimed como array de ids confirmado. |
 | `game/reward-tracks/get-track` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
 
 ### inbox
@@ -269,7 +269,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/ads/begin-watch` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 | `game/ads/cancel-watch` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/ads/get-state` | ✅ | · | ✅ | ✅ | · | — | · | ✅ | — | implementado, aguardando validação |
+| `game/ads/get-state` | ✅ | ✅ | ✅ | ✅ | · | — | ✅ | ✅ | — | metadata v29: AdApi.GetStateResponse{state}; AdState{allotment, rewardTokens}; AdAllotment{startEpoch, endEpoch, availableRewards}. Medido no emulador 2026-08-21: sem state o cliente estoura NullReferenceException em Ubu.Ads.AdController.ProcessAdState e o boot trava no LOADING 100%. |
 | `game/ads/refresh-token` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
 
 ### iap

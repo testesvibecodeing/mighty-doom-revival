@@ -61,7 +61,8 @@ try {
   assert.equal(repo.balance(user.id, 1), 35)
 
   // Wire RewardTrackModel (metadata v29): {id, track_id, entries_claimed,
-  // entries:[{id, resources}]}; claim responde ClaimRewardTrackResponse{resources}.
+  // next_claim_epoch, entries:[{resources}]}; claim responde
+  // ClaimRewardTrackResponse{resources}.
   tracks = rewardTrackState(repo, user.id, runtime)
   const wire = rewardTrackWire(tracks[0])
   assert.equal(wire.id, 700)
@@ -70,6 +71,14 @@ try {
   assert.equal(wire.entries.length, 2)
   assert.deepEqual(wire.entries[0].resources, [{ rid: 1, amount: 10 }])
   assert.equal('next_claim_epoch' in wire, false, 'sem cooldown o campo é omitido')
+
+  // RewardTrackEntryModel declara SOMENTE `resources`. Medido no emulador em
+  // 2026-08-21 por bisseção: com `{id, resources}` o cliente respondeu
+  // `Malformed response payload` e o boot parou; com `{resources}` passou.
+  for (const entry of wire.entries) {
+    assert.deepEqual(Object.keys(entry), ['resources'],
+      'entry do RewardTrackModel não pode carregar campo fora do DTO')
+  }
 
   let handled = handleRewardTrackRequest('/game/reward-tracks/get-all', {}, user.id, repo, runtime)
   assert.equal(handled.data.tracks.length, 1)

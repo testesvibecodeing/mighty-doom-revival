@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { Repository } from '../src/db.js'
-import { findAdRewardToken } from '../src/ad-tokens.js'
+import { adState, findAdRewardToken } from '../src/ad-tokens.js'
 import { boostIdleReward } from '../src/rewards.js'
 import { handleArmoryRequest } from '../src/armory.js'
 import {
@@ -95,6 +95,24 @@ try {
   assert.equal(result.ok, true)
   assert.equal(repo.balance(UID, 100), 10, '2 períodos x 1 x 2')
   assert.deepEqual(repo.getState(UID, 'ads', 'reward_tokens', []).map(t => t.id), [30, 32], 'só o token usado é consumido')
+
+  // ---- game/ads/get-state (AdApi.GetStateResponse) ----
+  // Medido no emulador em 2026-08-21: a resposta antiga `{ads_disabled:true}`
+  // não trazia `state` e o cliente estourou NullReferenceException em
+  // Ubu.Ads.AdController.ProcessAdState, travando o boot na tela de LOADING.
+  // Contrato do metadata v29: GetStateResponse{state}, AdState{allotment,
+  // rewardTokens}, AdAllotment{startEpoch, endEpoch, availableRewards}.
+  const ads = adState(repo, UID, 1787270500)
+  assert.deepEqual(Object.keys(ads), ['state'])
+  assert.deepEqual(Object.keys(ads.state).sort(), ['allotment', 'reward_tokens'])
+  assert.deepEqual(Object.keys(ads.state.allotment).sort(), ['end_epoch', 'start_epoch'])
+  assert.equal(ads.state.allotment.start_epoch % 86400, 0, 'janela começa no dia UTC')
+  assert.equal(ads.state.allotment.end_epoch - ads.state.allotment.start_epoch, 86400)
+  assert.deepEqual(ads.state.reward_tokens.map(row => row.id), [30, 32],
+    'os tokens vivos do jogador vão no wire, sem inventar nenhum')
+
+  const semTokens = adState(repo, 999999, 1787270500)
+  assert.deepEqual(semTokens.state.reward_tokens, [], 'jogador sem token vê lista vazia')
 
   // ---- armory (ArmoryApi) ----
   let response = handleArmoryRequest('/game/armory/get', {}, UID, repo, runtime)

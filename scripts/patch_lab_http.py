@@ -50,6 +50,7 @@ import ipaddress
 import json
 import re
 import shutil
+import struct
 import sys
 import zipfile
 from dataclasses import dataclass, field
@@ -288,8 +289,17 @@ def _candidate_entries(zf: zipfile.ZipFile) -> list[str]:
 
 
 def patch_apk(*, apk_in: Path, apk_out: Path, host: str, allow_insecure_lab: bool,
-              from_host: str | None = None, analyze: bool = False) -> dict:
-    """Gera o APK de laboratório. Recusa tudo que não for laboratório."""
+              from_host: str | None = None, analyze: bool = False,
+              activity_dex: Path | None = None, lab_dir: Path | None = None) -> dict:
+    """Gera o APK de laboratório. Recusa tudo que não for laboratório.
+
+    `lab_dir` troca APENAS a pasta de destino permitida; a recusa de `output/`
+    e a exigência de nome marcado como laboratório continuam valendo iguais.
+    Existe porque `LAB_DIR` é uma pasta compartilhada: quando a suíte e o rig
+    escrevem `teste-LAB-HTTP.apk` ao mesmo tempo, um lê o ZIP que o outro ainda
+    está gravando (`BadZipFile`) ou mede um artefato de outra geração. Com um
+    diretório próprio por chamada, cada job fica dono do que produziu.
+    """
     if not allow_insecure_lab:
         raise LabPatchError(
             "modo inseguro exige --allow-insecure-lab: este patch rebaixa o wire "
@@ -302,27 +312,33 @@ def patch_apk(*, apk_in: Path, apk_out: Path, host: str, allow_insecure_lab: boo
         raise LabPatchError(f"APK de entrada não existe: {apk_in}")
 
     saida = Path(apk_out).resolve()
+    destino_permitido = Path(lab_dir).resolve() if lab_dir is not None else LAB_DIR.resolve()
     if not analyze:
         if (ROOT / "output") in saida.parents:
             raise LabPatchError(
                 "artefato de laboratório NUNCA pode nascer em output/ — "
                 f"use {LAB_DIR.relative_to(ROOT).as_posix()}/")
-        if LAB_DIR.resolve() not in saida.parents and saida.parent != LAB_DIR.resolve():
+        if destino_permitido not in saida.parents and saida.parent != destino_permitido:
             raise LabPatchError(
                 f"artefato de laboratório só pode ser gravado em "
-                f"{LAB_DIR.relative_to(ROOT).as_posix()}/, veio {saida}")
+                f"{destino_permitido.as_posix()}/, veio {saida}")
         if MARKER not in saida.name and "LAB" not in saida.name.upper():
             raise LabPatchError(
                 "o nome do arquivo tem que identificar o artefato como de "
                 "laboratório (ex.: mighty-doom-revival-LAB-HTTP.apk)")
 
     origem = from_host or host
+    # `parent_sha256`: os bytes EXATOS de onde esta derivação saiu. Sem isso o
+    # artefato de laboratório fica órfão — ninguém consegue ligar o que foi
+    # exercitado no emulador ao APK HTTPS que o Studio verificou.
     relatorio = {
         "marker": MARKER,
         "insecure_http": True,
         "lab_only": True,
         "input_apk": apk_in.name,
         "input_sha256": _sha256(apk_in),
+        "parent_sha256": _sha256(apk_in),
+        "parent_path": apk_in.as_posix(),
         "from_host": origem,
         "host": host,
         "analyze": analyze,
@@ -364,6 +380,45 @@ def patch_apk(*, apk_in: Path, apk_out: Path, host: str, allow_insecure_lab: boo
             relatorio["written"] = False
             return relatorio
 
+        # ---- dex da Activity: o wire dela vive no BYTECODE, nao no metadata --
+        # O downgrade acima reescreve `global-metadata.dat` e os bundles, que e
+        # o que a UNITY le. A RevivalAuthActivity tem a URL propria compilada no
+        # dex — e sem trocar tambem esse dex o APK fica com cerebro dividido:
+        # Activity chamando o host PUBLICO por HTTPS e Unity chamando o rig por
+        # HTTP. Medido em 2026-08-21: a Activity criava a conta no servidor
+        # publico e o login-device seguinte batia 403/2101 no rig, porque a
+        # conta nao existia la.
+        if activity_dex is not None:
+            from patch_revival_auth import ACTIVITY_CLASS  # noqa: PLC0415
+            marca = ACTIVITY_CLASS.replace(".", "/").encode()
+            alvo_dex = next((n for n in zin.namelist()
+                             if n.endswith(".dex") and marca in zin.read(n)), None)
+            if alvo_dex is None:
+                raise LabPatchError(
+                    "--activity-dex pedido mas o APK nao tem a RevivalAuthActivity")
+            novo_dex = Path(activity_dex).read_bytes()
+            if marca not in novo_dex:
+                raise LabPatchError("o dex informado nao contem a RevivalAuthActivity")
+            patches[alvo_dex] = novo_dex
+            relatorio["activity_dex_replaced"] = {
+                "entry": alvo_dex,
+                "sha256": hashlib.sha256(novo_dex).hexdigest(),
+                "bytes": len(novo_dex),
+                "reason": "a Activity precisa apontar para o rig, igual a Unity",
+            }
+
+        # ---- cleartext do rig: a Activity fala pela stack do ANDROID ---------
+        # A Unity tem stack propria e ignora o network_security_config; a
+        # RevivalAuthActivity usa HttpURLConnection e NAO ignora. Desde a API 28
+        # o padrao e cleartext proibido, entao sem esta troca o `http://` do rig
+        # morre antes de sair do aparelho. Medido em 2026-08-20 e de novo em
+        # 2026-08-21: a tela mostrou "Sem conexao com o servidor Revival" e
+        # ZERO requests chegaram ao rig, enquanto a Unity conversava normalmente.
+        nsc = next((n for n in zin.namelist() if n.endswith(NSC_ENTRY)), None)
+        if nsc is not None:
+            patches[nsc], relatorio["network_security_config"] = patch_network_security_axml(
+                zin.read(nsc), host, allow_insecure_lab=allow_insecure_lab)
+
         # ---- CRC do catálogo: obrigatório para todo bundle alterado ----------
         # Regra 3 do AGENTS.md e DEAD-ENDS #7. A Unity só valida CRC não-zero;
         # bundle reserializado com CRC antigo no catálogo derruba o load da cena
@@ -401,7 +456,42 @@ def patch_apk(*, apk_in: Path, apk_out: Path, host: str, allow_insecure_lab: boo
 
     relatorio["written"] = True
     relatorio["output_apk"] = saida.name
-    relatorio["output_sha256"] = _sha256(saida)
+    relatorio["output_path"] = saida.as_posix()
+    # SHA PRE-assinatura. O SHA do artefato assinado e outro e entra depois,
+    # por `record_signed_sha()` — os dois ficam no mesmo relatorio para o
+    # auditor seguir a cadeia sem adivinhar qual arquivo foi qual.
+    relatorio["unsigned_sha256"] = _sha256(saida)
+    relatorio["output_sha256"] = relatorio["unsigned_sha256"]
+    relatorio["signed_sha256"] = None
+    relatorio["activity_preserved"] = _activity_facts(saida)
+    return relatorio
+
+
+def _activity_facts(apk: Path) -> dict:
+    """RevivalAuthActivity e Activity Unity sobreviveram a derivacao?"""
+    from patch_revival_auth import verify_apk  # noqa: PLC0415
+    try:
+        v = verify_apk(apk)
+    except Exception as exc:  # noqa: BLE001
+        return {"measured": False, "reason": str(exc)}
+    return {"measured": True, "activity_dex": v["activity_dex"],
+            "revival_activity_present": v["revival_activity_present"],
+            "unity_activity_present": v["unity_activity_present"],
+            "verified": v["verified"]}
+
+
+def record_signed_sha(report_path: Path | str, signed_apk: Path | str) -> dict:
+    """Fecha a cadeia: grava no relatorio o SHA do APK JA ASSINADO."""
+    caminho = Path(report_path)
+    relatorio = json.loads(caminho.read_text(encoding="utf-8"))
+    assinado = Path(signed_apk)
+    relatorio["signed_sha256"] = _sha256(assinado)
+    relatorio["signed_apk"] = assinado.name
+    relatorio["signed_bytes"] = assinado.stat().st_size
+    # A assinatura reescreve o ZIP, entao o hash MUDA — dizer o contrario seria
+    # mentira. O que liga os dois e este relatorio.
+    relatorio["signature_changed_bytes"] = relatorio["signed_sha256"] != relatorio.get("unsigned_sha256")
+    caminho.write_text(json.dumps(relatorio, indent=2, ensure_ascii=False), encoding="utf-8")
     return relatorio
 
 
@@ -457,6 +547,143 @@ def verify_catalog_crc_zero(apk: Path, bundles: list[str]) -> list[str]:
     return faltando
 
 
+NSC_ENTRY = "res/xml/network_security_config.xml"
+
+
+def _pool_axml(dados: bytes) -> tuple[int, int, list[int], bool]:
+    """Devolve (base_das_strings, quantidade, offsets, utf8) do string pool AXML."""
+    tipo, _cab, tam = struct.unpack_from("<HHI", dados, 8)
+    if tipo != 0x0001:
+        raise LabPatchError("AXML sem string pool logo apos o cabecalho")
+    qtd, _est, flags, inicio, _iest = struct.unpack_from("<IIIII", dados, 16)
+    offs = [struct.unpack_from("<I", dados, 36 + 4 * i)[0] for i in range(qtd)]
+    return 8 + inicio, qtd, offs, bool(flags & 0x100)
+
+
+def _texto_axml(dados: bytes, base: int, off: int, utf8: bool) -> str:
+    p = base + off
+    if utf8:
+        return dados[p + 2:p + 2 + dados[p + 1]].decode("utf-8", "replace")
+    n = struct.unpack_from("<H", dados, p)[0]
+    return dados[p + 2:p + 2 + 2 * n].decode("utf-16-le", "replace")
+
+
+def patch_network_security_axml(dados: bytes, host: str, *, allow_insecure_lab: bool,
+                                revival_host: str = "doom.sualoja.app.br") -> tuple[bytes, dict]:
+    """Libera cleartext para o host do rig editando o AXML ja compilado.
+
+    Mesma necessidade descrita em `write_lab_network_security`, so que aplicavel
+    ao fluxo em nivel de zip: aqui nao existe arvore decodificada do apktool
+    para reescrever o XML de texto. A edicao e cirurgica e verificavel:
+
+      1. a string do dominio publico vira o host do rig, escrita POR CIMA da
+         antiga (o pool AXML guarda offsets absolutos, entao encurtar um item no
+         lugar nao move nenhum outro); e
+      2. o valor tipado de `cleartextTrafficPermitted` passa de 0 (false) para
+         0xFFFFFFFF (true).
+
+    O resultado e um `<domain-config cleartextTrafficPermitted="true">` para o
+    rig e NENHUMA regra sobrando para o host publico — que volta ao padrao da
+    API 34, cleartext proibido. Ou seja: a Internet continua fechada em texto
+    claro mesmo no artefato de laboratorio.
+    """
+    if not allow_insecure_lab:
+        raise LabPatchError("cleartext exige --allow-insecure-lab")
+    if not is_lab_target(host):
+        raise LabPatchError(f"cleartext so para destino de laboratorio, nao {host!r}")
+    if len(host.encode("utf-8")) > len(revival_host.encode("utf-8")):
+        raise LabPatchError(
+            f"host {host!r} e maior que {revival_host!r}; a troca no lugar so encurta")
+
+    saida = bytearray(dados)
+    base, qtd, offs, utf8 = _pool_axml(dados)
+    if not utf8:
+        raise LabPatchError("string pool UTF-16 nao suportado nesta edicao")
+
+    idx_dominio = next((i for i in range(qtd)
+                        if _texto_axml(dados, base, offs[i], utf8) == revival_host), None)
+    if idx_dominio is None:
+        raise LabPatchError(f"AXML nao contem o dominio {revival_host!r}")
+    idx_attr = next((i for i in range(qtd)
+                     if _texto_axml(dados, base, offs[i], utf8) == "cleartextTrafficPermitted"), None)
+    if idx_attr is None:
+        raise LabPatchError("AXML nao declara cleartextTrafficPermitted")
+
+    bruto = host.encode("utf-8")
+    p = base + offs[idx_dominio]
+    saida[p] = len(bruto)          # comprimento em UTF-16
+    saida[p + 1] = len(bruto)      # comprimento em UTF-8
+    saida[p + 2:p + 2 + len(bruto)] = bruto
+    saida[p + 2 + len(bruto)] = 0
+
+    trocados = 0
+    pos = 8
+    while pos < len(dados):
+        tipo, _cab, tam = struct.unpack_from("<HHI", dados, pos)
+        if tam <= 0:
+            raise LabPatchError(f"chunk AXML de tamanho {tam} em {pos}")
+        if tipo == 0x0102:  # RES_XML_START_ELEMENT
+            _ns, _nome, ini, largura, quantos = struct.unpack_from("<IIHHH", dados, pos + 16)
+            for i in range(quantos):
+                a = pos + 16 + ini + i * largura
+                nome_idx = struct.unpack_from("<I", dados, a + 4)[0]
+                vtipo = dados[a + 15]
+                if nome_idx == idx_attr and vtipo == 0x12:
+                    struct.pack_into("<I", saida, a + 16, 0xFFFFFFFF)
+                    trocados += 1
+        pos += tam
+
+    if trocados != 1:
+        raise LabPatchError(
+            f"esperava 1 atributo cleartextTrafficPermitted tipado, achei {trocados}")
+
+    relatorio = {
+        "entry": NSC_ENTRY,
+        "cleartext_host": host,
+        "replaced_domain": revival_host,
+        "public_host_still_https": True,
+        "marker": MARKER,
+    }
+    return bytes(saida), relatorio
+
+
+def read_network_security_axml(dados: bytes) -> list[tuple[str, dict, str | None]]:
+    """Le o AXML de volta: (elemento, atributos, texto) — para pos-condicao."""
+    base, _qtd, offs, utf8 = _pool_axml(dados)
+    def s(i: int) -> str | None:
+        return None if i == 0xFFFFFFFF else _texto_axml(dados, base, offs[i], utf8)
+    elementos: list[tuple[str, dict, str | None]] = []
+    pilha: list[int] = []
+    pos = 8
+    while pos < len(dados):
+        tipo, _cab, tam = struct.unpack_from("<HHI", dados, pos)
+        if tipo == 0x0102:
+            _ns, nome, ini, largura, quantos = struct.unpack_from("<IIHHH", dados, pos + 16)
+            attrs: dict[str, str] = {}
+            for i in range(quantos):
+                a = pos + 16 + ini + i * largura
+                nome_idx, raw = struct.unpack_from("<II", dados, a + 4)
+                vtipo = dados[a + 15]
+                dado = struct.unpack_from("<I", dados, a + 16)[0]
+                if vtipo == 0x12:
+                    valor = "true" if dado else "false"
+                elif vtipo == 0x03:
+                    valor = s(raw) or ""
+                else:
+                    valor = str(dado)
+                attrs[s(nome_idx) or "?"] = valor
+            elementos.append((s(nome) or "?", attrs, None))
+            pilha.append(len(elementos) - 1)
+        elif tipo == 0x0104 and pilha:
+            dado = struct.unpack_from("<I", dados, pos + 16)[0]
+            nome, attrs, _ = elementos[pilha[-1]]
+            elementos[pilha[-1]] = (nome, attrs, s(dado))
+        elif tipo == 0x0103 and pilha:
+            pilha.pop()
+        pos += tam
+    return elementos
+
+
 def write_lab_network_security(decoded: Path, host: str, *, allow_insecure_lab: bool,
                                revival_host: str = "doom.sualoja.app.br") -> dict:
     """Permite cleartext para o host do rig — SÓ na árvore de laboratório.
@@ -505,7 +732,11 @@ def verify_lab_apk(apk: Path, host: str) -> dict:
     # como "oficial" reprovaria todo APK correto.
     from patch_apk import KNOWN_HOSTS, PRIMARY_API_HOST  # noqa: PLC0415
 
-    resultado = {"apk": apk.name, "sha256": _sha256(apk), "host": host,
+    # `server_host` e o nome que `verify_patched_apk.py` usa e que o harness le
+    # em `apk_proof` — manter dois nomes faria a prova falhar por detalhe de
+    # chave, nao por divergencia real de artefato.
+    resultado = {"apk": apk.name, "sha256": _sha256(apk),
+                 "host": host, "server_host": host,
                  "http_occurrences": 0, "https_occurrences": 0,
                  "official_occurrences": 0, "ancillary_occurrences": 0}
     alvo = re.escape(host.encode("ascii"))
@@ -524,6 +755,8 @@ def verify_lab_apk(apk: Path, host: str) -> dict:
                     resultado["ancillary_occurrences"] += dados.count(ancilar.encode("ascii"))
     resultado["verified"] = (resultado["http_occurrences"] > 0
                              and resultado["official_occurrences"] == 0)
+    # `target_occurrences`: mesmo nome do verificador do entregavel.
+    resultado["target_occurrences"] = resultado["http_occurrences"]
     return resultado
 
 
@@ -535,6 +768,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--from-host", help="host atualmente no APK, se for trocar também o host")
     p.add_argument("--allow-insecure-lab", action="store_true",
                    help="OBRIGATÓRIO: declara ciência de que o artefato é inseguro")
+    p.add_argument("--activity-dex", type=Path,
+                   help="dex da RevivalAuthActivity compilado para o host do rig; "
+                        "sem ele a Activity continua chamando o host publico")
     p.add_argument("--analyze", action="store_true", help="não escreve nada")
     p.add_argument("--report", type=Path)
     args = p.parse_args(argv)
@@ -544,7 +780,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         rel = patch_apk(apk_in=args.apk, apk_out=args.out or Path("x"), host=args.host,
-                        from_host=args.from_host,
+                        from_host=args.from_host, activity_dex=args.activity_dex,
                         allow_insecure_lab=args.allow_insecure_lab, analyze=args.analyze)
     except LabPatchError as exc:
         print(f"RECUSADO: {exc}", file=sys.stderr)

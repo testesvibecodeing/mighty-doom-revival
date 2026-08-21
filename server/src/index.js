@@ -11,7 +11,7 @@ import { loadRuntimeConfig, researchMode } from './config.js'
 import { Repository } from './db.js'
 import { handleEventRequest } from './events.js'
 import { handleArmoryRequest } from './armory.js'
-import { findAdRewardToken } from './ad-tokens.js'
+import { adState, findAdRewardToken } from './ad-tokens.js'
 import { boostIdleReward, idleRewardState } from './rewards.js'
 import { handleDevicesRequest } from './devices.js'
 import { redeemCode } from './codes.js'
@@ -889,6 +889,11 @@ function handleAuthed (path, body, user, req) {
     return { data: { total_lifetime_purchase: 0 } }
   }
   if (path.startsWith('/game/iap/')) return { error: [400, 2000, { iap_disabled: true }] }
+
+  // O boot chama esta rota e usa a resposta direto: sem `state` o
+  // AdController estoura NullReferenceException e o menu nunca carrega
+  // (medido no rig em 2026-08-21, request_log 629). Contrato em ad-tokens.js.
+  if (path === '/game/ads/get-state') return { data: adState(repo, user.id) }
   if (path.startsWith('/game/ads/')) return { data: { ads_disabled: true } }
 
   return null
