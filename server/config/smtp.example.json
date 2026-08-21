@@ -5,5 +5,7 @@
   "user": "usuario",
   "pass": "senha-de-aplicativo",
   "from": "nao-responda@exemplo.com",
-  "from_name": "Mighty DOOM Revival"
+  "from_name": "Mighty DOOM Revival",
+  "allow_invalid_cert": false,
+  "allow_plaintext_auth": false
 }

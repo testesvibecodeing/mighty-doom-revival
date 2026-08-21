@@ -1,4 +1,4 @@
-// Envio de e-mail em Node puro (net + tls) para os códigos de acesso do painel:
+// Envio de e-mail em Node puro (net + tls) para senhas temporárias do painel:
 // EHLO, STARTTLS quando o servidor oferece, AUTH LOGIN, DATA com dot-stuffing.
 // Zero dependências — o servidor é builtin-only por projeto.
 // Config: server/config/smtp.json (runtime, gitignored; exemplo em smtp.example.json).
@@ -20,7 +20,12 @@ const DEFAULTS = {
   pass: '',
   from: '',
   from_name: '',
-  timeout_ms: 15000
+  timeout_ms: 15000,
+  // Certificado TLS do SMTP é VALIDADO por padrão. As duas chaves abaixo são
+  // escapes explícitos, gravados no config por quem assume o risco — nunca
+  // ligadas sozinhas, nunca ligadas por falha de handshake.
+  allow_invalid_cert: false,
+  allow_plaintext_auth: false
 }
 
 export function readSmtpConfig () {
@@ -44,6 +49,8 @@ export function writeSmtpConfig (patch = {}) {
   if (patch.port !== undefined) next.port = Math.floor(Number(patch.port)) || 587
   if (patch.timeout_ms !== undefined) next.timeout_ms = Math.max(3000, Math.floor(Number(patch.timeout_ms)) || 15000)
   if (patch.secure !== undefined) next.secure = patch.secure === true
+  if (patch.allow_invalid_cert !== undefined) next.allow_invalid_cert = patch.allow_invalid_cert === true
+  if (patch.allow_plaintext_auth !== undefined) next.allow_plaintext_auth = patch.allow_plaintext_auth === true
   mkdirSync(dirname(CONFIG_PATH), { recursive: true })
   writeFileSync(CONFIG_PATH, JSON.stringify(next, null, 2) + '\n')
   return next
@@ -64,8 +71,28 @@ export function smtpPublic (config) {
     user: config.user,
     from: config.from,
     from_name: config.from_name,
-    has_pass: Boolean(config.pass)
+    has_pass: Boolean(config.pass),
+    allow_invalid_cert: Boolean(config.allow_invalid_cert),
+    allow_plaintext_auth: Boolean(config.allow_plaintext_auth)
   }
+}
+
+// Ponto UNICO onde a politica de TLS e decidida — exportado para o teste
+// poder afirmar `rejectUnauthorized` sem precisar de um certificado no repo
+// (AGENTS.md regra 1: nada de *.pem versionado).
+export function tlsOptionsFor (config, extra = {}) {
+  return {
+    ...extra,
+    servername: config.host,
+    minVersion: 'TLSv1.2',
+    rejectUnauthorized: config.allow_invalid_cert !== true
+  }
+}
+
+// Loopback nunca sai desta maquina: AUTH em texto claro ali nao expoe
+// credencial a ninguem. Exportado pelo mesmo motivo acima.
+export function plaintextAuthAllowed (config, secured) {
+  return Boolean(secured) || isLoopback(config.host) || config.allow_plaintext_auth === true
 }
 
 class SmtpSession {
@@ -126,15 +153,27 @@ class SmtpSession {
     return promise
   }
 
-  command (text, expected) {
+  // `label` existe para NUNCA ecoar o texto enviado: as linhas de AUTH LOGIN
+  // sao o usuario e a senha em base64, e a mensagem de erro daqui termina em
+  // console.warn no servidor. Rotulo fixo em vez do payload.
+  command (text, expected, label = text.split(' ')[0]) {
     const pending = this.readReply()
     this.socket.write(text + '\r\n')
     return pending.then(reply => {
       if (expected && !expected.includes(reply.code)) {
-        throw new Error(`SMTP ${text.split(' ')[0]}: esperado ${expected.join('/')}, recebido ${reply.lines.join(' | ')}`)
+        throw new Error(`SMTP ${label}: esperado ${expected.join('/')}, recebido ${reply.lines.join(' | ')}`)
       }
       return reply
     })
+  }
+
+  // Validacao do certificado LIGADA por padrao. Antes era `rejectUnauthorized:
+  // false` fixo, o que aceitava em silencio qualquer certificado — inclusive o
+  // de um man-in-the-middle entre este servidor e o provedor de e-mail, que
+  // veria a senha de aplicativo do AUTH LOGIN. So desliga com
+  // `allow_invalid_cert` gravado no config, e o painel mostra o aviso.
+  tlsOptions (extra) {
+    return tlsOptionsFor(this.config, extra)
   }
 
   connect () {
@@ -142,7 +181,7 @@ class SmtpSession {
     return new Promise((resolveConnect, rejectConnect) => {
       const base = { host: config.host, port: Number(config.port) || 587 }
       const socket = config.secure
-        ? tls.connect({ ...base, servername: config.host, rejectUnauthorized: false })
+        ? tls.connect(this.tlsOptions(base))
         : net.connect(base)
       socket.once('error', rejectConnect)
       socket.once(config.secure ? 'secureConnect' : 'connect', () => resolveConnect(socket))
@@ -153,7 +192,7 @@ class SmtpSession {
     const raw = this.socket
     raw.removeAllListeners('data')
     return new Promise((resolveTls, rejectTls) => {
-      const secure = tls.connect({ socket: raw, servername: this.config.host, rejectUnauthorized: false })
+      const secure = tls.connect(this.tlsOptions({ socket: raw }))
       secure.once('secureConnect', () => {
         this.attach(secure)
         resolveTls(secure)
@@ -165,6 +204,13 @@ class SmtpSession {
 
 function rfc2047 (value) {
   return /^[\x20-\x7e]*$/.test(value) ? value : `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
+}
+
+// Loopback: a conexao nunca deixa a maquina, entao AUTH em texto claro aqui
+// nao expoe credencial a ninguem. E o caso do SMTP falso da suite de testes.
+function isLoopback (host) {
+  const value = String(host || '').trim().toLowerCase().replace(/^\[|\]$/g, '')
+  return value === 'localhost' || value === '::1' || /^127\./.test(value)
 }
 
 function envelopeFrom (config) {
@@ -200,15 +246,24 @@ export async function sendMail (config, message) {
     const greeting = await session.readReply()
     if (greeting.code !== 220) throw new Error(`saudação SMTP inesperada: ${greeting.lines.join(' | ')}`)
     let ehlo = await session.command(`EHLO ${ehloName}`, [250])
+    let secured = Boolean(config.secure)
     if (!config.secure && ehlo.lines.some(line => /^250[- ]STARTTLS\b/i.test(line))) {
       await session.command('STARTTLS', [220])
       socket = await session.starttls()
+      secured = true
       ehlo = await session.command(`EHLO ${ehloName}`, [250])
     }
     if (config.user) {
+      // AUTH LOGIN manda usuario e senha em base64 — que e codificacao, nao
+      // cifra. Sem TLS a credencial trafega legivel. Loopback nunca sai desta
+      // maquina e continua liberado; qualquer outro host exige TLS ou o
+      // opt-in explicito `allow_plaintext_auth`.
+      if (!plaintextAuthAllowed(config, secured)) {
+        throw new Error('o servidor SMTP nao ofereceu STARTTLS: enviar AUTH LOGIN em texto claro exporia a senha de aplicativo')
+      }
       await session.command('AUTH LOGIN', [334])
-      await session.command(Buffer.from(String(config.user), 'utf8').toString('base64'), [334])
-      await session.command(Buffer.from(String(config.pass || ''), 'utf8').toString('base64'), [235])
+      await session.command(Buffer.from(String(config.user), 'utf8').toString('base64'), [334], 'AUTH usuario')
+      await session.command(Buffer.from(String(config.pass || ''), 'utf8').toString('base64'), [235], 'AUTH senha')
     }
     await session.command(`MAIL FROM:<${envelopeFrom(config)}>`, [250])
     await session.command(`RCPT TO:<${message.to}>`, [250, 251])

@@ -258,45 +258,43 @@ function passwordIsValid (value) {
   return typeof value === 'string' && value.length >= 8 && value.length <= 128
 }
 
+// O log do servidor nao guarda o endereco inteiro: identificar o pedido nao
+// exige publicar de quem e a conta em texto claro no journalctl.
+function maskEmail (value) {
+  const [nome = '', dominio = ''] = String(value || '').split('@')
+  const inicio = nome.slice(0, 2)
+  return `${inicio}${'*'.repeat(Math.max(1, nome.length - inicio.length))}@${dominio}`
+}
+
 function emailIsValid (value) {
   return typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
-// Envia o código de acesso por e-mail. `create: true` cadastra a conta no
-// primeiro pedido (login sem senha); `create: false` é o fluxo "esqueci a
-// senha", que responde ok mesmo para e-mail inexistente (anti-enumerção).
-async function dispatchLoginCode (email, { create }) {
+// Envia uma senha temporária somente quando o administrador configurou SMTP.
+// O pedido responde de forma neutra para e-mails inexistentes (anti-enumeração).
+async function dispatchTemporaryPassword (email) {
   const smtp = readSmtpConfig()
   if (!smtpConfigured(smtp)) {
     return { status: 503, payload: { ok: false, error: 'smtp-not-configured', message: 'O administrador precisa configurar o SMTP no painel.' } }
   }
-  let user = repo.userByLogin(email)
-  let created = false
-  if (!user) {
-    if (!create) return { status: 200, payload: { ok: true, code_sent: true } }
-    try {
-      user = repo.createUser({ email, passwordSet: false }).user
-      created = true
-    } catch (error) {
-      if (String(error.message).includes('UNIQUE')) return { status: 409, payload: { ok: false, error: 'email-already-used' } }
-      throw error
-    }
-  }
-  const code = repo.createLoginCode(email)
-  if (!code) {
-    return { status: 429, payload: { ok: false, error: 'code-rate-limited', message: 'Aguarde um minuto antes de pedir outro código.' } }
-  }
+  const user = repo.userByEmail(email)
+  // Resposta neutra: não revela se uma conta existe para o endereço digitado.
+  if (!user) return { status: 200, payload: { ok: true, temporary_password_sent: true } }
+  const reset = repo.createTemporaryPassword(user.id)
+  if (!reset) return { status: 429, payload: { ok: false, error: 'reset-rate-limited', message: 'Aguarde um minuto antes de pedir outra senha temporária.' } }
   try {
     await sendMail(smtp, {
       to: email,
-      subject: 'Seu código de acesso',
-      text: `Olá!\n\nSeu código de acesso é: ${code}\nEle é válido por 10 minutos.\n\nSe você não pediu este código, ignore este e-mail.`
+      subject: 'Sua senha temporária do Mighty DOOM Revival',
+      text: `Olá!\n\nSua senha temporária é: ${reset.password}\n\nEla é válida por 30 minutos e será ativada no primeiro login. Depois de entrar, troque-a em Minha conta > Segurança.\n\nSe você não pediu a recuperação, ignore este e-mail: sua senha atual continuará válida.`
     })
   } catch (error) {
-    console.warn(`[mail] falha ao enviar para ${email}: ${error.message}`)
+    // Não deixe uma credencial válida no banco quando o e-mail não saiu.
+    repo.revokeTemporaryPassword(reset.id)
+    console.warn(`[mail] falha ao enviar para ${maskEmail(email)}: ${error.message}`)
     return { status: 502, payload: { ok: false, error: 'mail-send-failed' } }
   }
-  return { status: 200, payload: { ok: true, code_sent: true, account_created: created } }
+  return { status: 200, payload: { ok: true, temporary_password_sent: true, expires_in_seconds: 1800 } }
 }
 
 async function handleAccount (req, res, path) {
@@ -344,25 +342,11 @@ async function handleAccount (req, res, path) {
   try { body = await readJsonBody(req) } catch { return json(res, 400, { ok: false, error: 'invalid-json' }) }
 
   if (path === '/account/email-code/request') {
-    const email = String(body.email || '').trim().toLowerCase()
-    if (!emailIsValid(email)) return json(res, 400, { ok: false, error: 'email-invalid' })
-    const outcome = await dispatchLoginCode(email, { create: true })
-    return json(res, outcome.status, outcome.payload)
+    return json(res, 410, { ok: false, error: 'password-login-required', message: 'Entre ou crie a conta usando e-mail e senha.' })
   }
 
   if (path === '/account/email-code/login') {
-    const email = String(body.email || '').trim().toLowerCase()
-    const user = repo.userByLogin(email)
-    if (!user || !repo.consumeLoginCode(email, body.code)) return json(res, 401, { ok: false, error: 'code-invalid' })
-    const session = repo.createWebSession(user.id)
-    accountCookie(res, session.token)
-    const fresh = repo.userById(user.id)
-    return json(res, 200, {
-      ok: true,
-      account: publicAccount(fresh),
-      snapshot: accountSnapshot(fresh),
-      password_set: Boolean(fresh.password_set)
-    })
+    return json(res, 410, { ok: false, error: 'password-login-required', message: 'Entre usando e-mail e senha.' })
   }
 
   if (path === '/account/register') {
@@ -377,8 +361,7 @@ async function handleAccount (req, res, path) {
       return json(res, 201, {
         ok: true,
         account: publicAccount(repo.userById(created.user_id)),
-        recovery_code: created.recovery_code,
-        message: 'Guarde o código de recuperação em local seguro.'
+        message: 'Conta criada. Use este e-mail e senha também na tela do jogo.'
       })
     } catch (error) {
       if (String(error.message).includes('UNIQUE')) return json(res, 409, { ok: false, error: 'email-already-used' })
@@ -387,11 +370,19 @@ async function handleAccount (req, res, path) {
   }
 
   if (path === '/account/login') {
-    const user = repo.loginAccount(body.login, body.password)
-    if (!user) return json(res, 401, { ok: false, error: 'invalid-login' })
+    const email = String(body.email || body.login || '').trim().toLowerCase()
+    if (!emailIsValid(email)) return json(res, 401, { ok: false, error: 'invalid-login' })
+    const authenticated = repo.loginAccountDetailed(email, body.password)
+    if (!authenticated) return json(res, 401, { ok: false, error: 'invalid-login' })
+    const user = authenticated.user
     const session = repo.createWebSession(user.id)
     accountCookie(res, session.token)
-    return json(res, 200, { ok: true, account: publicAccount(repo.userById(user.id)), snapshot: accountSnapshot(repo.userById(user.id)) })
+    return json(res, 200, {
+      ok: true,
+      account: publicAccount(repo.userById(user.id)),
+      snapshot: accountSnapshot(repo.userById(user.id)),
+      temporary_password_used: authenticated.temporaryPasswordUsed
+    })
   }
 
   if (path === '/account/logout') {
@@ -402,33 +393,14 @@ async function handleAccount (req, res, path) {
 
   if (path === '/account/forgot-password') {
     const email = String(body.email || '').trim().toLowerCase()
-    if (emailIsValid(email)) {
-      const outcome = await dispatchLoginCode(email, { create: false })
-      if (outcome.payload?.code_sent) {
-        return json(res, 200, { ok: true, code_sent: true, message: 'Se a conta existir, um código de acesso foi enviado ao e-mail.' })
-      }
-      if (outcome.status === 429 || outcome.status === 502) return json(res, outcome.status, outcome.payload)
-    }
-    return json(res, 200, { ok: true, recovery_required: true, message: 'Sem SMTP configurado, use o código de recuperação criado junto com a conta.' })
+    if (!emailIsValid(email)) return json(res, 400, { ok: false, error: 'email-invalid' })
+    const outcome = await dispatchTemporaryPassword(email)
+    if (outcome.status === 200) outcome.payload.message = 'Se a conta existir, uma senha temporária foi enviada ao e-mail.'
+    return json(res, outcome.status, outcome.payload)
   }
 
   if (path === '/account/reset-password') {
-    // Via nova: e-mail + código recebido. Via antiga: código de recuperação RV-.
-    const email = String(body.email || '').trim().toLowerCase()
-    if (email && body.code) {
-      const user = repo.userByLogin(email)
-      if (!user || !passwordIsValid(body.new_password) || !repo.consumeLoginCode(email, body.code)) {
-        return json(res, 400, { ok: false, error: 'recovery-data-invalid' })
-      }
-      repo.updatePassword(user.id, body.new_password)
-      return json(res, 200, { ok: true, message: 'Senha redefinida. Faça login com e-mail e senha.' })
-    }
-    const user = repo.userByLogin(body.login)
-    if (!user || !passwordIsValid(body.new_password) || !repo.verifyRecoveryCode(user.id, body.recovery_code)) {
-      return json(res, 400, { ok: false, error: 'recovery-data-invalid' })
-    }
-    repo.updatePassword(user.id, body.new_password)
-    return json(res, 200, { ok: true, message: 'Senha redefinida. Faça login novamente.' })
+    return json(res, 410, { ok: false, error: 'temporary-password-required', message: 'Use “Esqueci minha senha” para receber uma senha temporária por e-mail.' })
   }
 
   const user = repo.userByWebSession(accountToken(req))

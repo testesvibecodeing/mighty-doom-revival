@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, scryptSync } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -14,12 +14,18 @@ function passwordHash (password) {
 }
 
 function verifyPassword (stored, password) {
+  if (typeof stored !== 'string' || typeof password !== 'string') return false
   if (stored?.startsWith('scrypt$')) {
     const [, salt, digest] = stored.split('$')
     if (!salt || !digest) return false
-    return scryptSync(password, salt, 32).toString('hex') === digest
+    const expected = Buffer.from(digest, 'hex')
+    if (expected.length !== 32) return false
+    const actual = scryptSync(password, salt, expected.length)
+    return expected.length === actual.length && timingSafeEqual(expected, actual)
   }
-  return stored === legacyPasswordHash(password)
+  const expected = Buffer.from(stored, 'utf8')
+  const actual = Buffer.from(legacyPasswordHash(password), 'utf8')
+  return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
 function tokenHash (token) {
@@ -170,6 +176,16 @@ export class Repository {
         expires_at INTEGER NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        password_hash TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        used_at INTEGER,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
     `)
     const columns = new Set(this.db.prepare('PRAGMA table_info(users)').all().map(row => row.name))
     if (!columns.has('email')) this.db.exec('ALTER TABLE users ADD COLUMN email TEXT')
@@ -238,6 +254,12 @@ export class Repository {
     `).get(value, value) || null
   }
 
+  userByEmail (email) {
+    const value = String(email || '').trim().toLowerCase()
+    if (!value) return null
+    return this.db.prepare('SELECT * FROM users WHERE lower(email) = ? LIMIT 1').get(value) || null
+  }
+
   countUsers () {
     return this.db.prepare('SELECT COUNT(*) AS total FROM users').get().total
   }
@@ -267,12 +289,38 @@ export class Repository {
   }
 
   loginAccount (login, password) {
-    const user = this.userByLogin(login)
-    if (!user || !verifyPassword(user.password_hash, password)) return null
-    if (!user.password_hash.startsWith('scrypt$')) {
-      this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash(password), user.id)
+    return this.loginAccountDetailed(login, password)?.user || null
+  }
+
+  loginAccountDetailed (email, password) {
+    const user = this.userByEmail(email)
+    if (!user || typeof password !== 'string') return null
+    if (verifyPassword(user.password_hash, password)) {
+      if (!user.password_hash.startsWith('scrypt$')) {
+        this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash(password), user.id)
+      }
+      return { user: this.userById(user.id), temporaryPasswordUsed: false }
     }
-    return this.userById(user.id)
+
+    const now = Math.floor(Date.now() / 1000)
+    const reset = this.db.prepare(`
+      SELECT * FROM password_resets
+      WHERE user_id = ? AND used_at IS NULL AND expires_at > ?
+      ORDER BY id DESC LIMIT 1
+    `).get(user.id, now)
+    if (!reset || reset.attempts >= 5) return null
+    const valid = verifyPassword(reset.password_hash, password)
+    this.db.prepare('UPDATE password_resets SET attempts = attempts + 1 WHERE id = ?').run(reset.id)
+    if (!valid) return null
+
+    this.tx(() => {
+      // A senha temporária só substitui a anterior quando é usada com sucesso.
+      // Até esse momento, pedir recuperação não expulsa o dono da conta.
+      this.db.prepare('UPDATE users SET password_hash = ?, password_set = 1 WHERE id = ?').run(reset.password_hash, user.id)
+      this.db.prepare('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL').run(now, user.id)
+      this.db.prepare('DELETE FROM web_sessions WHERE user_id = ?').run(user.id)
+    })
+    return { user: this.userById(user.id), temporaryPasswordUsed: true }
   }
 
   updateProfile (userId, { email, displayName }) {
@@ -281,13 +329,32 @@ export class Repository {
   }
 
   updatePassword (userId, password) {
-    this.db.prepare('UPDATE users SET password_hash = ?, password_set = 1 WHERE id = ?').run(passwordHash(password), userId)
+    this.tx(() => {
+      this.db.prepare('UPDATE users SET password_hash = ?, password_set = 1 WHERE id = ?').run(passwordHash(password), userId)
+      this.db.prepare('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL').run(Math.floor(Date.now() / 1000), userId)
+    })
   }
 
-  verifyRecoveryCode (userId, recoveryCode) {
-    const user = this.userById(userId)
-    return Boolean(user?.recovery_hash && verifyPassword(user.recovery_hash, recoveryCode))
+  createTemporaryPassword (userId, ttlSeconds = 30 * 60) {
+    const now = Math.floor(Date.now() / 1000)
+    this.db.prepare('DELETE FROM password_resets WHERE expires_at < ?').run(now - 86400)
+    const latest = this.db.prepare('SELECT created_at FROM password_resets WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(userId)
+    if (latest && now - latest.created_at < 60) return null
+    const password = `RV-${randomBytes(9).toString('base64url')}`
+    const result = this.tx(() => {
+      this.db.prepare('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL').run(now, userId)
+      return this.db.prepare(`
+        INSERT INTO password_resets (user_id, password_hash, expires_at, created_at)
+        VALUES (?, ?, ?, ?)
+      `).run(userId, passwordHash(password), now + ttlSeconds, now)
+    })
+    return { id: Number(result.lastInsertRowid), password, expiresAt: now + ttlSeconds }
   }
+
+  revokeTemporaryPassword (resetId) {
+    this.db.prepare('UPDATE password_resets SET used_at = ? WHERE id = ? AND used_at IS NULL').run(Math.floor(Date.now() / 1000), resetId)
+  }
+
 
   // Códigos de acesso por e-mail: 6 dígitos, hash scrypt, TTL curto,
   // mínimo de 60s entre envios para o mesmo destinatário.
@@ -399,12 +466,6 @@ export class Repository {
 
   setAdminFlag (userId, flag) {
     this.db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(flag ? 1 : 0, userId)
-  }
-
-  resetRecoveryCode (userId) {
-    const recoveryCode = `RV-${randomBytes(6).toString('hex').toUpperCase()}`
-    this.db.prepare('UPDATE users SET recovery_hash = ? WHERE id = ?').run(passwordHash(recoveryCode), userId)
-    return recoveryCode
   }
 
   createNotification ({ title, body = '', kind = 'info', createdBy = null }) {
