@@ -3,12 +3,14 @@ package br.com.revival.auth;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.text.method.PasswordTransformationMethod;
 import android.util.TypedValue;
+import android.util.Patterns;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,11 +39,29 @@ import java.util.concurrent.Executors;
  *
  * Fluxo (maquina de estados do prompt de especificacao):
  *
- *   START -> credenciais validas -> abre a Activity Unity
- *         -> sem credenciais     -> AUTH_SCREEN
- *   AUTH_SCREEN -> Criar conta -> register real -> grava -> mostra recovery -> Unity
- *               -> Entrar      -> login-device real -> grava -> Unity
+ *   START -> credencial gravada -> PREFLIGHT (game/auth/login-device)
+ *              preflight 1000        -> abre a Activity Unity
+ *              preflight 403/2101    -> apaga a credencial -> AUTH_SCREEN
+ *              preflight sem rede    -> AUTH_SCREEN com "tentar de novo"
+ *         -> sem credencial     -> AUTH_SCREEN
+ *   AUTH_SCREEN -> Criar conta -> abre /account?mode=register no domínio Revival
+ *               -> Entrar      -> e-mail/senha
+ *                                   senha permanente -> grava credencial -> Unity
+ *                                   senha temporária -> NEW_PASSWORD_SCREEN
+ *               -> Esqueci     -> SMTP envia senha temporária, se configurado
  *               -> erro de rede/credencial -> permanece na tela, com mensagem
+ *   NEW_PASSWORD_SCREEN -> /account/password -> grava credencial NOVA -> Unity
+ *
+ * Por que o PREFLIGHT existe (dead-end fechado, nao contornado): o
+ * `credentials.json` guarda a SENHA, e a senha pode mudar no site depois de o
+ * arquivo ter sido escrito. Sem verificar, o boot seguinte pularia esta tela e
+ * morreria no `login-device` com 2101, sem caminho de volta para o jogador. O
+ * preflight usa a MESMA rota que a Unity vai usar — nada inventado — e por isso
+ * mede exatamente a condicao que importa.
+ *
+ * E por que a NEW_PASSWORD_SCREEN e obrigatoria: gravar a senha TEMPORARIA no
+ * arquivo criaria o mesmo dead-end de proposito, ja que ela expira e e trocada.
+ * A credencial persistida e sempre uma senha permanente.
  *
  * Contratos REAIS, medidos (nao inventados):
  *
@@ -77,11 +97,13 @@ public final class RevivalAuthActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler ui = new Handler(Looper.getMainLooper());
 
-    private EditText userIdField;
+    private EditText emailField;
     private EditText passwordField;
     private Button createButton;
     private Button loginButton;
+    private Button forgotButton;
     private Button showPasswordButton;
+    private Button retryButton;
     private TextView statusView;
     private boolean busy;
 
@@ -93,11 +115,10 @@ public final class RevivalAuthActivity extends Activity {
         // o device auth. Escrito aqui porque a Activity roda antes da Unity.
         writeGpgConfigIfMissing();
 
-        if (hasValidCredentials()) {
-            launchUnity();
-            return;
-        }
         setContentView(buildLayout());
+        if (hasStoredCredentials()) {
+            preflightStoredCredentials();
+        }
     }
 
     @Override
@@ -123,22 +144,36 @@ public final class RevivalAuthActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Servidor da comunidade. Entre com sua conta Revival ou crie uma nova.");
+        subtitle.setText("Entre com o e-mail e a senha da sua conta Revival.");
         subtitle.setTextColor(Color.parseColor("#A8B3BD"));
         subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         subtitle.setGravity(Gravity.CENTER);
         subtitle.setPadding(0, dp(8), 0, dp(28));
         root.addView(subtitle);
 
-        userIdField = new EditText(this);
-        userIdField.setHint("ID da conta (número)");
-        userIdField.setInputType(InputType.TYPE_CLASS_NUMBER);
-        userIdField.setTextColor(Color.WHITE);
-        userIdField.setHintTextColor(Color.parseColor("#5A6672"));
-        root.addView(userIdField);
+        TextView server = new TextView(this);
+        server.setText("Servidor: " + portalDomain());
+        server.setTextColor(Color.parseColor("#7FD41B"));
+        server.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        server.setGravity(Gravity.CENTER);
+        server.setTextIsSelectable(true);
+        server.setPadding(0, 0, 0, dp(18));
+        root.addView(server);
+
+        emailField = new EditText(this);
+        emailField.setHint("E-mail");
+        // contentDescription: o hint de um EditText vazio nem sempre chega ao
+        // dump do UIAutomator. Com a descricao o campo e localizavel por nome
+        // na verificacao automatizada, sem depender de posicao na tela.
+        emailField.setContentDescription("Campo E-mail");
+        emailField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        emailField.setTextColor(Color.WHITE);
+        emailField.setHintTextColor(Color.parseColor("#5A6672"));
+        root.addView(emailField);
 
         passwordField = new EditText(this);
         passwordField.setHint("Senha da conta");
+        passwordField.setContentDescription("Campo Senha");
         passwordField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         passwordField.setTransformationMethod(PasswordTransformationMethod.getInstance());
         passwordField.setTextColor(Color.WHITE);
@@ -159,18 +194,36 @@ public final class RevivalAuthActivity extends Activity {
         });
         root.addView(loginButton);
 
+        forgotButton = new Button(this);
+        forgotButton.setText("ESQUECI MINHA SENHA");
+        forgotButton.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { onForgotPassword(); }
+        });
+        root.addView(forgotButton);
+
         createButton = new Button(this);
-        createButton.setText("CRIAR CONTA");
+        createButton.setText("CRIAR CONTA NO SITE");
         createButton.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { onCreate(); }
+            @Override public void onClick(View v) { openPortal("register"); }
         });
         root.addView(createButton);
+
+        // So aparece quando existe credencial gravada e o preflight nao pode ser
+        // concluido por falta de rede: repetir a verificacao e melhor do que
+        // exigir que o jogador redigite a senha por causa de um wi-fi instavel.
+        retryButton = new Button(this);
+        retryButton.setText("TENTAR NOVAMENTE");
+        retryButton.setVisibility(View.GONE);
+        retryButton.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { preflightStoredCredentials(); }
+        });
+        root.addView(retryButton);
 
         statusView = new TextView(this);
         statusView.setTextColor(Color.parseColor("#E8EDF2"));
         statusView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         statusView.setPadding(0, dp(20), 0, 0);
-        statusView.setTextIsSelectable(true);   // recovery code copiável
+        statusView.setTextIsSelectable(true);
         root.addView(statusView);
 
         ScrollView scroll = new ScrollView(this);
@@ -197,7 +250,9 @@ public final class RevivalAuthActivity extends Activity {
         busy = value;
         createButton.setEnabled(!value);
         loginButton.setEnabled(!value);
+        forgotButton.setEnabled(!value);
         showPasswordButton.setEnabled(!value);
+        retryButton.setEnabled(!value);
     }
 
     private void status(String message) {
@@ -206,46 +261,37 @@ public final class RevivalAuthActivity extends Activity {
 
     // ------------------------------------------------------------- fluxo ----
 
-    private void onCreate() {
-        if (busy) return;
-        setBusy(true);
-        status("Criando conta no servidor Revival…");
-        worker.execute(new Runnable() {
-            @Override public void run() {
-                try {
-                    JSONObject body = new JSONObject();
-                    body.put("platform_id", PLATFORM_ID);
-                    body.put("client_version", CLIENT_VERSION);
-                    body.put("region", REGION);
-                    final JSONObject response = post("/game/auth/register", body);
-                    final Credentials creds = Credentials.fromResponse(response);
-                    saveCredentials(creds);
-                    final String recovery = response.optString("recovery_code", "");
-                    ui.post(new Runnable() {
-                        @Override public void run() {
-                            showCredentialsToKeep(creds, recovery);
-                        }
-                    });
-                } catch (final Exception error) {
-                    failOnUi(error);
-                }
-            }
-        });
+    private String portalBaseUrl() {
+        try {
+            URL base = new URL(BASE_URL);
+            return base.getProtocol() + "://" + base.getAuthority();
+        } catch (Exception invalid) {
+            return BASE_URL;
+        }
+    }
+
+    private String portalDomain() {
+        try { return new URL(BASE_URL).getHost(); }
+        catch (Exception invalid) { return BASE_URL; }
+    }
+
+    private void openPortal(String mode) {
+        try {
+            Intent browser = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse(portalBaseUrl() + "/account?mode=" + mode));
+            startActivity(browser);
+            status("O cadastro é feito em " + portalDomain() + ". Depois, volte e entre aqui.");
+        } catch (Exception error) {
+            status("Abra " + portalBaseUrl() + "/account no navegador para continuar.");
+        }
     }
 
     private void onLogin() {
         if (busy) return;
-        final String rawId = userIdField.getText().toString().trim();
+        final String email = emailField.getText().toString().trim().toLowerCase();
         final String password = passwordField.getText().toString();
-        if (rawId.isEmpty() || password.isEmpty()) {
-            status("Informe o ID da conta e a senha.");
-            return;
-        }
-        final long userId;
-        try {
-            userId = Long.parseLong(rawId);
-        } catch (NumberFormatException invalid) {
-            status("O ID da conta é numérico.");
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches() || password.isEmpty()) {
+            status("Informe um e-mail válido e a senha.");
             return;
         }
         setBusy(true);
@@ -254,11 +300,22 @@ public final class RevivalAuthActivity extends Activity {
             @Override public void run() {
                 try {
                     JSONObject body = new JSONObject();
-                    body.put("client_version", CLIENT_VERSION);
-                    body.put("user_id", userId);
+                    body.put("email", email);
                     body.put("password", password);
-                    JSONObject response = post("/game/auth/login-device", body);
-                    Credentials creds = Credentials.fromLogin(response, userId, password);
+                    Reply reply = postAccount("/account/login", body);
+                    final Credentials creds = Credentials.fromAccount(reply.json, password);
+                    // Senha temporária NAO e persistida: ela expira e sera trocada,
+                    // e o arquivo local ficaria apontando para uma credencial morta.
+                    if (reply.json.optBoolean("temporary_password_used", false)) {
+                        final String cookie = reply.cookie;
+                        ui.post(new Runnable() {
+                            @Override public void run() {
+                                setBusy(false);
+                                showNewPasswordScreen(creds, cookie);
+                            }
+                        });
+                        return;
+                    }
                     saveCredentials(creds);
                     ui.post(new Runnable() {
                         @Override public void run() {
@@ -273,18 +330,43 @@ public final class RevivalAuthActivity extends Activity {
         });
     }
 
+    private void onForgotPassword() {
+        if (busy) return;
+        final String email = emailField.getText().toString().trim().toLowerCase();
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            status("Digite o e-mail da conta para recuperar a senha.");
+            return;
+        }
+        setBusy(true);
+        status("Solicitando senha temporária…");
+        worker.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    JSONObject body = new JSONObject();
+                    body.put("email", email);
+                    postAccount("/account/forgot-password", body);
+                    ui.post(new Runnable() {
+                        @Override public void run() {
+                            setBusy(false);
+                            status("Se a conta existir, a senha temporária foi enviada. Confira também o spam.");
+                        }
+                    });
+                } catch (final Exception error) {
+                    failOnUi(error);
+                }
+            }
+        });
+    }
+
     /**
-     * Tela de "guarde estes dados" — sem auto-dismiss e sem pressa.
+     * NEW_PASSWORD_SCREEN — obrigatoria depois de entrar com senha temporaria.
      *
-     * O que o jogador precisa para reentrar depois de desinstalar é ID + SENHA.
-     * A senha é gerada pelo servidor e antes só existia dentro do
-     * `credentials.json`: sem ADB, quem perdesse os dados perdia a conta. Agora
-     * os três valores ficam em tela, selecionáveis e copiáveis, e a Unity só
-     * abre depois de o jogador confirmar explicitamente.
-     *
-     * Continua valendo: nada disto vai para logcat, Intent, Toast ou relatório.
+     * A temporaria expira em 30 minutos e deixa de valer assim que o jogador
+     * define a definitiva. Persistir a temporaria no `credentials.json` seria
+     * fabricar o dead-end que este fluxo existe para fechar, entao a Unity so
+     * abre depois de a senha permanente estar valendo no servidor E gravada.
      */
-    private void showCredentialsToKeep(final Credentials creds, String recovery) {
+    private void showNewPasswordScreen(final Credentials creds, final String cookie) {
         LinearLayout painel = new LinearLayout(this);
         painel.setOrientation(LinearLayout.VERTICAL);
         painel.setBackgroundColor(Color.parseColor("#0B0F14"));
@@ -292,67 +374,88 @@ public final class RevivalAuthActivity extends Activity {
         painel.setPadding(pad, dp(40), pad, pad);
 
         TextView titulo = new TextView(this);
-        titulo.setText("GUARDE ESTES DADOS");
+        titulo.setText("DEFINA SUA SENHA");
         titulo.setTextColor(Color.parseColor("#7FD41B"));
         titulo.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
         titulo.setGravity(Gravity.CENTER);
         painel.addView(titulo);
 
         TextView aviso = new TextView(this);
-        aviso.setText("São a única forma de voltar à sua conta se você desinstalar o jogo "
-                + "ou trocar de aparelho. Anote ou copie antes de continuar.");
+        aviso.setText("Você entrou com a senha temporária enviada por e-mail. "
+                + "Ela expira e é de uso único: escolha agora a senha definitiva "
+                + "para continuar entrando no jogo.");
         aviso.setTextColor(Color.parseColor("#E8A33D"));
         aviso.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         aviso.setPadding(0, dp(12), 0, dp(20));
         painel.addView(aviso);
 
-        final String bloco = "ID da conta: " + creds.userId
-                + "\nSenha: " + creds.password
-                + (recovery.isEmpty() ? "" : "\nCódigo de recuperação: " + recovery);
+        final EditText nova = new EditText(this);
+        nova.setHint("Nova senha (mínimo de 8 caracteres)");
+        nova.setContentDescription("Campo Nova senha");
+        nova.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        nova.setTransformationMethod(PasswordTransformationMethod.getInstance());
+        nova.setTextColor(Color.WHITE);
+        nova.setHintTextColor(Color.parseColor("#5A6672"));
+        painel.addView(nova);
 
-        TextView dados = new TextView(this);
-        dados.setText(bloco);
-        dados.setTextColor(Color.WHITE);
-        dados.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        dados.setTextIsSelectable(true);            // seleção manual
-        dados.setPadding(dp(12), dp(16), dp(12), dp(16));
-        dados.setBackgroundColor(Color.parseColor("#141B23"));
-        painel.addView(dados);
+        final EditText repetida = new EditText(this);
+        repetida.setHint("Repita a nova senha");
+        repetida.setContentDescription("Campo Repita a nova senha");
+        repetida.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        repetida.setTransformationMethod(PasswordTransformationMethod.getInstance());
+        repetida.setTextColor(Color.WHITE);
+        repetida.setHintTextColor(Color.parseColor("#5A6672"));
+        painel.addView(repetida);
 
-        Button copiar = new Button(this);
-        copiar.setText("COPIAR PARA A ÁREA DE TRANSFERÊNCIA");
-        copiar.setOnClickListener(new View.OnClickListener() {
+        final TextView estado = new TextView(this);
+        estado.setTextColor(Color.parseColor("#E8EDF2"));
+        estado.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        estado.setPadding(0, dp(18), 0, 0);
+        estado.setTextIsSelectable(true);
+
+        final Button salvar = new Button(this);
+        salvar.setText("SALVAR SENHA E ENTRAR");
+        salvar.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                android.content.ClipboardManager cb = (android.content.ClipboardManager)
-                        getSystemService(CLIPBOARD_SERVICE);
-                if (cb != null) {
-                    cb.setPrimaryClip(android.content.ClipData.newPlainText("Revival", bloco));
-                    Toast.makeText(RevivalAuthActivity.this, "Copiado.", Toast.LENGTH_SHORT).show();
+                final String escolhida = nova.getText().toString();
+                if (escolhida.length() < 8) {
+                    estado.setText("A senha precisa ter pelo menos 8 caracteres.");
+                    return;
                 }
-            }
-        });
-        painel.addView(copiar);
-
-        final Button continuar = new Button(this);
-        continuar.setEnabled(false);
-        continuar.setText("ANOTEI — ABRIR O JOGO");
-        painel.addView(continuar);
-
-        final android.widget.CheckBox confirmou = new android.widget.CheckBox(this);
-        confirmou.setText("Guardei o ID e a senha em lugar seguro");
-        confirmou.setTextColor(Color.parseColor("#E8EDF2"));
-        confirmou.setOnCheckedChangeListener(
-                new android.widget.CompoundButton.OnCheckedChangeListener() {
-                    @Override public void onCheckedChanged(
-                            android.widget.CompoundButton botao, boolean marcado) {
-                        continuar.setEnabled(marcado);
+                if (!escolhida.equals(repetida.getText().toString())) {
+                    estado.setText("As duas senhas não são iguais.");
+                    return;
+                }
+                salvar.setEnabled(false);
+                estado.setText("Salvando a nova senha\u2026");
+                worker.execute(new Runnable() {
+                    @Override public void run() {
+                        try {
+                            JSONObject body = new JSONObject();
+                            body.put("current_password", creds.password);
+                            body.put("new_password", escolhida);
+                            postAccount("/account/password", body, cookie);
+                            saveCredentials(creds.withPassword(escolhida));
+                            ui.post(new Runnable() {
+                                @Override public void run() {
+                                    estado.setText("Senha definida. Abrindo o jogo\u2026");
+                                    launchUnity();
+                                }
+                            });
+                        } catch (final Exception error) {
+                            ui.post(new Runnable() {
+                                @Override public void run() {
+                                    salvar.setEnabled(true);
+                                    estado.setText(messageFor(error));
+                                }
+                            });
+                        }
                     }
                 });
-        painel.addView(confirmou, painel.indexOfChild(continuar));
-
-        continuar.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { launchUnity(); }
+            }
         });
+        painel.addView(salvar);
+        painel.addView(estado);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Color.parseColor("#0B0F14"));
@@ -362,18 +465,7 @@ public final class RevivalAuthActivity extends Activity {
     }
 
     private void failOnUi(final Exception error) {
-        // Mensagem por CLASSE de erro: rede, credencial e servidor são
-        // situações diferentes para o jogador. Nunca ecoa segredo.
-        final String message;
-        if (error instanceof ApiException) {
-            int code = ((ApiException) error).code;
-            if (code == 2101 || code == 2102) message = "ID ou senha não conferem.";
-            else if (code == 2010 || code == 2011) message = "Versão do cliente incompatível com o servidor.";
-            else if (code >= 3000) message = "O servidor Revival respondeu com erro. Tente de novo em instantes.";
-            else message = "Não foi possível autenticar (código " + code + ").";
-        } else {
-            message = "Sem conexão com o servidor Revival. Verifique a rede e tente de novo.";
-        }
+        final String message = messageFor(error);
         ui.post(new Runnable() {
             @Override public void run() {
                 setBusy(false);
@@ -382,14 +474,74 @@ public final class RevivalAuthActivity extends Activity {
         });
     }
 
-    // --------------------------------------------------------------- HTTP ---
-
-    private static final class ApiException extends Exception {
-        final int code;
-        ApiException(int code) { super("code " + code); this.code = code; }
+    /**
+     * Mensagem por CLASSE de erro: rede, credencial e servidor sao situacoes
+     * diferentes para o jogador. Nunca ecoa segredo nem corpo de resposta.
+     *
+     * `ApiException.status` e o HTTP das rotas /account/*; `gameCode` e o code
+     * do envelope quando o erro veio de uma rota /game/*.
+     */
+    private String messageFor(Exception error) {
+        if (!(error instanceof ApiException)) {
+            return "Sem conexão com o servidor Revival. Verifique a rede e tente de novo.";
+        }
+        ApiException api = (ApiException) error;
+        if ("invalid-login".equals(api.error)) return "E-mail ou senha não conferem.";
+        if ("smtp-not-configured".equals(api.error)) {
+            return "Recuperação por e-mail desativada: o administrador deste servidor não configurou o SMTP. "
+                    + "Peça a ele para configurar em " + portalDomain()
+                    + ", ou entre com a senha que você cadastrou no site.";
+        }
+        if ("reset-rate-limited".equals(api.error)) return "Aguarde um minuto antes de pedir outra senha temporária.";
+        if ("mail-send-failed".equals(api.error)) return "O servidor não conseguiu enviar o e-mail. Tente de novo mais tarde.";
+        if ("password-data-invalid".equals(api.error)) return "Senha recusada pelo servidor: use pelo menos 8 caracteres.";
+        if ("session-expired".equals(api.error)) return "A sessão expirou. Entre de novo com o e-mail e a senha temporária.";
+        if (api.gameCode == 2101 || api.gameCode == 2102) return "E-mail ou senha não conferem.";
+        if (api.gameCode == 2010 || api.gameCode == 2011 || api.gameCode == 2200) {
+            return "Versão do cliente incompatível com o servidor Revival.";
+        }
+        if (api.status == 401 || api.status == 403) return "E-mail ou senha não conferem.";
+        if (api.status == 410) return "Este servidor Revival é antigo demais para esta tela. Atualize o servidor.";
+        if (api.status >= 500) return "O servidor Revival respondeu com erro. Tente de novo em instantes.";
+        return "Não foi possível concluir a operação com o servidor.";
     }
 
-    private JSONObject post(String path, JSONObject body) throws Exception {
+    // --------------------------------------------------------------- HTTP ---
+
+    /** Resposta ja parseada + o cookie de sessao que veio no Set-Cookie. */
+    private static final class Reply {
+        final JSONObject json;
+        final String cookie;
+        Reply(JSONObject json, String cookie) {
+            this.json = json;
+            this.cookie = cookie;
+        }
+    }
+
+    /**
+     * `status` = HTTP das rotas /account/*; `error` = campo `error` do corpo;
+     * `gameCode` = `code` do envelope quando o erro veio de uma rota /game/*.
+     * Os tres existem porque as duas familias de rota falham de jeitos
+     * diferentes e a mensagem para o jogador depende de qual foi.
+     */
+    private static final class ApiException extends Exception {
+        final int status;
+        final int gameCode;
+        final String error;
+        ApiException(int status, int gameCode, String error) {
+            super("request failed");
+            this.status = status;
+            this.gameCode = gameCode;
+            this.error = error == null ? "" : error;
+        }
+    }
+
+    /**
+     * Rota /game/*: guard de POST + x-ubu-apiversion + content-type JSON, e
+     * envelope { uts, code, ... } com 1000 = sucesso. Usada pelo preflight da
+     * credencial gravada — a MESMA chamada que a Unity fara em seguida.
+     */
+    private JSONObject postGame(String path, JSONObject body) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(BASE_URL + path).openConnection();
         try {
             conn.setRequestMethod("POST");
@@ -398,20 +550,64 @@ public final class RevivalAuthActivity extends Activity {
             conn.setDoOutput(true);
             conn.setRequestProperty("content-type", "application/json");
             conn.setRequestProperty("x-ubu-apiversion", API_VERSION);
-            byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
             OutputStream out = conn.getOutputStream();
-            out.write(payload);
+            out.write(body.toString().getBytes(StandardCharsets.UTF_8));
             out.close();
 
             int status = conn.getResponseCode();
             InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
-            String text = readAll(stream);
-            JSONObject json = new JSONObject(text);
+            JSONObject json = new JSONObject(readAll(stream));
             int code = json.optInt("code", -1);
-            if (status != 200 || code != 1000) throw new ApiException(code);
+            if (status != 200 || code != 1000) throw new ApiException(status, code, "");
             return json;
         } finally {
             conn.disconnect();
+        }
+    }
+
+    private Reply postAccount(String path, JSONObject body) throws Exception {
+        return postAccount(path, body, null);
+    }
+
+    /** Rota /account/*: JSON simples com `ok`, e cookie de sessao no header. */
+    private Reply postAccount(String path, JSONObject body, String cookie) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(BASE_URL + path).openConnection();
+        try {
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(TIMEOUT_MS);
+            conn.setReadTimeout(TIMEOUT_MS);
+            conn.setDoOutput(true);
+            conn.setRequestProperty("content-type", "application/json");
+            if (cookie != null && !cookie.isEmpty()) conn.setRequestProperty("cookie", cookie);
+            OutputStream out = conn.getOutputStream();
+            out.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            out.close();
+
+            int status = conn.getResponseCode();
+            InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            JSONObject json = new JSONObject(readAll(stream));
+            if (status < 200 || status >= 300 || !json.optBoolean("ok", false)) {
+                throw new ApiException(status, -1, json.optString("error", "request-failed"));
+            }
+            return new Reply(json, sessionCookie(conn));
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    /**
+     * So o par nome=valor do Set-Cookie, sem os atributos. E o que o servidor
+     * espera de volta em `cookie:` para reconhecer a sessao web na troca de
+     * senha. Nunca vai para log, Intent nem Toast.
+     */
+    private static String sessionCookie(HttpURLConnection conn) {
+        for (int i = 0; ; i++) {
+            String nome = conn.getHeaderFieldKey(i);
+            String valor = conn.getHeaderField(i);
+            if (nome == null && valor == null) return null;
+            if (nome != null && nome.equalsIgnoreCase("set-cookie") && valor != null) {
+                return valor.split(";")[0];
+            }
         }
     }
 
@@ -438,42 +634,32 @@ public final class RevivalAuthActivity extends Activity {
             this.password = password;
         }
 
-        /** register devolve user_id, device_id e password — nada é inventado. */
-        static Credentials fromResponse(JSONObject json) throws Exception {
-            long id = json.getLong("user_id");
-            String device = json.getString("device_id");
-            String password = json.getString("password");
-            if (device.length() != 36 || password.isEmpty()) {
-                throw new Exception("resposta de register fora do contrato");
+        /** O endpoint de conta devolve somente identidade publica; a senha e a
+         * digitada pelo jogador e nunca volta no response. */
+        static Credentials fromAccount(JSONObject json, String password) throws Exception {
+            JSONObject account = json.getJSONObject("account");
+            long id = account.getLong("id");
+            String device = account.getString("uuid");
+            if (id <= 0 || device.length() != 36 || password.isEmpty()) {
+                throw new Exception("resposta de conta fora do contrato");
             }
             return new Credentials(id, device, password);
         }
 
-        /**
-         * O `device_id` da conta, vindo do próprio response — nunca inventado.
-         *
-         * `login-device` não devolve `device_id` (ele vai no REQUEST, porque a
-         * rota pressupõe um dispositivo que já tem credenciais). Mas devolve
-         * `puuid`, e os dois são o MESMO valor:
-         *
-         *   register  -> `device_id: body.device_id || user.uuid`  (index.js:595)
-         *   login     -> `puuid: user.uuid`                        (loginUser)
-         *
-         * e nem o cliente Unity nem esta Activity enviam `device_id` no
-         * register (fixture real: `{platform_id, client_version, region}`), ou
-         * seja, `device_id == user.uuid == puuid` para toda conta Revival.
-         *
-         * Ordem de preferência mesmo assim: `device_id` explícito, se algum dia
-         * a rota passar a devolvê-lo; depois `puuid`. Sem nenhum dos dois,
-         * falha explícita — nunca um UUID gerado aqui.
-         */
-        static Credentials fromLogin(JSONObject json, long userId, String password) throws Exception {
+        /** Le o arquivo ja gravado; devolve null se estiver fora do schema. */
+        static Credentials fromFile(JSONObject json) {
+            long id = json.optLong("user_id", 0);
             String device = json.optString("device_id", "");
-            if (device.length() != 36) device = json.optString("puuid", "");
-            if (device.length() != 36) {
-                throw new Exception("login sem device_id nem puuid utilizável");
+            String password = json.optString("password", "");
+            if (json.optInt("version", 0) != SAVE_DATA_VERSION
+                    || id <= 0 || device.length() != 36 || password.isEmpty()) {
+                return null;
             }
-            return new Credentials(userId, device, password);
+            return new Credentials(id, device, password);
+        }
+
+        Credentials withPassword(String outra) {
+            return new Credentials(userId, deviceId, outra);
         }
 
         JSONObject toJson() throws Exception {
@@ -492,22 +678,96 @@ public final class RevivalAuthActivity extends Activity {
         return new File(getExternalFilesDir(null), CREDENTIALS_FILE);
     }
 
-    private boolean hasValidCredentials() {
+    /** Le a credencial gravada. Arquivo ausente, vazio ou corrompido = null. */
+    private Credentials readStoredCredentials() {
         File file = credentialsFile();
-        if (!file.isFile() || file.length() == 0) return false;
+        if (!file.isFile() || file.length() == 0) return null;
         try {
-            JSONObject json = new JSONObject(readAll(new java.io.FileInputStream(file)));
-            return json.optInt("version", 0) == SAVE_DATA_VERSION
-                    && json.optLong("user_id", 0) > 0
-                    && json.optString("device_id", "").length() == 36
-                    && !json.optString("password", "").isEmpty();
+            return Credentials.fromFile(new JSONObject(readAll(new java.io.FileInputStream(file))));
         } catch (Exception broken) {
             // Arquivo corrompido volta para a tela em vez de derrubar o app.
-            return false;
+            return null;
         }
     }
 
-    /** Gravação atômica: temporário no MESMO diretório + rename. */
+    private boolean hasStoredCredentials() {
+        return readStoredCredentials() != null;
+    }
+
+    private void deleteCredentials() {
+        File file = credentialsFile();
+        if (file.isFile()) file.delete();
+    }
+
+    /**
+     * PREFLIGHT — o dead-end da credencial obsoleta morre aqui.
+     *
+     * O `credentials.json` guarda a SENHA. Se o jogador trocar a senha no site
+     * (ou se ele tiver entrado com uma temporaria que ja foi substituida), o
+     * arquivo continua com a senha velha. Antes, o boot pulava esta tela,
+     * entregava o arquivo para a Unity e o `login-device` batia 403/2101 sem
+     * caminho de volta.
+     *
+     * Agora a Activity faz ELA MESMA o `game/auth/login-device` com o que esta
+     * gravado, ANTES de abrir a Unity, e o resultado e deterministico:
+     *
+     *   - 1000        -> a credencial vale; abre a Unity;
+     *   - 403 / 2101  -> a credencial nao vale mais; apaga o arquivo e cai na
+     *                    tela de login, com a razao escrita na tela;
+     *   - sem rede    -> nao acusa credencial ruim sem ter medido: mantem o
+     *                    arquivo, mostra "tentar novamente" e deixa entrar na
+     *                    mao se o jogador preferir.
+     */
+    private void preflightStoredCredentials() {
+        final Credentials stored = readStoredCredentials();
+        if (stored == null) return;
+        setBusy(true);
+        retryButton.setVisibility(View.GONE);
+        status("Verificando a credencial salva\u2026");
+        worker.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    JSONObject body = new JSONObject();
+                    body.put("client_version", CLIENT_VERSION);
+                    body.put("user_id", stored.userId);
+                    body.put("password", stored.password);
+                    postGame("/game/auth/login-device", body);
+                    ui.post(new Runnable() {
+                        @Override public void run() {
+                            status("Credencial confirmada. Abrindo o jogo\u2026");
+                            launchUnity();
+                        }
+                    });
+                } catch (final Exception error) {
+                    final boolean rejeitada = credentialRejected(error);
+                    if (rejeitada) deleteCredentials();
+                    ui.post(new Runnable() {
+                        @Override public void run() {
+                            setBusy(false);
+                            if (rejeitada) {
+                                retryButton.setVisibility(View.GONE);
+                                status("Sua senha mudou desde o último acesso neste aparelho. "
+                                        + "Entre de novo com o e-mail e a senha atual.");
+                            } else {
+                                retryButton.setVisibility(View.VISIBLE);
+                                status(messageFor(error)
+                                        + " Você também pode entrar com e-mail e senha.");
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    /** O servidor RECUSOU a credencial (nao foi rede, nao foi indisponibilidade). */
+    private static boolean credentialRejected(Exception error) {
+        if (!(error instanceof ApiException)) return false;
+        ApiException api = (ApiException) error;
+        return api.gameCode == 2101 || api.gameCode == 2102 || api.status == 403;
+    }
+
+    /** Gravacao atomica: temporario no MESMO diretorio + rename. */
     private void saveCredentials(Credentials creds) throws Exception {
         File target = credentialsFile();
         File parent = target.getParentFile();
