@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-23T17:05:04Z",
+    "updated": "2026-08-23T17:20:52Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -1404,7 +1404,7 @@
       "fixture": "tests/fixtures/protocol/client/quests/game__quests__get-daily-quests.json",
       "fixture_provenance": "client",
       "uses_fallback": false,
-      "evidence": "metadata v29: GetDailyQuestsResponse{dayStartEpoch, dayEndEpoch, milestones, quests}; DailyQuestModel{id, questId, progress, claimed, points, goTo}; DailyQuestMilestoneModel{id, milestoneId, pointsRequired, claimed, rewards}. Wire recortado ao DTO em 2026-08-21 — o estado interno (target/completed) nao vai para a resposta. | 2026-08-23 rig (bissecao 8 degraus, server-fs2..fs10.log): nome de wire do membro de colecao e daily_quests (override JsonProperty no attributeData; fallback quests com conteudo derruba Malformed response payload, array vazia e tolerada). Com rename + arrays cheias: boot flow_validated, fatais 0, fixture provenance=client. NRE tolerado em DailyQuestController.UpdateQuestState em TODA resposta (vazio ou cheio), client-interno. Painel MISSIONS renderiza quests e barra de milestone com dados do servidor (menu-claim1.png, 2/20)."
+      "evidence": "metadata v29: GetDailyQuestsResponse{dayStartEpoch, dayEndEpoch, milestones, quests}; DailyQuestModel{id, questId, progress, claimed, points, goTo}; DailyQuestMilestoneModel{id, milestoneId, pointsRequired, claimed, rewards}. Wire recortado ao DTO em 2026-08-21 — o estado interno (target/completed) nao vai para a resposta. | 2026-08-23 rig (bissecao 8 degraus, server-fs2..fs10.log): nome de wire do membro de colecao e daily_quests (override JsonProperty no attributeData; fallback quests com conteudo derruba Malformed response payload, array vazia e tolerada). Com rename + arrays cheias: boot flow_validated, fatais 0, fixture provenance=client. NRE tolerado em DailyQuestController.UpdateQuestState em TODA resposta (vazio ou cheio), client-interno. Painel MISSIONS renderiza quests e barra de milestone com dados do servidor (menu-claim1.png, 2/20). | 2026-08-23: o NRE de UpdateQuestState NAO e tolerado - roda DENTRO de NetworkRequestHandler.UpdateRequestQueue e mata o pump de requests do cliente: sem reward-tracks/get-all e sem session/heartbeat apos qualquer boot com parse bem-sucedido (heartbeats so ate o request id 1004, sempre na era de parse Malformed). Latencia artificial de 1500ms (REVIVAL_QUEST_DELAY_MS) NAO suprime o NRE - corrida com assinantes de UI refutada (DEAD-ENDS #23). Causa raiz A VERIFICAR: null client-interno (DailyQuestController/DailyQuestRegistry); DTO conferido completo e nenhum outro DTO carrega estado de quests."
     },
     "game/reward-tracks/claim": {
       "module": "reward-tracks",
@@ -1434,7 +1434,7 @@
       "fixture": "tests/fixtures/protocol/server-replay/reward-tracks/game__reward-tracks__get-all.json",
       "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": "RewardTrackEntryModel declara SOMENTE resources. Bisseção no emulador em 2026-08-21 (8 execucoes): entries com {id, resources} -> Malformed response payload e boot parado; entries com {resources} -> boot segue ate o menu. entries_claimed como array de ids confirmado. | 2026-08-23 rig: nome de wire do membro de colecao e reward_tracks (override JsonProperty no attributeData; fallback tracks com conteudo derruba Malformed response payload, array vazia e tolerada). Boot medido do 1.13.1 NAO chama get-all (sequencia 1077-1094) - rota aguarda porta de entrada na UI (painel de temporada)."
+      "evidence": "RewardTrackEntryModel declara SOMENTE resources. Bisseção no emulador em 2026-08-21 (8 execucoes): entries com {id, resources} -> Malformed response payload e boot parado; entries com {resources} -> boot segue ate o menu. entries_claimed como array de ids confirmado. | 2026-08-23 rig: nome de wire do membro de colecao e reward_tracks (override JsonProperty no attributeData; fallback tracks com conteudo derruba Malformed response payload, array vazia e tolerada). Boot medido do 1.13.1 NAO chama get-all (sequencia 1077-1094) - rota aguarda porta de entrada na UI (painel de temporada). | 2026-08-23: get-all e inalcancavel pela UI enquanto get-daily-quests parseia com sucesso - o NRE de UpdateQuestState mata o pump antes (DEAD-ENDS #23). Chamadas reais de get-all (ids 706/781/853 em 2026-08-21, id 978 em 2026-08-23 15:47) ocorreram SOMENTE na era em que o parse de quests falhava com Malformed; o rename reward_tracks foi medido por bissecao nessa era. Rota permanece request_observed=false ate existir porta de entrada que nao passe pelo pump morto."
     },
     "game/reward-tracks/get-track": {
       "module": "reward-tracks",
