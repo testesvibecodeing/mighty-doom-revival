@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-23T16:44:21Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-23T17:05:04Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -49,8 +49,8 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/gear/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.ApplyCosmetic(gearUid, cosmeticId); cosmetic_id literal confirmado | NEGATIVA 2026-08-23 rig: flows UI completos de compra por moedas e equip de uniforme + skin de arma (uniforms-fs1..6.png, weaponskins-fs1..5.png) com ZERO chamadas de rede e inventario do servidor inalterado entre cold boots - cosmetic e client-authoritative no 1.13.1. request_observed permanece false. DEAD-ENDS #21. |
 | `game/gear/dismantle` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Dismantle(gearUid); refund via dismantle.tiers no game-data |
 | `game/gear/fuse` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Fuse(inputUids); requer gear_fusion no game-data (erro 2300 explicito sem config) |
-| `game/gear/multi-upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade) |
-| `game/gear/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29 2026-08-17: GearApi.Upgrade(gearUid); levels_to_upgrade e literal confirmado, gear_uid do fallback snake (A VERIFICAR em captura cliente) |
+| `game/gear/multi-upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade) | NEGATIVA 2026-08-23 rig: mesmo painel e mesmo handler de upgrade do botao UPGRADE do BARRACKS - acao quebra o cliente antes do wire (ver game/gear/upgrade). Rota nunca emitida no UI medido. |
+| `game/gear/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29 2026-08-17: GearApi.Upgrade(gearUid); levels_to_upgrade e literal confirmado, gear_uid do fallback snake (A VERIFICAR em captura cliente) | NEGATIVA 2026-08-23 rig: tap medido no botao UPGRADE (826,1193, pixel scan) com app vivo (navegacao e selecao de carta respondem) produziu re-init COMPLETO da sessao em-processo (login-device..get-daily-quests, requests 1149-1166) SEM chamar game/gear/upgrade, seguido de wedge do main thread do Unity: 0 requests, 0 linhas Unity no logcat, render thread em spam continuo goldfish_vulkan QSRI (logcat-upgrade-tap.txt, 3920/3920 linhas). Reproduzido 2x. Causa raiz A VERIFICAR (hipotese: estado de controller nulo no handler, mesma familia do NRE de UpdateQuestState). Rota nunca emitida. |
 
 ### slayers
 

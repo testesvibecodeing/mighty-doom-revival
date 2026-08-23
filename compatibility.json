@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-23T16:44:21Z",
+    "updated": "2026-08-23T17:05:04Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -864,7 +864,7 @@
       "fixture": "tests/fixtures/protocol/server-replay/gear/game__gear__multi-upgrade.json",
       "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": "metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade)"
+      "evidence": "metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade) | NEGATIVA 2026-08-23 rig: mesmo painel e mesmo handler de upgrade do botao UPGRADE do BARRACKS - acao quebra o cliente antes do wire (ver game/gear/upgrade). Rota nunca emitida no UI medido."
     },
     "game/gear/upgrade": {
       "module": "gear",
@@ -879,7 +879,7 @@
       "fixture": "tests/fixtures/protocol/server-replay/gear/game__gear__upgrade.json",
       "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": "metadata v29 2026-08-17: GearApi.Upgrade(gearUid); levels_to_upgrade e literal confirmado, gear_uid do fallback snake (A VERIFICAR em captura cliente)"
+      "evidence": "metadata v29 2026-08-17: GearApi.Upgrade(gearUid); levels_to_upgrade e literal confirmado, gear_uid do fallback snake (A VERIFICAR em captura cliente) | NEGATIVA 2026-08-23 rig: tap medido no botao UPGRADE (826,1193, pixel scan) com app vivo (navegacao e selecao de carta respondem) produziu re-init COMPLETO da sessao em-processo (login-device..get-daily-quests, requests 1149-1166) SEM chamar game/gear/upgrade, seguido de wedge do main thread do Unity: 0 requests, 0 linhas Unity no logcat, render thread em spam continuo goldfish_vulkan QSRI (logcat-upgrade-tap.txt, 3920/3920 linhas). Reproduzido 2x. Causa raiz A VERIFICAR (hipotese: estado de controller nulo no handler, mesma familia do NRE de UpdateQuestState). Rota nunca emitida."
     },
     "game/iap/begin-purchase": {
       "module": "iap",
