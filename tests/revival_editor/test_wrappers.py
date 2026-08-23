@@ -154,5 +154,48 @@ class TestLauncherNaoReferenciaShell(unittest.TestCase):
                         )
 
 
+class TestContratoDeProducaoDoInstalador(unittest.TestCase):
+    """O install.sh não pode mais nascer um servidor de produção doente.
+
+    Medido em 2026-08-23: o health público rodava `research_mode=true` e sem
+    identidade porque o instalador copiava o `.env` do exemplo (RESEARCH_MODE
+    ligado, default de pesquisa) e nunca sobrescrevia para produção. O gate de
+    health do próprio instalador só conferia client/api_version — deixava
+    passar um servidor que o preflight do Studio (`productionReadiness` de
+    server/src/instance.js) recusaria.
+
+    Bash não roda na suíte Windows do projeto; a regressão é por invariantes
+    de texto no script, como o restante deste arquivo.
+    """
+
+    def setUp(self) -> None:
+        self.install = (SCRIPTS_DIR / "install.sh").read_text(
+            encoding="utf-8", errors="replace"
+        )
+
+    def test_producao_desliga_research_mode(self) -> None:
+        self.assertIn(
+            "set_env_var RESEARCH_MODE false", self.install,
+            "instalador deve fixar RESEARCH_MODE=false para produção",
+        )
+
+    def test_producao_define_identidade_de_instancia(self) -> None:
+        for chave in ("REVIVAL_INSTANCE_ID", "REVIVAL_ENVIRONMENT"):
+            self.assertIn(
+                f"set_env_var { chave }", self.install,
+                f"instalador deve definir {chave} no .env de produção",
+            )
+
+    def test_gate_de_health_reprova_research_e_revisao_velha(self) -> None:
+        for marcador in ('payload.get("research_mode") is not False',
+                         'payload.get("contract_revision")',
+                         'payload.get("instance_id")',
+                         'payload.get("build_id")'):
+            self.assertIn(
+                marcador, self.install,
+                f"gate de health do instalador deve recusar: faltou {marcador}",
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

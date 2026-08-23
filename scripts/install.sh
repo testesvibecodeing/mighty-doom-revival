@@ -352,6 +352,16 @@ set_env_var HOST 127.0.0.1
 set_env_var PORT 8080
 set_env_var TRUST_PROXY true
 
+# Produção NÃO pode nascer em modo pesquisa (medido 2026-08-23: o health
+# público rodava research_mode=true porque o .env copiado do exemplo mantém o
+# default ligado). Em research, endpoint /game/* desconhecido responde ok()
+# vazio — mascara rota faltante e reprova o gate --strict-research. A
+# identidade de instância (server/src/instance.js) prova onde o tráfego do
+# cliente aterrissou; sem ela o preflight do Studio recusa gerar o APK.
+set_env_var RESEARCH_MODE false
+set_env_var REVIVAL_INSTANCE_ID "$DOMAIN"
+set_env_var REVIVAL_ENVIRONMENT production
+
 CURRENT_TOKEN="$(get_env_var REVIVAL_ADMIN_TOKEN)"
 if [[ -z "$CURRENT_TOKEN" || "$CURRENT_TOKEN" == "change-me" ]]; then
   NEW_TOKEN="$(openssl rand -hex 32)"
@@ -882,7 +892,7 @@ fi
 cat "$PUBLIC_HEALTH"
 echo ""
 
-python3 - "$PUBLIC_HEALTH" <<'PYEOF' || fail "O health check público não é compatível com o patcher (client_version/api_version incorretos)."
+python3 - "$PUBLIC_HEALTH" <<'PYEOF' || fail "O health check público não atende o gate de produção (versão, research_mode, contract_revision ou identidade). Veja os erros acima."
 import json
 import sys
 
@@ -897,6 +907,18 @@ if payload.get("client_version") != "1.13.1":
     errors.append(f"client_version={payload.get('client_version')!r}; esperado '1.13.1'")
 if payload.get("api_version") != "24.0.0":
     errors.append(f"api_version={payload.get('api_version')!r}; esperado '24.0.0'")
+
+# Gate de produção (espelha productionReadiness de server/src/instance.js e o
+# preflight do Studio): sem isso o deploy pode subir um servidor que o patcher
+# vai recusar — ou pior, aceitar — com rota faltante mascarada por ok() vazio.
+if payload.get("research_mode") is not False:
+    errors.append("research_mode ligado em produção: endpoint desconhecido responderia sucesso vazio")
+if not isinstance(payload.get("contract_revision"), int) or payload.get("contract_revision", 0) < 2:
+    errors.append(f"contract_revision={payload.get('contract_revision')!r}; esperado >= 2 (wire do cliente 1.13.1)")
+if not payload.get("instance_id"):
+    errors.append("health sem instance_id: impossível provar onde o tráfego do cliente aterrissou")
+if not payload.get("build_id"):
+    errors.append("health sem build_id: os bytes em execução não estão identificados")
 
 if errors:
     print("[ERRO] health incompatível com o patcher: " + "; ".join(errors))
