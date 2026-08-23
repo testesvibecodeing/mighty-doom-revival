@@ -78,10 +78,13 @@ try {
   // O estado interno continua rico (target/completed alimentam o claim), mas
   // campo fora do DTO não pode vazar para a resposta — medido em 2026-08-21:
   // extra dentro de DTO aninhado derruba o parse do cliente.
+  // E o membro de coleção `quests` vai no wire como `daily_quests` (override
+  // [JsonProperty]) — medido em 2026-08-23 por bisseção no rig: com conteúdo
+  // sob o nome fallback o cliente derruba `Malformed response payload`.
   const wire = dailyQuestWire(dailyQuestState(repo, user.id, runtime, epoch))
   assert.deepEqual(Object.keys(wire).sort(),
-    ['day_end_epoch', 'day_start_epoch', 'milestones', 'quests'])
-  for (const quest of wire.quests) {
+    ['daily_quests', 'day_end_epoch', 'day_start_epoch', 'milestones'])
+  for (const quest of wire.daily_quests) {
     assert.deepEqual(Object.keys(quest).sort(),
       ['claimed', 'go_to', 'id', 'points', 'progress', 'quest_id'])
   }
@@ -89,7 +92,7 @@ try {
     assert.deepEqual(Object.keys(milestone).sort(),
       ['claimed', 'id', 'milestone_id', 'points_required', 'rewards'])
   }
-  assert.equal(Array.isArray(wire.quests), true)
+  assert.equal(Array.isArray(wire.daily_quests), true)
   assert.equal(Array.isArray(wire.milestones), true)
 
   repo.close()

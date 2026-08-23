@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-21T02:08:30Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-23T16:44:21Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -46,7 +46,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/gear/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.ApplyCosmetic(gearUid, cosmeticId); cosmetic_id literal confirmado |
+| `game/gear/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.ApplyCosmetic(gearUid, cosmeticId); cosmetic_id literal confirmado | NEGATIVA 2026-08-23 rig: flows UI completos de compra por moedas e equip de uniforme + skin de arma (uniforms-fs1..6.png, weaponskins-fs1..5.png) com ZERO chamadas de rede e inventario do servidor inalterado entre cold boots - cosmetic e client-authoritative no 1.13.1. request_observed permanece false. DEAD-ENDS #21. |
 | `game/gear/dismantle` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Dismantle(gearUid); refund via dismantle.tiers no game-data |
 | `game/gear/fuse` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Fuse(inputUids); requer gear_fusion no game-data (erro 2300 explicito sem config) |
 | `game/gear/multi-upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade) |
@@ -56,7 +56,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/slayers/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SlayerApi.ApplyCosmetic(slayerUid, cosmeticId) |
+| `game/slayers/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SlayerApi.ApplyCosmetic(slayerUid, cosmeticId) | NEGATIVA 2026-08-23 rig: mesmo fluxo de equip de uniforme do slayer sem chamada de rede - client-authoritative (ver game/gear/apply-cosmetic). DEAD-ENDS #21. |
 | `game/slayers/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SlayerApi.Upgrade(slayerUid) |
 
 ### talents
@@ -87,16 +87,16 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/quests/claim-daily-quest` | ✅ | ✅ | · | · | · | — | · | · | — | schema extraído |
-| `game/quests/claim-milestone` | ✅ | ✅ | · | · | · | — | · | · | — | schema extraído |
-| `game/quests/get-daily-quests` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GetDailyQuestsResponse{dayStartEpoch, dayEndEpoch, milestones, quests}; DailyQuestModel{id, questId, progress, claimed, points, goTo}; DailyQuestMilestoneModel{id, milestoneId, pointsRequired, claimed, rewards}. Wire recortado ao DTO em 2026-08-21 — o estado interno (target/completed) nao vai para a resposta. |
+| `game/quests/claim-daily-quest` | ✅ | ✅ | · | · | · | — | · | · | — | NEGATIVA 2026-08-23 rig: botoes READY TO COLLECT do painel MISSIONS sao inertes - 3 taps medidos (coordenadas por pixel scan), 0 requests em janela harness --no-launch de 100s, 0 excecoes no logcat, painel byte-identico antes/depois (missions-claim1..3.png). NRE client-interno em UpdateQuestState presente em toda resposta de get-daily-quests. DEAD-ENDS #20. |
+| `game/quests/claim-milestone` | ✅ | ✅ | · | · | · | — | · | · | — | NEGATIVA 2026-08-23 rig: milestone 1 exige 20 pontos e o jogador esta em 2/20 - botao indisponivel no estado medido; claim de quest no mesmo painel e inertes (ver claim-daily-quest). Rota nunca emitida pelo UI medido. |
+| `game/quests/get-daily-quests` | ✅ | ✅ | ✅ | ✅ | · | — | ✅ | ✅ | — | metadata v29: GetDailyQuestsResponse{dayStartEpoch, dayEndEpoch, milestones, quests}; DailyQuestModel{id, questId, progress, claimed, points, goTo}; DailyQuestMilestoneModel{id, milestoneId, pointsRequired, claimed, rewards}. Wire recortado ao DTO em 2026-08-21 — o estado interno (target/completed) nao vai para a resposta. | 2026-08-23 rig (bissecao 8 degraus, server-fs2..fs10.log): nome de wire do membro de colecao e daily_quests (override JsonProperty no attributeData; fallback quests com conteudo derruba Malformed response payload, array vazia e tolerada). Com rename + arrays cheias: boot flow_validated, fatais 0, fixture provenance=client. NRE tolerado em DailyQuestController.UpdateQuestState em TODA resposta (vazio ou cheio), client-interno. Painel MISSIONS renderiza quests e barra de milestone com dados do servidor (menu-claim1.png, 2/20). |
 
 ### reward-tracks
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `game/reward-tracks/claim` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
-| `game/reward-tracks/get-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | RewardTrackEntryModel declara SOMENTE resources. Bisseção no emulador em 2026-08-21 (8 execucoes): entries com {id, resources} -> Malformed response payload e boot parado; entries com {resources} -> boot segue ate o menu. entries_claimed como array de ids confirmado. |
+| `game/reward-tracks/get-all` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | RewardTrackEntryModel declara SOMENTE resources. Bisseção no emulador em 2026-08-21 (8 execucoes): entries com {id, resources} -> Malformed response payload e boot parado; entries com {resources} -> boot segue ate o menu. entries_claimed como array de ids confirmado. | 2026-08-23 rig: nome de wire do membro de colecao e reward_tracks (override JsonProperty no attributeData; fallback tracks com conteudo derruba Malformed response payload, array vazia e tolerada). Boot medido do 1.13.1 NAO chama get-all (sequencia 1077-1094) - rota aguarda porta de entrada na UI (painel de temporada). |
 | `game/reward-tracks/get-track` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | schema extraído |
 
 ### inbox
@@ -118,7 +118,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/player/set-push-token` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: PlayerApi.SetPushToken CONFIRMADO; envelope puro; push_token obrigatório (2200); nome de campo A VERIFICAR |
 | `game/player/stats` | ✅ | ✅ | · | · | · | — | · | ✅ | — | schema extraído |
 | `game/player/update-settings` | ✅ | · | · | · | · | — | · | · | — | implementado, aguardando validação |
-| `game/player/user-data` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: user-data no bootstrap e refletindo progressão persistida após restart do servidor. | client_harness 2026-08-20T21:06:49Z fluxo menu contra http://127.0.0.1:8110 |
+| `game/player/user-data` | ✅ | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: user-data no bootstrap e refletindo progressão persistida após restart do servidor. | client_harness 2026-08-20T21:06:49Z fluxo menu contra http://127.0.0.1:8110 | client_harness 2026-08-23T16:42:12Z fluxo boot contra http://127.0.0.1:8140 |
 
 ### events
 
@@ -179,7 +179,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/store/get-offer-items` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetOfferItems() CONFIRMADO; mesmo DTO de GetItems; fixture server-replay 2026-08-17 |
 | `game/store/get-offers` | ✅ | · | ✅ | ✅ | · | — | · | ✅ | — | implementado, aguardando validação |
 | `game/store/get-player-offers` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetPlayerOffers() CONFIRMADO; GetPlayerOffersResponse{offers} com PlayerOfferModel das offers ativadas |
-| `game/store/purchase` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
+| `game/store/purchase` | ✅ | · | · | · | · | — | ✅ | · | — | NEGATIVA 2026-08-23 rig: compra de cosmetic por moedas/cristais concluida no UI sem chamada de rede e currencies do servidor inalteradas ([{rid:3,amount:60}]) - client-authoritative no 1.13.1. DEAD-ENDS #21. |
 
 ### inventory
 
@@ -214,7 +214,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/auth/login-device` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: login-device no bootstrap do emulador, resposta aceita pelo cliente. | client_harness 2026-08-20T21:06:49Z fluxo menu contra http://127.0.0.1:8110 |
+| `game/auth/login-device` | ✅ | · | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | RELATORIO-STATUS 2026-08-16: login-device no bootstrap do emulador, resposta aceita pelo cliente. | client_harness 2026-08-20T21:06:49Z fluxo menu contra http://127.0.0.1:8110 | client_harness 2026-08-23T16:42:12Z fluxo boot contra http://127.0.0.1:8140 |
 | `game/auth/login-game-center` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 | `game/auth/login-google-play-games` | ✅ | · | · | · | · | — | ✅ | · | — | implementado, aguardando validação |
 | `game/auth/login-xbox` | ✅ | ✅ | · | · | · | — | ✅ | · | — | metadata v29: AuthApi login de plataforma; ResponseCode EXTRAÍDO dos fieldDefaultValues (âncoras Success=1000/2200/2300/3000): XboxUnavailable=3127 — indisponibilidade real, Revival não fala com Xbox Live |

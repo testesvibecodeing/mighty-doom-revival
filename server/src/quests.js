@@ -226,7 +226,14 @@ export function dailyQuestWire (state) {
   return {
     day_start_epoch: state.day_start_epoch,
     day_end_epoch: state.day_end_epoch,
-    quests: state.quests.map(row => ({
+    // Nome de wire medido em 2026-08-23 (bisseção de 8 degraus no rig):
+    // o membro de coleção da resposta NÃO é `quests` (fallback snakecase de
+    // QuestsApi.GetDailyQuestsResponse.quests) — o cliente só parseia com o
+    // override [JsonProperty("daily_quests")] presente no attributeData do
+    // metadata v29. Array vazia sob o nome errado é tolerada; com conteúdo
+    // derruba o parse com `Malformed response payload`. `milestones` não tem
+    // override e segue o fallback mesmo.
+    daily_quests: state.quests.map(row => ({
       id: row.id,
       quest_id: row.quest_id,
       progress: row.progress,

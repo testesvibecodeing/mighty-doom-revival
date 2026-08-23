@@ -80,9 +80,12 @@ try {
       'entry do RewardTrackModel não pode carregar campo fora do DTO')
   }
 
+  // GetAllResponse.tracks vai no wire como `reward_tracks` (override
+  // [JsonProperty]) — medido em 2026-08-23 por bisseção no rig: com conteúdo
+  // sob o nome fallback o cliente derruba `Malformed response payload`.
   let handled = handleRewardTrackRequest('/game/reward-tracks/get-all', {}, user.id, repo, runtime)
-  assert.equal(handled.data.tracks.length, 1)
-  assert.deepEqual(handled.data.tracks[0].entries_claimed, [701, 702])
+  assert.equal(handled.data.reward_tracks.length, 1)
+  assert.deepEqual(handled.data.reward_tracks[0].entries_claimed, [701, 702])
 
   handled = handleRewardTrackRequest('/game/reward-tracks/get-track', { track_id: 700 }, user.id, repo, runtime)
   assert.equal(handled.data.track.id, 700)

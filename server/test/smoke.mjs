@@ -236,8 +236,8 @@ try {
 
   const daily = await post('/game/quests/get-daily-quests', {}, token)
   assert.deepEqual(Object.keys(daily).filter(k => k !== 'uts' && k !== 'code').sort(),
-    ['day_end_epoch', 'day_start_epoch', 'milestones', 'quests'])
-  for (const quest of daily.quests) {
+    ['daily_quests', 'day_end_epoch', 'day_start_epoch', 'milestones'])
+  for (const quest of daily.daily_quests) {
     assert.deepEqual(Object.keys(quest).sort(),
       ['claimed', 'go_to', 'id', 'points', 'progress', 'quest_id'])
   }

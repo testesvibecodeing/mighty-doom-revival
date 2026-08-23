@@ -171,7 +171,12 @@ export function rewardTrackWire (track) {
 
 export function handleRewardTrackRequest (path, body, userId, repo, runtime) {
   if (path === '/game/reward-tracks/get-all') {
-    return { data: { tracks: rewardTrackState(repo, userId, runtime).map(rewardTrackWire) } }
+    // Nome de wire medido em 2026-08-23 (bisseção no rig): o membro de coleção
+    // NÃO é `tracks` (fallback snakecase de RewardTracksApi.GetAllResponse.tracks)
+    // — o cliente só parseia com o override [JsonProperty("reward_tracks")],
+    // presente no attributeData do metadata v29. Array vazia sob o nome errado
+    // é tolerada; com conteúdo derruba o parse com `Malformed response payload`.
+    return { data: { reward_tracks: rewardTrackState(repo, userId, runtime).map(rewardTrackWire) } }
   }
 
   if (path === '/game/reward-tracks/get-track') {

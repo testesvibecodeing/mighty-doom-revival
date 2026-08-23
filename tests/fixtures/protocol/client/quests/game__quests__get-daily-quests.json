@@ -1,0 +1,970 @@
+{
+  "endpoint": "game/quests/get-daily-quests",
+  "provenance": "client",
+  "captured_at": "2026-08-23T16:42:12Z",
+  "sanitized": true,
+  "source": "client_harness.py (request_log pareado do servidor)",
+  "request": {
+    "method": "POST",
+    "path": "/game/quests/get-daily-quests",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "code": 1000,
+    "body": {
+      "uts": "<uts>",
+      "code": 1000,
+      "day_start_epoch": 1787443200,
+      "day_end_epoch": 1787529600,
+      "daily_quests": [
+        {
+          "id": 1,
+          "quest_id": 1,
+          "progress": 0,
+          "claimed": false,
+          "points": 10,
+          "go_to": 0
+        },
+        {
+          "id": 2,
+          "quest_id": 2,
+          "progress": 0,
+          "claimed": false,
+          "points": 25,
+          "go_to": 1
+        },
+        {
+          "id": 3,
+          "quest_id": 3,
+          "progress": 0,
+          "claimed": false,
+          "points": 10,
+          "go_to": 2
+        },
+        {
+          "id": 4,
+          "quest_id": 4,
+          "progress": 0,
+          "claimed": false,
+          "points": 25,
+          "go_to": 1
+        },
+        {
+          "id": 5,
+          "quest_id": 5,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 1
+        },
+        {
+          "id": 6,
+          "quest_id": 6,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 1
+        },
+        {
+          "id": 7,
+          "quest_id": 7,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 1
+        },
+        {
+          "id": 8,
+          "quest_id": 8,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 9,
+          "quest_id": 9,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 1
+        },
+        {
+          "id": 10,
+          "quest_id": 10,
+          "progress": 0,
+          "claimed": false,
+          "points": 10,
+          "go_to": 3
+        },
+        {
+          "id": 11,
+          "quest_id": 11,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 1
+        },
+        {
+          "id": 12,
+          "quest_id": 12,
+          "progress": 0,
+          "claimed": false,
+          "points": 25,
+          "go_to": 1
+        },
+        {
+          "id": 13,
+          "quest_id": 13,
+          "progress": 0,
+          "claimed": false,
+          "points": 10,
+          "go_to": 3
+        },
+        {
+          "id": 14,
+          "quest_id": 14,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 15,
+          "quest_id": 15,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 16,
+          "quest_id": 16,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 17,
+          "quest_id": 17,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 18,
+          "quest_id": 18,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 19,
+          "quest_id": 19,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 20,
+          "quest_id": 20,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 21,
+          "quest_id": 21,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 22,
+          "quest_id": 22,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 23,
+          "quest_id": 23,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 24,
+          "quest_id": 24,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 25,
+          "quest_id": 25,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 26,
+          "quest_id": 26,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 27,
+          "quest_id": 27,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 28,
+          "quest_id": 28,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 29,
+          "quest_id": 29,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 30,
+          "quest_id": 30,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 31,
+          "quest_id": 31,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 32,
+          "quest_id": 32,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 33,
+          "quest_id": 33,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 34,
+          "quest_id": 34,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 35,
+          "quest_id": 35,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 36,
+          "quest_id": 36,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 37,
+          "quest_id": 37,
+          "progress": 0,
+          "claimed": false,
+          "points": 20,
+          "go_to": 0
+        },
+        {
+          "id": 38,
+          "quest_id": 38,
+          "progress": 0,
+          "claimed": false,
+          "points": 10,
+          "go_to": 0
+        }
+      ],
+      "milestones": [
+        {
+          "id": 1,
+          "milestone_id": 1,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 200
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "milestone_id": 2,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 200
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "milestone_id": 3,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "milestone_id": 4,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 200
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "milestone_id": 5,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 400
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "milestone_id": 6,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 300
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "milestone_id": 7,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 300
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "milestone_id": 8,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "milestone_id": 9,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 300
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "milestone_id": 10,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 600
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "milestone_id": 11,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 360
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "milestone_id": 12,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 360
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "milestone_id": 13,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "milestone_id": 14,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 360
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "milestone_id": 15,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 720
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 16,
+          "milestone_id": 16,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 440
+            }
+          ]
+        },
+        {
+          "id": 17,
+          "milestone_id": 17,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 440
+            }
+          ]
+        },
+        {
+          "id": 18,
+          "milestone_id": 18,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 19,
+          "milestone_id": 19,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 440
+            }
+          ]
+        },
+        {
+          "id": 20,
+          "milestone_id": 20,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 880
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 21,
+          "milestone_id": 21,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 560
+            }
+          ]
+        },
+        {
+          "id": 22,
+          "milestone_id": 22,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 560
+            }
+          ]
+        },
+        {
+          "id": 23,
+          "milestone_id": 23,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 24,
+          "milestone_id": 24,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 560
+            }
+          ]
+        },
+        {
+          "id": 25,
+          "milestone_id": 25,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1120
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 26,
+          "milestone_id": 26,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 720
+            }
+          ]
+        },
+        {
+          "id": 27,
+          "milestone_id": 27,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 720
+            }
+          ]
+        },
+        {
+          "id": 28,
+          "milestone_id": 28,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 29,
+          "milestone_id": 29,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 720
+            }
+          ]
+        },
+        {
+          "id": 30,
+          "milestone_id": 30,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1440
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 31,
+          "milestone_id": 31,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1000
+            }
+          ]
+        },
+        {
+          "id": 32,
+          "milestone_id": 32,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1000
+            }
+          ]
+        },
+        {
+          "id": 33,
+          "milestone_id": 33,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 34,
+          "milestone_id": 34,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1000
+            }
+          ]
+        },
+        {
+          "id": 35,
+          "milestone_id": 35,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 2000
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 36,
+          "milestone_id": 36,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1500
+            }
+          ]
+        },
+        {
+          "id": 37,
+          "milestone_id": 37,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1500
+            }
+          ]
+        },
+        {
+          "id": 38,
+          "milestone_id": 38,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 39,
+          "milestone_id": 39,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1500
+            }
+          ]
+        },
+        {
+          "id": 40,
+          "milestone_id": 40,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 3000
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 41,
+          "milestone_id": 41,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1820
+            }
+          ]
+        },
+        {
+          "id": 42,
+          "milestone_id": 42,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1820
+            }
+          ]
+        },
+        {
+          "id": 43,
+          "milestone_id": 43,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 44,
+          "milestone_id": 44,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 1820
+            }
+          ]
+        },
+        {
+          "id": 45,
+          "milestone_id": 45,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 3640
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "id": 46,
+          "milestone_id": 46,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 2200
+            }
+          ]
+        },
+        {
+          "id": 47,
+          "milestone_id": 47,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 2200
+            }
+          ]
+        },
+        {
+          "id": 48,
+          "milestone_id": 48,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 29,
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": 49,
+          "milestone_id": 49,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 2200
+            }
+          ]
+        },
+        {
+          "id": 50,
+          "milestone_id": 50,
+          "points_required": 1,
+          "claimed": false,
+          "rewards": [
+            {
+              "rid": 1,
+              "amount": 4400
+            },
+            {
+              "rid": 3,
+              "amount": 15
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
