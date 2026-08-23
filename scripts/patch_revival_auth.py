@@ -78,7 +78,8 @@ def check_preconditions(decoded: Path) -> dict:
 
 
 def apply(*, decoded: Path, base_url: str, api_version: str, client_version: str,
-          analyze: bool = False, dex_out: Path | None = None) -> dict:
+          analyze: bool = False, dex_out: Path | None = None,
+          background_png: Path | None = None) -> dict:
     decoded = Path(decoded)
     # O dex fica FORA da árvore decodificada de propósito: o Apktool reconstrói
     # `classes*.dex` a partir do smali, e um arquivo com esse nome na raiz
@@ -108,7 +109,7 @@ def apply(*, decoded: Path, base_url: str, api_version: str, client_version: str
 
     info = build_dex(base_url=base_url, api_version=api_version,
                      client_version=client_version, unity_activity=UNITY_ACTIVITY,
-                     out_dex=dex_out)
+                     out_dex=dex_out, background_png=background_png)
     relatorio.update({k: v for k, v in info.items() if k != "base_url_scheme"})
     relatorio["dex_path"] = dex_out.as_posix()
     relatorio["dex_added"] = dex_out.name
@@ -211,6 +212,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--analyze", action="store_true", help="não altera nada")
     p.add_argument("--verify-apk", type=Path, help="confere um APK já construído")
     p.add_argument("--report", type=Path)
+    p.add_argument("--background-png", type=Path, default=None,
+                   help="PNG local (nunca versionado) para o fundo da tela; "
+                        "ausente = fundo sólido")
     args = p.parse_args(argv)
 
     try:
@@ -222,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             rel = apply(decoded=args.decoded, base_url=args.base_url,
                         api_version=args.api_version, client_version=args.client_version,
-                        analyze=args.analyze)
+                        analyze=args.analyze, background_png=args.background_png)
     except (AuthPatchError, ManifestError, BuildError) as exc:
         print(f"FALHOU: {exc}", file=sys.stderr)
         return 4

@@ -13,8 +13,10 @@ recompilado. Ele entra no APK como `classes3.dex` (o cliente já traz
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -117,9 +119,43 @@ def detect_toolchain() -> Toolchain:
                      java=java, versions=versoes)
 
 
+BG_PLACEHOLDER = "@@REVIVAL_BG_B64_ENTRIES@@"
+BG_CHUNK_SIZE = 4000  # << limite de 65535 bytes UTF-8 por literal String do classfile
+BG_MAX_BYTES = 2 * 1024 * 1024  # orçamento de dex; fundo é cosmético, não vale inflar o APK
+_BASE64_CHUNK_RE = re.compile(r"^[A-Za-z0-9+/]*={0,2}$")
+
+
+def _encode_background(background_png: Path | None) -> str:
+    """PNG local -> literal de array Java (string vazia = sem fundo, cai no
+    fallback solido). O arquivo NUNCA é lido de um caminho versionado no git —
+    quem chama decide a origem; aqui só valida e fatia."""
+    if background_png is None:
+        return ""
+    background_png = Path(background_png)
+    if not background_png.is_file():
+        raise BuildError(f"background_png não existe: {background_png}")
+    dados = background_png.read_bytes()
+    if len(dados) > BG_MAX_BYTES:
+        raise BuildError(
+            f"background_png tem {len(dados)} bytes, acima do orçamento de {BG_MAX_BYTES}")
+    b64 = base64.b64encode(dados).decode("ascii")
+    partes = [b64[i:i + BG_CHUNK_SIZE] for i in range(0, len(b64), BG_CHUNK_SIZE)]
+    for parte in partes:
+        if not _BASE64_CHUNK_RE.match(parte):
+            # Nunca deveria acontecer (saída do próprio base64.b64encode), mas
+            # isto vai para dentro de um literal Java: falha alto e cedo.
+            raise BuildError("chunk de base64 com caractere fora do alfabeto esperado")
+    return ", ".join(f'"{parte}"' for parte in partes)
+
+
 def render_source(*, base_url: str, api_version: str, client_version: str,
-                  unity_activity: str) -> str:
-    """Injeta a configuração do pipeline. Nada de URL de produção no .java."""
+                  unity_activity: str, background_png: Path | None = None) -> str:
+    """Injeta a configuração do pipeline. Nada de URL de produção no .java.
+
+    `background_png` é OPCIONAL e nunca deve apontar para um caminho
+    versionado: a imagem em si não entra no git (regra 1 do AGENTS.md — o
+    `.gitignore` já bloqueia `*.png`). Sem ela, a tela usa o fundo sólido.
+    """
     if not base_url.startswith(("http://", "https://")):
         raise BuildError(f"base_url inválida: {base_url!r}")
     fonte = ACTIVITY_SOURCE.read_text(encoding="utf-8")
@@ -135,16 +171,21 @@ def render_source(*, base_url: str, api_version: str, client_version: str,
         if '"' in valor or "\\" in valor:
             raise BuildError(f"valor com caractere proibido para literal Java: {marcador}")
         fonte = fonte.replace(marcador, valor)
+    if BG_PLACEHOLDER not in fonte:
+        raise BuildError(f"marcador ausente na fonte: {BG_PLACEHOLDER}")
+    fonte = fonte.replace(BG_PLACEHOLDER, _encode_background(background_png))
     return fonte
 
 
 def build_dex(*, base_url: str, api_version: str, client_version: str,
               unity_activity: str, out_dex: Path,
-              toolchain: Toolchain | None = None) -> dict:
+              toolchain: Toolchain | None = None,
+              background_png: Path | None = None) -> dict:
     """Compila + dexa. Devolve relatório sanitizado (sem segredo algum)."""
     tc = toolchain or detect_toolchain()
     fonte = render_source(base_url=base_url, api_version=api_version,
-                          client_version=client_version, unity_activity=unity_activity)
+                          client_version=client_version, unity_activity=unity_activity,
+                          background_png=background_png)
 
     with tempfile.TemporaryDirectory(prefix="revival-auth-") as tmp:
         trabalho = Path(tmp)
@@ -194,4 +235,8 @@ def build_dex(*, base_url: str, api_version: str, client_version: str,
         "toolchain": tc.describe(),
         "base_url_scheme": base_url.split("://", 1)[0],
         "unity_activity": unity_activity,
+        # Nunca o caminho nem os bytes: só se o fundo entrou e o hash do PNG de
+        # entrada, para correlacionar com a origem sem versionar a imagem.
+        "background_embedded": background_png is not None,
+        "background_sha256": _sha256(Path(background_png)) if background_png else None,
     }

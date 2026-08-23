@@ -452,11 +452,18 @@ def _executar(
         _passo(ctx, "auth", "[2b/7] RevivalAuthActivity — compilando e patchando Manifest…")
         try:
             from patch_revival_auth import apply as aplicar_auth  # noqa: PLC0415
+            # Fundo da tela é opcional e NUNCA versionado (regra 1 do
+            # AGENTS.md) — só existe se alguém colocou o PNG localmente
+            # (scripts/revival_auth/local_assets/README.md explica). Sem o
+            # arquivo, a Activity compila e roda igual, com fundo sólido.
+            fundo_local = (Path(__file__).resolve().parent.parent / "revival_auth"
+                           / "local_assets" / "login_background.png")
             relatorio_auth = aplicar_auth(
                 decoded=workspace,
                 base_url=f"https://{host}/collections/doom",
                 api_version=resultado.api_version or "24.0.0",
                 client_version=resultado.client_version or "1.13.1",
+                background_png=fundo_local if fundo_local.is_file() else None,
             )
         except Exception as exc:  # noqa: BLE001 - AuthPatchError traz mensagem pronta
             _falhar(resultado, code="REVIVAL_AUTH", stage="auth",

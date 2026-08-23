@@ -8,6 +8,7 @@ quando a máquina não tem JDK/SDK.
 """
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -18,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import patch_revival_auth as auth  # noqa: E402
-from revival_auth.build import BuildError, render_source  # noqa: E402
+from revival_auth.build import BG_MAX_BYTES, BuildError, render_source  # noqa: E402
 from revival_auth.manifest import (  # noqa: E402
     ACTIVITY_NAME, UNITY_ACTIVITY, ManifestError, count_launchers, patch_manifest_text,
 )
@@ -193,6 +194,64 @@ class TestFonteDaActivity(unittest.TestCase):
             baixo = linha.lower()
             for proibido in ("google", "play games", "gpg", "sign in", "sign-in"):
                 self.assertNotIn(proibido, baixo, linha.strip())
+
+
+class TestFundoOpcional(unittest.TestCase):
+    """AGENTS.md regra 1: nunca commitar imagem. O PNG do fundo entra só em
+    build time, de um caminho local nunca versionado — a fonte rastreada tem
+    apenas o marcador @@REVIVAL_BG_B64_ENTRIES@@, substituído aqui."""
+
+    def _fonte(self, **kw):
+        return render_source(base_url="https://doom.exemplo.br/collections/doom",
+                             api_version="24.0.0", client_version="1.13.1",
+                             unity_activity=UNITY_ACTIVITY, **kw)
+
+    def test_sem_background_png_array_fica_vazio(self):
+        fonte = self._fonte()
+        self.assertNotIn("@@REVIVAL_", fonte, "nenhum marcador sobra")
+        linha = next(l for l in fonte.splitlines() if "BG_B64 =" in l)
+        self.assertNotIn('"', linha, "sem PNG local, nenhum literal de string entra no array")
+
+    def test_com_background_png_embute_chunks_base64(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            png = Path(tmp) / "fundo.png"
+            # Cabecalho PNG real + payload arbitrario: build.py so precisa de
+            # bytes, quem decodifica de verdade e o BitmapFactory no device.
+            png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"conteudo-fake-de-teste" * 50)
+            fonte = self._fonte(background_png=png)
+            self.assertNotIn("@@REVIVAL_", fonte)
+            linha = next(l for l in fonte.splitlines() if "BG_B64 =" in l)
+            self.assertIn('"', linha, "com PNG local, os chunks base64 entram no array")
+
+    def test_background_png_ausente_recusa(self):
+        with self.assertRaises(BuildError):
+            self._fonte(background_png=Path("/nao/existe/fundo.png"))
+
+    def test_background_png_acima_do_orcamento_recusa(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            png = Path(tmp) / "grande.png"
+            png.write_bytes(b"\x00" * (BG_MAX_BYTES + 1))
+            with self.assertRaises(BuildError):
+                self._fonte(background_png=png)
+
+    def test_chunk_nunca_excede_limite_de_string_do_classfile(self):
+        # Regra do classfile Java: literal de String <= 65535 bytes UTF-8.
+        with tempfile.TemporaryDirectory() as tmp:
+            png = Path(tmp) / "fundo.png"
+            png.write_bytes(b"\x89PNG\r\n\x1a\n" + os.urandom(300_000))
+            fonte = self._fonte(background_png=png)
+            for linha in fonte.splitlines():
+                for literal in linha.split('"')[1::2]:
+                    self.assertLess(len(literal.encode("utf-8")), 65535)
+
+    def test_nenhum_binario_na_fonte_rastreada_do_repo(self):
+        """A fonte do REPO (não a renderizada) não pode conter o blob — só o
+        marcador. Se isto falhar, alguém reintroduziu o PNG como base64 fixo."""
+        bruta = (ROOT / "scripts" / "revival_auth" / "android"
+                 / "RevivalAuthActivity.java").read_text(encoding="utf-8")
+        self.assertIn("@@REVIVAL_BG_B64_ENTRIES@@", bruta)
+        self.assertLess(len(bruta), 60_000,
+                        "fonte rastreada ficou grande demais - PNG reintroduzido como base64?")
 
 
 class TestPrecondicoes(unittest.TestCase):

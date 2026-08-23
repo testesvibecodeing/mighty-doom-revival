@@ -87,3 +87,9 @@ server/public/assets/img/game/
 
 # arquivos estacionados fora do versionamento (limpezas de scripts/)
 tmp/
+
+# Entrada local opcional para o fundo da RevivalAuthActivity (imagem, nunca
+# versionada — regra 1 do AGENTS.md). scripts/revival_auth/build.py lê daqui
+# em build time e embute como base64 no dex; ausente = fundo solido no app.
+scripts/revival_auth/local_assets/*
+!scripts/revival_auth/local_assets/README.md
