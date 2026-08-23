@@ -4,7 +4,7 @@
     "client": "com.bethsoft.ubu 1.13.1 build 84862",
     "metadata_version": 29,
     "route_count": 116,
-    "updated": "2026-08-23T21:54:06Z",
+    "updated": "2026-08-23T22:16:44Z",
     "dod_gates": [
       "schema_extracted",
       "implemented",
@@ -888,7 +888,7 @@
       "fixture": "tests/fixtures/protocol/server-replay/gear/game__gear__dismantle.json",
       "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": "metadata v29: GearApi.Dismantle(gearUid); refund via dismantle.tiers no game-data"
+      "evidence": "metadata v29: GearApi.Dismantle(gearUid); refund via dismantle.tiers no game-data | 2026-08-23: gate request_observed BLOQUEADO por defeito do cliente, nao por falta de trabalho no servidor. O cliente trava logo apos o NRE de get-daily-quests (DEAD-ENDS #25/#26) e nao chega ao painel BARRACKS de forma estavel, entao o tap no botao nao pode ser observado com controle de responsividade. Sem execucao conclusiva, a rota NAO e classificada (nem confirmada, nem negada)."
     },
     "game/gear/fuse": {
       "module": "gear",
@@ -904,7 +904,7 @@
       "fixture": "tests/fixtures/protocol/server-replay/gear/game__gear__fuse.json",
       "fixture_provenance": "server-replay",
       "uses_fallback": false,
-      "evidence": "metadata v29: GearApi.Fuse(inputUids); requer gear_fusion no game-data (erro 2300 explicito sem config)"
+      "evidence": "metadata v29: GearApi.Fuse(inputUids); requer gear_fusion no game-data (erro 2300 explicito sem config) | 2026-08-23: mesmo bloqueio de game/gear/dismantle - cliente trava antes do painel (DEAD-ENDS #25/#26). Sem execucao conclusiva, sem classificacao."
     },
     "game/gear/multi-upgrade": {
       "module": "gear",
@@ -1496,7 +1496,7 @@
       "fixture": "tests/fixtures/protocol/client/quests/game__quests__get-daily-quests.json",
       "fixture_provenance": "client",
       "uses_fallback": false,
-      "evidence": "metadata v29: GetDailyQuestsResponse{dayStartEpoch, dayEndEpoch, milestones, quests}; DailyQuestModel{id, questId, progress, claimed, points, goTo}; DailyQuestMilestoneModel{id, milestoneId, pointsRequired, claimed, rewards}. Wire recortado ao DTO em 2026-08-21 — o estado interno (target/completed) nao vai para a resposta. | 2026-08-23 rig (bissecao 8 degraus, server-fs2..fs10.log): nome de wire do membro de colecao e daily_quests (override JsonProperty no attributeData; fallback quests com conteudo derruba Malformed response payload, array vazia e tolerada). Com rename + arrays cheias: boot flow_validated, fatais 0, fixture provenance=client. NRE tolerado em DailyQuestController.UpdateQuestState em TODA resposta (vazio ou cheio), client-interno. Painel MISSIONS renderiza quests e barra de milestone com dados do servidor (menu-claim1.png, 2/20). | 2026-08-23: o NRE de UpdateQuestState NAO e tolerado - roda DENTRO de NetworkRequestHandler.UpdateRequestQueue e mata o pump de requests do cliente: sem reward-tracks/get-all e sem session/heartbeat apos qualquer boot com parse bem-sucedido (heartbeats so ate o request id 1004, sempre na era de parse Malformed). Latencia artificial de 1500ms (REVIVAL_QUEST_DELAY_MS) NAO suprime o NRE - corrida com assinantes de UI refutada (DEAD-ENDS #23). Causa raiz A VERIFICAR: null client-interno (DailyQuestController/DailyQuestRegistry); DTO conferido completo e nenhum outro DTO carrega estado de quests."
+      "evidence": "metadata v29: GetDailyQuestsResponse{dayStartEpoch, dayEndEpoch, milestones, quests}; DailyQuestModel{id, questId, progress, claimed, points, goTo}; DailyQuestMilestoneModel{id, milestoneId, pointsRequired, claimed, rewards}. Wire recortado ao DTO em 2026-08-21 — o estado interno (target/completed) nao vai para a resposta. | 2026-08-23 rig (bissecao 8 degraus, server-fs2..fs10.log): nome de wire do membro de colecao e daily_quests (override JsonProperty no attributeData; fallback quests com conteudo derruba Malformed response payload, array vazia e tolerada). Com rename + arrays cheias: boot flow_validated, fatais 0, fixture provenance=client. NRE tolerado em DailyQuestController.UpdateQuestState em TODA resposta (vazio ou cheio), client-interno. Painel MISSIONS renderiza quests e barra de milestone com dados do servidor (menu-claim1.png, 2/20). | 2026-08-23: o NRE de UpdateQuestState NAO e tolerado - roda DENTRO de NetworkRequestHandler.UpdateRequestQueue e mata o pump de requests do cliente: sem reward-tracks/get-all e sem session/heartbeat apos qualquer boot com parse bem-sucedido (heartbeats so ate o request id 1004, sempre na era de parse Malformed). Latencia artificial de 1500ms (REVIVAL_QUEST_DELAY_MS) NAO suprime o NRE - corrida com assinantes de UI refutada (DEAD-ENDS #23). Causa raiz A VERIFICAR: null client-interno (DailyQuestController/DailyQuestRegistry); DTO conferido completo e nenhum outro DTO carrega estado de quests. | 2026-08-23 bisseção conclusiva (DEAD-ENDS #26): o NRE de UpdateQuestState dispara com arrays CHEIAS, com as duas VAZIAS e com os campos de colecao OMITIDOS (parse OK, Malformed=0). Nao existe payload que o evite - e defeito interno do cliente, nao do contrato. Corolario: nao ha correcao pelo servidor sem fabricar incompatibilidade (proibido). Verificado tambem em guest 100% limpo (-no-snapshot -wipe-data, DEAD-ENDS #25), o que descarta ambiente como causa."
     },
     "game/reward-tracks/claim": {
       "module": "reward-tracks",
