@@ -24,6 +24,21 @@ Campos DERIVADOS (recomputados, escrever à mão não tem efeito):
 Campos de EVIDÊNCIA (só mudam com prova, via --set ou edição consciente):
   schema_extracted, client_validated, uses_fallback (true/false);
   persistence_validated aceita true/false/null (null = não aplicável)
+  client_authoritative (true/false) — marca uma rota como PROVADAMENTE nunca
+  emitida pelo cliente por design (feature client-authoritative, não bug).
+  Exige --note na MESMA chamada (rejeitado sem evidência). Quando true, força
+  request_observed/response_observed/client_validated para null (não
+  aplicável — não há round-trip para observar) SE E SOMENTE SE ainda não
+  houver prova real (fixture client). Uma captura de cliente real REFUTA o
+  marcador: os gates reabrem E o próprio `client_authoritative` volta a false
+  automaticamente, sem intervenção manual (o campo nunca fica mentindo `true`
+  contra uma evidência que o contradiz). Ao reabrir, `client_validated` volta
+  a false, não a true — a fixture prova request/response observados, não que o
+  fluxo passou no client_harness. NÃO conta como "DoD completo" na matriz nem
+  no resumo: aparece como estado distinto (🔒 terminal), para não enfraquecer
+  silenciosamente a métrica de paridade. Existe para impedir que next_task.py
+  repita indefinidamente uma tarefa já refutada com evidência (ver
+  research/DEAD-ENDS.md) sem fingir que a rota foi validada no cliente.
 
 Uso:
   python scripts/generate_endpoint_matrix.py                     # sync + doc
@@ -223,7 +238,17 @@ def first_failed_gate(endpoint: dict) -> str | None:
     return None
 
 
+def endpoint_terminal(endpoint: dict) -> bool:
+    """Rota client-authoritative sem prova real de cliente: os gates de
+    round-trip (request/response_observed, client_validated) foram
+    marcados N/A por evidência terminal documentada, não por corte de
+    métrica. Distinta de "done" — não conta como paridade real."""
+    return bool(endpoint.get("client_authoritative")) and endpoint.get("request_observed") is None
+
+
 def endpoint_done(endpoint: dict) -> bool:
+    if endpoint_terminal(endpoint):
+        return False
     return first_failed_gate(endpoint) is None
 
 
@@ -276,6 +301,40 @@ def build_compat(metadata: Path | None, previous: dict | None) -> dict:
             elif prev.get("request_observed") and prev_accepted:
                 observed_provenance = prev_provenance
 
+        client_validated = bool(prev.get("client_validated") or seed.get("client_validated", False))
+
+        # client_authoritative: marca terminal para rota provadamente nunca
+        # emitida por DESIGN (não por bug). Só se aplica quando NÃO há prova
+        # real de cliente (fixture client) — uma captura real sempre vence e
+        # a rota volta a pedir os gates normalmente, sem intervenção manual.
+        client_authoritative = bool(prev.get("client_authoritative", False))
+        has_real_client_proof = observed_provenance == "client-fixture"
+        if client_authoritative and has_real_client_proof:
+            # O marcador dizia "o cliente NUNCA emite esta rota". Uma captura
+            # real sanitizada é exatamente a evidência que REFUTA isso, então o
+            # próprio marcador cai aqui — não basta reabrir os gates e deixar o
+            # campo mentindo `true` no registro. Ninguém precisa lembrar de
+            # limpar na mão: o gerador desfaz sozinho na primeira prova real.
+            client_authoritative = False
+        if client_authoritative:
+            # Gates de round-trip viram N/A: não há requisição para observar.
+            # Sem isto, first_failed_gate() devolveria `request_observed` para
+            # sempre e o next_task.py repetiria eternamente uma tarefa já
+            # refutada com evidência (research/DEAD-ENDS.md).
+            if request_observed is False:
+                request_observed = None
+            if response_observed is False:
+                response_observed = None
+            if client_validated is False:
+                client_validated = None
+        elif client_validated is None:
+            # Saindo do estado terminal, `null` era artefato do marcador — e
+            # `null` num gate de DoD significa "não aplicável", o que aqui seria
+            # falso. Volta para o padrão honesto: ainda NÃO validado no cliente.
+            # Não vira `true` por causa da fixture: fixture prova request e
+            # response observados, não que o fluxo passou no client_harness.
+            client_validated = False
+
         endpoints[route] = {
             "module": module,
             "implemented": resolve_implementation(route, implemented),
@@ -283,7 +342,8 @@ def build_compat(metadata: Path | None, previous: dict | None) -> dict:
             "request_observed": request_observed,
             "response_observed": response_observed,
             "evidence_provenance": observed_provenance,
-            "client_validated": bool(prev.get("client_validated") or seed.get("client_validated", False)),
+            "client_validated": client_validated,
+            "client_authoritative": client_authoritative,
             "persistence_validated": prev.get("persistence_validated", seed.get("persistence_validated")),
             "regression_test": route in tests,
             "fixture": fixture["file"] if fixture else None,
@@ -333,6 +393,7 @@ def build_compat(metadata: Path | None, previous: dict | None) -> dict:
 
 STATUS_ICON = {
     "done": "✅", "client": "🧪", "schema": "🔬", "missing": "❌", "fallback": "🔁",
+    "terminal": "🔒",
 }
 
 
@@ -340,6 +401,8 @@ def endpoint_status(endpoint: dict) -> tuple[str, str]:
     """(ícone, rótulo) do estado resumido na matriz."""
     if endpoint.get("uses_fallback"):
         return STATUS_ICON["fallback"], "usa fallback RESEARCH_MODE"
+    if endpoint_terminal(endpoint):
+        return STATUS_ICON["terminal"], "client-autoritativo — cliente nunca emite esta rota (evidência terminal, não é paridade)"
     if endpoint_done(endpoint):
         return STATUS_ICON["done"], "DoD completo"
     if endpoint.get("client_validated"):
@@ -376,15 +439,21 @@ def render_matrix(compat: dict) -> str:
         "`schema_extracted` · `implemented` · `request_observed` · `response_observed` ·",
         "`client_validated` · `persistence_validated` · `regression_test` · `uses_fallback=false`.",
         "",
-        "| Módulo | Pri | Endpoints | ✅ DoD | 🧪 impl. | ❌ falta | 🔬 schema | Estado |",
-        "|---|---:|---:|---:|---:|---:|---:|---|",
+        "🔒 terminal = `client_authoritative`: evidência documentada de que o cliente",
+        "NUNCA emite esta rota por design (não é bug nem gap) — ver `research/DEAD-ENDS.md`.",
+        "Gates de round-trip viram N/A (null); não conta como paridade real na métrica.",
+        "",
+        "| Módulo | Pri | Endpoints | ✅ DoD | 🔒 term. | 🧪 impl. | ❌ falta | 🔬 schema | Estado |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for module in ordered:
         routes = sorted(modules[module])
-        done = client = missing = schema = 0
+        done = client = missing = schema = terminal = 0
         for route in routes:
             data = endpoints[route]
-            if endpoint_done(data):
+            if endpoint_terminal(data):
+                terminal += 1
+            elif endpoint_done(data):
                 done += 1
             elif data.get("client_validated"):
                 client += 1
@@ -397,6 +466,8 @@ def render_matrix(compat: dict) -> str:
         implemented_count = sum(1 for r in routes if endpoints[r].get("implemented"))
         if module in out_of_scope:
             state = "⛔ fora de escopo (dependência externa)"
+        elif done + terminal == len(routes) and terminal:
+            state = "🔒 paridade com rotas terminais (não é 100% observado)"
         elif done == len(routes):
             state = "✅ paridade"
         elif missing == len(routes):
@@ -406,7 +477,7 @@ def render_matrix(compat: dict) -> str:
         scope = " ⛔" if module in out_of_scope else ""
         lines.append(
             f"| [{module}{scope}](#{module}) | {priority.get(module, 99)} | {len(routes)} "
-            f"| {done} | {implemented_count - done} | {missing} | {schema} | {state} |"
+            f"| {done} | {terminal} | {implemented_count - done - terminal} | {missing} | {schema} | {state} |"
         )
 
     lines += ["", "## Detalhe por módulo", ""]
@@ -417,16 +488,17 @@ def render_matrix(compat: dict) -> str:
         lines.append("|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|")
         for route in sorted(modules[module]):
             d = endpoints[route]
-            def mark(value):
+            terminal = endpoint_terminal(d)
+            def mark(value, is_round_trip_gate=False):
                 if value is None:
-                    return "—"
+                    return "🔒" if (terminal and is_round_trip_gate) else "—"
                 return "✅" if value else "·"
             fixture = "✅" if d.get("fixture") else "·"
             note = d.get("evidence") or endpoint_status(d)[1]
             lines.append(
                 f"| `{route}` | {mark(d['implemented'])} | {mark(d['schema_extracted'])} "
-                f"| {mark(d['request_observed'])} | {mark(d['response_observed'])} "
-                f"| {mark(d['client_validated'])} | {mark(d['persistence_validated'])} "
+                f"| {mark(d['request_observed'], True)} | {mark(d['response_observed'], True)} "
+                f"| {mark(d['client_validated'], True)} | {mark(d['persistence_validated'])} "
                 f"| {mark(d['regression_test'])} | {fixture} "
                 f"| {'🔁' if d['uses_fallback'] else '—'} | {note} |"
             )
@@ -451,6 +523,10 @@ def render_matrix(compat: dict) -> str:
 
 BOOL_EVIDENCE_FIELDS = ("schema_extracted", "client_validated", "uses_fallback")
 TRISTATE_EVIDENCE_FIELDS = ("persistence_validated",)  # true/false/null (null = não aplicável)
+# client_authoritative=true precisa de --note na MESMA chamada (apply_set):
+# marca terminal irreversível sem justificativa por escrito é exatamente o
+# "enfraquecer silenciosamente o DoD" que este campo existe para evitar.
+TERMINAL_EVIDENCE_FIELDS = ("client_authoritative",)
 
 
 def apply_set(compat: dict, route: str, assignments: list[str], notes: dict[str, str]) -> None:
@@ -470,6 +546,19 @@ def apply_set(compat: dict, route: str, assignments: list[str], notes: dict[str,
                 print(f"ERRO: {key} espera true/false/null, veio {raw!r}", file=sys.stderr)
                 raise SystemExit(2)
             endpoint[key] = None if raw == "null" else raw == "true"
+            continue
+        if key in TERMINAL_EVIDENCE_FIELDS:
+            if raw not in ("true", "false"):
+                print(f"ERRO: {key} espera true/false, veio {raw!r}", file=sys.stderr)
+                raise SystemExit(2)
+            if raw == "true" and route not in notes:
+                print(
+                    f"ERRO: {key}=true em {route} exige --note {route}=... na MESMA chamada "
+                    "(evidência terminal sem justificativa por escrito não é aceita)",
+                    file=sys.stderr,
+                )
+                raise SystemExit(2)
+            endpoint[key] = raw == "true"
             continue
         if key not in BOOL_EVIDENCE_FIELDS:
             print(f"ERRO: campo {key!r} não é campo de evidência editável", file=sys.stderr)
@@ -559,9 +648,11 @@ def main() -> int:
 
     total = len(compat["endpoints"])
     done = sum(1 for d in compat["endpoints"].values() if endpoint_done(d))
+    terminal = sum(1 for d in compat["endpoints"].values() if endpoint_terminal(d))
     implemented = sum(1 for d in compat["endpoints"].values() if d["implemented"])
     fallbacks = sum(1 for d in compat["endpoints"].values() if d["uses_fallback"])
-    print(f"compatibility.json: {total} rotas · {implemented} implementadas · {done} DoD completo · {fallbacks} em fallback")
+    print(f"compatibility.json: {total} rotas · {implemented} implementadas · {done} DoD completo · "
+          f"{terminal} terminal (client-autoritativo) · {fallbacks} em fallback")
     print(f"docs/ENDPOINT-MATRIX.md regenerado")
     return 0
 

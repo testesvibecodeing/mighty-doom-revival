@@ -226,6 +226,139 @@ class TestApplySet(unittest.TestCase):
         gem.apply_set(compat, "game/store/get", ["client_validated=true"], {})
         self.assertEqual(compat["endpoints"]["game/store/get"]["evidence_provenance"], "client-manual")
 
+    def test_client_authoritative_true_sem_note_e_rejeitado(self):
+        compat = registro_minimo()
+        with self.assertRaises(SystemExit):
+            gem.apply_set(compat, "game/gear/upgrade", ["client_authoritative=true"], {})
+
+    def test_client_authoritative_true_com_note_aplica(self):
+        compat = registro_minimo()
+        gem.apply_set(
+            compat, "game/gear/upgrade", ["client_authoritative=true"],
+            {"game/gear/upgrade": "DEAD-ENDS #21: flows completos, zero wire"},
+        )
+        ep = compat["endpoints"]["game/gear/upgrade"]
+        self.assertIs(ep["client_authoritative"], True)
+        self.assertIn("DEAD-ENDS #21", ep["evidence"])
+
+    def test_client_authoritative_false_nao_exige_note(self):
+        compat = registro_minimo()
+        gem.apply_set(compat, "game/gear/upgrade", ["client_authoritative=false"], {})
+        self.assertIs(compat["endpoints"]["game/gear/upgrade"]["client_authoritative"], False)
+
+    def test_client_authoritative_rejeita_valor_invalido(self):
+        compat = registro_minimo()
+        with self.assertRaises(SystemExit):
+            gem.apply_set(compat, "game/gear/upgrade", ["client_authoritative=maybe"],
+                          {"game/gear/upgrade": "nota"})
+
+
+class TestClientAuthoritativeDerivation(unittest.TestCase):
+    """client_authoritative=true na entrada anterior deve virar terminal
+    (gates de round-trip -> null) sem prova real de cliente, e nunca contar
+    como 'DoD completo' na métrica — sem enfraquecer silenciosamente."""
+
+    def setUp(self):
+        self._original = (gem.implemented_routes, gem.test_routes, gem.load_fixtures)
+        gem.implemented_routes = lambda: {"game/gear/apply-cosmetic"}
+        gem.test_routes = lambda: {"game/gear/apply-cosmetic"}
+        gem.load_fixtures = lambda: {}
+
+    def tearDown(self):
+        gem.implemented_routes, gem.test_routes, gem.load_fixtures = self._original
+
+    def _prev(self, **overrides):
+        base = {
+            "module": "gear", "implemented": True, "schema_extracted": True,
+            "request_observed": False, "response_observed": False,
+            "client_validated": False, "client_authoritative": True,
+            "persistence_validated": None, "regression_test": True,
+            "fixture": None, "fixture_provenance": None,
+            "uses_fallback": False, "evidence": "DEAD-ENDS #21",
+        }
+        base.update(overrides)
+        return {"_meta": {}, "endpoints": {"game/gear/apply-cosmetic": base}}
+
+    def test_terminal_sem_prova_vira_null_nos_tres_gates(self):
+        compat = gem.build_compat(None, self._prev())
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertIsNone(ep["request_observed"])
+        self.assertIsNone(ep["response_observed"])
+        self.assertIsNone(ep["client_validated"])
+        self.assertTrue(ep["client_authoritative"])
+
+    def test_terminal_nao_conta_como_done(self):
+        compat = gem.build_compat(None, self._prev())
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertTrue(gem.endpoint_terminal(ep), "deveria ser reconhecida como terminal")
+        self.assertFalse(gem.endpoint_done(ep), "terminal não pode contar como DoD completo")
+
+    def test_terminal_nao_bloqueia_next_task_indefinidamente(self):
+        # first_failed_gate (a mesma lógica usada por next_task.py) deve
+        # devolver None: nada pendente para repetir em loop.
+        compat = gem.build_compat(None, self._prev())
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertIsNone(gem.first_failed_gate(ep))
+
+    def _com_fixture_client(self):
+        gem.load_fixtures = lambda: {
+            "game/gear/apply-cosmetic": {
+                "file": "tests/fixtures/protocol/client/gear/game__gear__apply-cosmetic.json",
+                "provenance": "client", "sanitized": True,
+            }
+        }
+
+    def test_fixture_client_real_vence_o_marcador_terminal(self):
+        self._com_fixture_client()
+        compat = gem.build_compat(None, self._prev())
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertIs(ep["request_observed"], True, "captura real de cliente deve reabrir a rota")
+        self.assertIs(ep["response_observed"], True)
+        self.assertFalse(gem.endpoint_terminal(ep), "com prova real não é mais terminal")
+
+    def test_fixture_client_real_limpa_o_proprio_client_authoritative(self):
+        """O marcador afirma 'o cliente NUNCA emite'. Uma captura real é a
+        evidência que refuta isso: o campo tem que cair sozinho, senão fica
+        mentindo `true` no registro contra a própria evidência ao lado."""
+        self._com_fixture_client()
+        compat = gem.build_compat(None, self._prev())
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertIs(ep["client_authoritative"], False,
+                      "o marcador terminal não pode sobreviver a uma fixture client real")
+
+    def test_reabertura_por_fixture_client_deixa_gates_coerentes(self):
+        """Cadeia completa da reabertura, sem sobra de `null` do marcador."""
+        self._com_fixture_client()
+        compat = gem.build_compat(None, self._prev())
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertIs(ep["request_observed"], True)
+        self.assertIs(ep["response_observed"], True)
+        self.assertIs(ep["client_authoritative"], False)
+        self.assertFalse(gem.endpoint_terminal(ep))
+        # client_validated volta ao padrão honesto (False), NUNCA a True: a
+        # fixture prova request/response observados, não que o fluxo completo
+        # passou no client_harness. `null` aqui seria pior ainda — num gate de
+        # DoD significa "não aplicável", e validar no cliente É aplicável.
+        self.assertIs(ep["client_validated"], False,
+                      "sem `null` residual do marcador e sem promoção inventada")
+        self.assertEqual(gem.first_failed_gate(ep), "client_validated",
+                         "a rota reaberta volta para a fila de trabalho real")
+
+    def test_reabertura_nao_promove_rota_a_dod_completo(self):
+        """Reabrir não pode virar atalho para paridade: a rota reaberta
+        continua fora do DoD até a validação real de cliente existir."""
+        self._com_fixture_client()
+        compat = gem.build_compat(None, self._prev())
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertFalse(gem.endpoint_done(ep))
+
+    def test_client_authoritative_false_nao_afeta_gates(self):
+        compat = gem.build_compat(None, self._prev(client_authoritative=False))
+        ep = compat["endpoints"]["game/gear/apply-cosmetic"]
+        self.assertIs(ep["request_observed"], False)
+        self.assertIs(ep["response_observed"], False)
+        self.assertFalse(gem.endpoint_terminal(ep))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

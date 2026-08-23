@@ -3,7 +3,7 @@
 <!-- GERADO por scripts/generate_endpoint_matrix.py a partir de compatibility.json.
      Não edite à mão: rode o script. -->
 
-Fonte de verdade: `compatibility.json` · atualizado em 2026-08-23T19:42:59Z ·
+Fonte de verdade: `compatibility.json` · atualizado em 2026-08-23T21:54:06Z ·
 116 rotas `game/*` extraídas do global-metadata.dat v29
 do cliente com.bethsoft.ubu 1.13.1 build 84862.
 
@@ -12,33 +12,37 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 `schema_extracted` · `implemented` · `request_observed` · `response_observed` ·
 `client_validated` · `persistence_validated` · `regression_test` · `uses_fallback=false`.
 
-| Módulo | Pri | Endpoints | ✅ DoD | 🧪 impl. | ❌ falta | 🔬 schema | Estado |
-|---|---:|---:|---:|---:|---:|---:|---|
-| [gear](#gear) | 1 | 5 | 0 | 5 | 0 | 5 | 🧪 em convergência |
-| [slayers](#slayers) | 2 | 2 | 0 | 2 | 0 | 2 | 🧪 em convergência |
-| [talents](#talents) | 3 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
-| [chapters](#chapters) | 4 | 13 | 3 | 10 | 0 | 10 | 🧪 em convergência |
-| [quests](#quests) | 5 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
-| [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 3 | 0 | 3 | 🧪 em convergência |
-| [inbox](#inbox) | 7 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
-| [player](#player) | 8 | 7 | 0 | 7 | 0 | 2 | 🧪 em convergência |
-| [events](#events) | 9 | 11 | 0 | 11 | 0 | 9 | 🧪 em convergência |
-| [battle-pass](#battle-pass) | 10 | 9 | 0 | 9 | 0 | 9 | 🧪 em convergência |
-| [daily-rewards](#daily-rewards) | 11 | 2 | 0 | 2 | 0 | 0 | 🧪 em convergência |
-| [idle-rewards](#idle-rewards) | 12 | 4 | 0 | 4 | 0 | 2 | 🧪 em convergência |
-| [store](#store) | 13 | 10 | 0 | 10 | 0 | 5 | 🧪 em convergência |
-| [inventory](#inventory) | 14 | 3 | 0 | 3 | 0 | 1 | 🧪 em convergência |
-| [armory](#armory) | 15 | 2 | 1 | 1 | 0 | 1 | 🧪 em convergência |
-| [tutorial](#tutorial) | 16 | 1 | 0 | 1 | 0 | 0 | 🧪 em convergência |
-| [session](#session) | 17 | 3 | 0 | 3 | 0 | 1 | 🧪 em convergência |
-| [auth](#auth) | 18 | 5 | 0 | 5 | 0 | 1 | 🧪 em convergência |
-| [identity](#identity) | 19 | 8 | 0 | 8 | 0 | 5 | 🧪 em convergência |
-| [devices](#devices) | 20 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
-| [codes](#codes) | 21 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
-| [xbox](#xbox) | 22 | 4 | 0 | 4 | 0 | 4 | 🧪 em convergência |
-| [bnet](#bnet) | 23 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
-| [ads ⛔](#ads) | 99 | 4 | 0 | 4 | 0 | 1 | ⛔ fora de escopo (dependência externa) |
-| [iap ⛔](#iap) | 99 | 6 | 0 | 6 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
+🔒 terminal = `client_authoritative`: evidência documentada de que o cliente
+NUNCA emite esta rota por design (não é bug nem gap) — ver `research/DEAD-ENDS.md`.
+Gates de round-trip viram N/A (null); não conta como paridade real na métrica.
+
+| Módulo | Pri | Endpoints | ✅ DoD | 🔒 term. | 🧪 impl. | ❌ falta | 🔬 schema | Estado |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| [gear](#gear) | 1 | 5 | 0 | 1 | 4 | 0 | 4 | 🧪 em convergência |
+| [slayers](#slayers) | 2 | 2 | 0 | 1 | 1 | 0 | 1 | 🧪 em convergência |
+| [talents](#talents) | 3 | 1 | 0 | 0 | 1 | 0 | 1 | 🧪 em convergência |
+| [chapters](#chapters) | 4 | 13 | 3 | 0 | 10 | 0 | 10 | 🧪 em convergência |
+| [quests](#quests) | 5 | 3 | 0 | 0 | 3 | 0 | 3 | 🧪 em convergência |
+| [reward-tracks](#reward-tracks) | 6 | 3 | 0 | 0 | 3 | 0 | 3 | 🧪 em convergência |
+| [inbox](#inbox) | 7 | 4 | 0 | 0 | 4 | 0 | 4 | 🧪 em convergência |
+| [player](#player) | 8 | 7 | 0 | 0 | 7 | 0 | 2 | 🧪 em convergência |
+| [events](#events) | 9 | 11 | 0 | 0 | 11 | 0 | 9 | 🧪 em convergência |
+| [battle-pass](#battle-pass) | 10 | 9 | 0 | 0 | 9 | 0 | 9 | 🧪 em convergência |
+| [daily-rewards](#daily-rewards) | 11 | 2 | 0 | 0 | 2 | 0 | 0 | 🧪 em convergência |
+| [idle-rewards](#idle-rewards) | 12 | 4 | 0 | 0 | 4 | 0 | 2 | 🧪 em convergência |
+| [store](#store) | 13 | 10 | 0 | 1 | 9 | 0 | 5 | 🧪 em convergência |
+| [inventory](#inventory) | 14 | 3 | 0 | 0 | 3 | 0 | 1 | 🧪 em convergência |
+| [armory](#armory) | 15 | 2 | 1 | 0 | 1 | 0 | 1 | 🧪 em convergência |
+| [tutorial](#tutorial) | 16 | 1 | 0 | 0 | 1 | 0 | 0 | 🧪 em convergência |
+| [session](#session) | 17 | 3 | 0 | 0 | 3 | 0 | 1 | 🧪 em convergência |
+| [auth](#auth) | 18 | 5 | 0 | 0 | 5 | 0 | 1 | 🧪 em convergência |
+| [identity](#identity) | 19 | 8 | 0 | 0 | 8 | 0 | 5 | 🧪 em convergência |
+| [devices](#devices) | 20 | 4 | 0 | 0 | 4 | 0 | 4 | 🧪 em convergência |
+| [codes](#codes) | 21 | 1 | 0 | 0 | 1 | 0 | 1 | 🧪 em convergência |
+| [xbox](#xbox) | 22 | 4 | 0 | 0 | 4 | 0 | 4 | 🧪 em convergência |
+| [bnet](#bnet) | 23 | 1 | 0 | 0 | 1 | 0 | 1 | 🧪 em convergência |
+| [ads ⛔](#ads) | 99 | 4 | 0 | 0 | 4 | 0 | 1 | ⛔ fora de escopo (dependência externa) |
+| [iap ⛔](#iap) | 99 | 6 | 0 | 0 | 6 | 0 | 0 | ⛔ fora de escopo (dependência externa) |
 
 ## Detalhe por módulo
 
@@ -46,17 +50,17 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/gear/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.ApplyCosmetic(gearUid, cosmeticId); cosmetic_id literal confirmado | NEGATIVA 2026-08-23 rig: flows UI completos de compra por moedas e equip de uniforme + skin de arma (uniforms-fs1..6.png, weaponskins-fs1..5.png) com ZERO chamadas de rede e inventario do servidor inalterado entre cold boots - cosmetic e client-authoritative no 1.13.1. request_observed permanece false. DEAD-ENDS #21. |
+| `game/gear/apply-cosmetic` | ✅ | ✅ | 🔒 | 🔒 | 🔒 | — | ✅ | ✅ | — | metadata v29: GearApi.ApplyCosmetic(gearUid, cosmeticId); cosmetic_id literal confirmado | NEGATIVA 2026-08-23 rig: flows UI completos de compra por moedas e equip de uniforme + skin de arma (uniforms-fs1..6.png, weaponskins-fs1..5.png) com ZERO chamadas de rede e inventario do servidor inalterado entre cold boots - cosmetic e client-authoritative no 1.13.1. request_observed permanece false. DEAD-ENDS #21. | Marcado client_authoritative 2026-08-23: DEAD-ENDS #21, flows completos de UI (compra+equip) no rig, zero chamadas de rede em multiplos cold boots. request_observed/response_observed/client_validated viram null (nao aplicavel, nao ha round-trip por design) — nao conta como DoD completo (endpoint_terminal). Fixture client real sempre reabre a rota automaticamente. |
 | `game/gear/dismantle` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Dismantle(gearUid); refund via dismantle.tiers no game-data |
 | `game/gear/fuse` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.Fuse(inputUids); requer gear_fusion no game-data (erro 2300 explicito sem config) |
-| `game/gear/multi-upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade) | NEGATIVA 2026-08-23 rig: mesmo painel e mesmo handler de upgrade do botao UPGRADE do BARRACKS - acao quebra o cliente antes do wire (ver game/gear/upgrade). Rota nunca emitida no UI medido. | 2026-08-23 correcao: mesma ressalva de game/gear/upgrade - o travamento associado nao e atribuivel ao botao (reproduzido em cold boot sem interacao, ver DEAD-ENDS #24). Rota nunca emitida no UI medido, mas a causa do travamento observado apos o tap fica A VERIFICAR. |
-| `game/gear/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29 2026-08-17: GearApi.Upgrade(gearUid); levels_to_upgrade e literal confirmado, gear_uid do fallback snake (A VERIFICAR em captura cliente) | NEGATIVA 2026-08-23 rig: tap medido no botao UPGRADE (826,1193, pixel scan) com app vivo (navegacao e selecao de carta respondem) produziu re-init COMPLETO da sessao em-processo (login-device..get-daily-quests, requests 1149-1166) SEM chamar game/gear/upgrade, seguido de wedge do main thread do Unity: 0 requests, 0 linhas Unity no logcat, render thread em spam continuo goldfish_vulkan QSRI (logcat-upgrade-tap.txt, 3920/3920 linhas). Reproduzido 2x. Causa raiz A VERIFICAR (hipotese: estado de controller nulo no handler, mesma familia do NRE de UpdateQuestState). Rota nunca emitida. | 2026-08-23 correcao: o travamento goldfish_vulkan medido apos o tap NAO e causado pelo botao - o mesmo travamento ocorreu em cold boot LIMPO sem nenhuma interacao (conta nova df-test-rig, logcat-newaccount.txt), poucos segundos apos o NRE de UpdateQuestState (DEAD-ENDS #23/#24). O resultado 0-wire continua medido, mas a atribuicao causal ao tap fica sem sustentacao - o cliente pode ja estar a caminho do travamento espontaneo quando o tap ocorre. Tempo ate travar e variavel (minutos em algumas sessoes, segundos em outras). |
+| `game/gear/multi-upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: GearApi.MultiUpgrade(gearUid, levelsToUpgrade) | NEGATIVA 2026-08-23 rig: mesmo painel e mesmo handler de upgrade do botao UPGRADE do BARRACKS - acao quebra o cliente antes do wire (ver game/gear/upgrade). Rota nunca emitida no UI medido. | 2026-08-23 correcao: mesma ressalva de game/gear/upgrade - o travamento associado nao e atribuivel ao botao (reproduzido em cold boot sem interacao, ver DEAD-ENDS #24). Rota nunca emitida no UI medido, mas a causa do travamento observado apos o tap fica A VERIFICAR. | 2026-08-23 revisao de precisao: mesma ressalva de game/gear/upgrade - ver DEAD-ENDS #24 revisado. Causa raiz do travamento A VERIFICAR, nao confirmada. |
+| `game/gear/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29 2026-08-17: GearApi.Upgrade(gearUid); levels_to_upgrade e literal confirmado, gear_uid do fallback snake (A VERIFICAR em captura cliente) | NEGATIVA 2026-08-23 rig: tap medido no botao UPGRADE (826,1193, pixel scan) com app vivo (navegacao e selecao de carta respondem) produziu re-init COMPLETO da sessao em-processo (login-device..get-daily-quests, requests 1149-1166) SEM chamar game/gear/upgrade, seguido de wedge do main thread do Unity: 0 requests, 0 linhas Unity no logcat, render thread em spam continuo goldfish_vulkan QSRI (logcat-upgrade-tap.txt, 3920/3920 linhas). Reproduzido 2x. Causa raiz A VERIFICAR (hipotese: estado de controller nulo no handler, mesma familia do NRE de UpdateQuestState). Rota nunca emitida. | 2026-08-23 correcao: o travamento goldfish_vulkan medido apos o tap NAO e causado pelo botao - o mesmo travamento ocorreu em cold boot LIMPO sem nenhuma interacao (conta nova df-test-rig, logcat-newaccount.txt), poucos segundos apos o NRE de UpdateQuestState (DEAD-ENDS #23/#24). O resultado 0-wire continua medido, mas a atribuicao causal ao tap fica sem sustentacao - o cliente pode ja estar a caminho do travamento espontaneo quando o tap ocorre. Tempo ate travar e variavel (minutos em algumas sessoes, segundos em outras). | 2026-08-23 revisao de precisao: a entrada #24 do DEAD-ENDS foi reescrita para nao afirmar causa do travamento como fato — o unico item CONFIRMADO e que a escolha de backend de GPU (swiftshader vs auto) nao decide o travamento (reproduziu identico nos dois). A causa raiz permanece A VERIFICAR entre duas hipoteses nao isoladas (pump morto vs estado residual do processo do emulador/host). DISMANTLE e FUSE nunca tiveram execucao conclusiva neste rig e nao devem ser tratados como confirmados nem negados. |
 
 ### slayers
 
 | Rota | Impl | Schema | Req obs | Res obs | Cliente | Persist | Teste | Fixt | Fallback | Nota |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| `game/slayers/apply-cosmetic` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SlayerApi.ApplyCosmetic(slayerUid, cosmeticId) | NEGATIVA 2026-08-23 rig: mesmo fluxo de equip de uniforme do slayer sem chamada de rede - client-authoritative (ver game/gear/apply-cosmetic). DEAD-ENDS #21. |
+| `game/slayers/apply-cosmetic` | ✅ | ✅ | 🔒 | 🔒 | 🔒 | — | ✅ | ✅ | — | metadata v29: SlayerApi.ApplyCosmetic(slayerUid, cosmeticId) | NEGATIVA 2026-08-23 rig: mesmo fluxo de equip de uniforme do slayer sem chamada de rede - client-authoritative (ver game/gear/apply-cosmetic). DEAD-ENDS #21. | Marcado client_authoritative 2026-08-23: mesma evidencia de game/gear/apply-cosmetic (DEAD-ENDS #21) — flow de equip de skin de arma no rig, zero chamadas de rede. |
 | `game/slayers/upgrade` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: SlayerApi.Upgrade(slayerUid) |
 
 ### talents
@@ -179,7 +183,7 @@ DEFINITION OF DONE por endpoint (todos devem ser verdadeiros;
 | `game/store/get-offer-items` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetOfferItems() CONFIRMADO; mesmo DTO de GetItems; fixture server-replay 2026-08-17 |
 | `game/store/get-offers` | ✅ | · | ✅ | ✅ | · | — | · | ✅ | — | implementado, aguardando validação |
 | `game/store/get-player-offers` | ✅ | ✅ | · | · | · | — | ✅ | ✅ | — | metadata v29: StoreApi.GetPlayerOffers() CONFIRMADO; GetPlayerOffersResponse{offers} com PlayerOfferModel das offers ativadas |
-| `game/store/purchase` | ✅ | · | · | · | · | — | ✅ | · | — | NEGATIVA 2026-08-23 rig: compra de cosmetic por moedas/cristais concluida no UI sem chamada de rede e currencies do servidor inalteradas ([{rid:3,amount:60}]) - client-authoritative no 1.13.1. DEAD-ENDS #21. |
+| `game/store/purchase` | ✅ | · | 🔒 | 🔒 | 🔒 | — | ✅ | · | — | NEGATIVA 2026-08-23 rig: compra de cosmetic por moedas/cristais concluida no UI sem chamada de rede e currencies do servidor inalteradas ([{rid:3,amount:60}]) - client-authoritative no 1.13.1. DEAD-ENDS #21. | Marcado client_authoritative 2026-08-23: DEAD-ENDS #21, compra de uniforme por moedas no rig com zero chamadas de rede e inventario do servidor inalterado. schema_extracted permanece false — DTO real nao foi extraido ainda, gap legitimo e distinto da negativa de request_observed. |
 
 ### inventory
 

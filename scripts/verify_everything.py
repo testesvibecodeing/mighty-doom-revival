@@ -48,6 +48,12 @@ ROOT = Path(__file__).resolve().parent.parent
 # enquanto o run_tests.py os executava — o gate ficava verde por omissão.
 sys.path.insert(0, str(ROOT))
 from run_tests import descobrir as descobrir_testes_python  # noqa: E402
+sys.path.insert(0, str(ROOT / "scripts"))
+# "DoD completo" tem UMA fonte de verdade: generate_endpoint_matrix.endpoint_done().
+# Uma fórmula própria aqui já divergiu da real (contava rota client_authoritative
+# sem prova real como "done" porque `is not False` aceita None de qualquer gate,
+# sem saber que None ali é marcador terminal, não "não aplicável" genérico).
+from generate_endpoint_matrix import endpoint_done, endpoint_terminal  # noqa: E402
 
 # Consoles Windows ficam em cp1252; a saída destes scripts é UTF-8 (mesclas
 # de português e emoji do estado dos testes) — nunca deixe o print derrubar o gate.
@@ -204,13 +210,12 @@ def check_registry(report: Report) -> None:
 
     check_fixtures(report)
 
-    done = sum(1 for d in endpoints.values()
-               if all(d.get(g) is not False for g in ("schema_extracted", "implemented",
-                                                     "request_observed", "response_observed",
-                                                     "client_validated", "regression_test"))
-               and not d.get("uses_fallback"))
+    done = sum(1 for d in endpoints.values() if endpoint_done(d))
+    terminal = sum(1 for d in endpoints.values() if endpoint_terminal(d))
     legacy = compat.get("server_only_routes") or []
-    print(f"  [info] DoD completo: {done}/{len(endpoints)} · rotas legadas do servidor: {len(legacy)}")
+    print(f"  [info] DoD completo: {done}/{len(endpoints)} · "
+          f"terminal (client-autoritativo, não é paridade): {terminal} · "
+          f"rotas legadas do servidor: {len(legacy)}")
     report.ok("compatibility.json coerente")
 
 
