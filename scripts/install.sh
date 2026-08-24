@@ -57,23 +57,196 @@ TS="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="$LOG_DIR/install-$TS.log"
 : > "$LOG_FILE"
 
-# Espelha tudo (stdout + stderr) no log, mantendo o terminal interativo para
-# os prompts (stdin não é redirecionado).
-exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$LOG_FILE" >&2)
+# ---------------------------------------------------------------------------
+# Apresentação (cores, largura do terminal e molduras do resumo final).
+#
+# Precisa ser decidido AQUI, antes do redirecionamento para o log: depois dele
+# o stdout vira um pipe para o tee e '[ -t 1 ]' nunca mais é verdadeiro, ou
+# seja, o script nunca saberia que está falando com um terminal de verdade.
+STDOUT_IS_TTY=0
+if [[ -t 1 ]]; then
+  STDOUT_IS_TTY=1
+fi
 
-rule() {
-  printf '%*s\n' 64 '' | tr ' ' "${1:-=}"
+TERM_COLS=0
+TERM_COLORS=0
+if [[ "$STDOUT_IS_TTY" == "1" ]]; then
+  TERM_COLS="$(tput cols 2>/dev/null || echo 0)"
+  TERM_COLORS="$(tput colors 2>/dev/null || echo 0)"
+fi
+[[ "$TERM_COLS"   =~ ^[0-9]+$ ]] || TERM_COLS=0
+[[ "$TERM_COLORS" =~ ^[0-9]+$ ]] || TERM_COLORS=0
+
+# Cor só quando há terminal de verdade; NO_COLOR e TERM=dumb desligam tudo.
+UI_COLOR=0
+if [[ "$STDOUT_IS_TTY" == "1" && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
+  UI_COLOR=1
+fi
+
+if [[ "$UI_COLOR" == "1" ]]; then
+  C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'
+  if (( TERM_COLORS >= 256 )); then
+    C_ACCENT=$'\033[38;5;202m'; C_TITLE=$'\033[1;38;5;208m'
+    C_OK=$'\033[38;5;77m';      C_WARN=$'\033[38;5;214m'
+    C_LINK=$'\033[1;38;5;45m';  C_KEY=$'\033[38;5;245m'
+    C_SECRET=$'\033[1;38;5;220m'; C_CMD=$'\033[38;5;151m'
+  else
+    C_ACCENT=$'\033[31m';    C_TITLE=$'\033[1;31m'
+    C_OK=$'\033[32m';        C_WARN=$'\033[33m'
+    C_LINK=$'\033[1;36m';    C_KEY=$'\033[90m'
+    C_SECRET=$'\033[1;33m';  C_CMD=$'\033[36m'
+  fi
+else
+  C_RESET=''; C_BOLD=''; C_DIM=''; C_ACCENT=''; C_TITLE=''
+  C_OK='';    C_WARN=''; C_LINK=''; C_KEY='';   C_SECRET=''; C_CMD=''
+fi
+
+# Largura das molduras: acompanha o terminal, com piso e teto para o texto não
+# ficar espremido em janela estreita nem largo demais para ler em monitor 4K.
+UI_WIDTH=72
+if (( TERM_COLS > 0 )); then
+  UI_WIDTH=$(( TERM_COLS - 2 ))
+  if (( UI_WIDTH > 88 )); then UI_WIDTH=88; fi
+  if (( UI_WIDTH < 56 )); then UI_WIDTH=56; fi
+fi
+UI_KEY_W=24
+
+# As cores viram lixo dentro do arquivo de log; este filtro tira os códigos
+# ANSI só do que é gravado, mantendo o terminal colorido.
+UI_SED_U=''
+if printf '' | sed -u '' >/dev/null 2>&1; then
+  UI_SED_U='-u'
+fi
+strip_ansi() {
+  sed ${UI_SED_U:+-u} $'s/\033\\[[0-9;]*[a-zA-Z]//g'
 }
 
-section() {
-  echo ""
-  rule '-'
-  echo " $1"
-  rule '-'
+# Espelha tudo (stdout + stderr) no log, mantendo o terminal interativo para
+# os prompts (stdin não é redirecionado).
+if [[ "$UI_COLOR" == "1" ]]; then
+  exec > >(tee >(strip_ansi >> "$LOG_FILE")) 2> >(tee >(strip_ansi >> "$LOG_FILE") >&2)
+else
+  exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$LOG_FILE" >&2)
+fi
+
+rule() {
+  printf '%*s\n' "$UI_WIDTH" '' | tr ' ' "${1:-=}"
 }
 
 kv() {
   printf '  %-25s %s\n' "$1:" "$2"
+}
+
+# --- Blocos do resumo final ------------------------------------------------
+# Contagem de caracteres à prova de locale: em locale C o bash conta BYTES, e
+# uma única palavra acentuada ("SERVIÇO") desalinharia a moldura inteira. Aqui
+# forçamos byte-mode e contamos só os bytes-líder do UTF-8 (os bytes 0x80-0xBF
+# são continuação de caractere, nunca um caractere novo).
+ui_len() (
+  export LC_ALL=C
+  local s="$1" lead
+  lead="${s//[$'\x80'-$'\xbf']/}"
+  printf '%s' "${#lead}"
+)
+
+ui_repeat() {
+  local char="$1" count="$2" out=''
+  while (( count-- > 0 )); do out+="$char"; done
+  printf '%s' "$out"
+}
+
+ui_pad() {
+  local text="$1" width="$2" fill
+  fill=$(( width - $(ui_len "$text") ))
+  if (( fill < 0 )); then fill=0; fi
+  printf '%s%*s' "$text" "$fill" ''
+}
+
+# Linha interna da moldura: mede o texto SEM cor e imprime o texto COM cor.
+ui_box_row() {
+  local plain="$1" colored="$2" pad
+  pad=$(( UI_WIDTH - 2 - $(ui_len "$plain") ))
+  if (( pad < 0 )); then pad=0; fi
+  printf '%s║%s%s%*s%s║%s\n' "$C_ACCENT" "$C_RESET" "$colored" "$pad" '' "$C_ACCENT" "$C_RESET"
+}
+
+ui_banner() {
+  local title="$1" sub="${2:-}" line
+  line="$(ui_repeat '═' $(( UI_WIDTH - 2 )))"
+  echo ""
+  printf '%s╔%s╗%s\n' "$C_ACCENT" "$line" "$C_RESET"
+  ui_box_row "  ✔  $title" "  ${C_OK}✔${C_RESET}  ${C_BOLD}${title}${C_RESET}"
+  if [[ -n "$sub" ]]; then
+    ui_box_row "     $sub" "     ${C_LINK}${sub}${C_RESET}"
+  fi
+  printf '%s╚%s╝%s\n' "$C_ACCENT" "$line" "$C_RESET"
+}
+
+# Cabeçalho de seção: barra + título + régua até a borda, com etiqueta
+# opcional encostada à direita (ex: "opcional").
+ui_section() {
+  local title="$1" badge="${2:-}" right='' n fill
+  if [[ -n "$badge" ]]; then right=" ${badge} ──"; fi
+  n=$(( UI_WIDTH - 3 - $(ui_len "$title") - $(ui_len "$right") ))
+  if (( n < 2 )); then n=2; fi
+  fill="$(ui_repeat '─' "$n")"
+  echo ""
+  printf '%s▌%s %s%s%s %s%s%s%s\n' \
+    "$C_ACCENT" "$C_RESET" "$C_TITLE" "$title" "$C_RESET" "$C_DIM" "$fill" "$right" "$C_RESET"
+}
+
+ui_row() {
+  printf '   %s%s%s%s\n' "$C_KEY" "$(ui_pad "$1" "$UI_KEY_W")" "$C_RESET" "$2"
+}
+
+# Igual ao ui_row, mas com o valor destacado (segredos: senha, token).
+ui_row_hi() {
+  printf '   %s%s%s%s%s%s\n' "$C_KEY" "$(ui_pad "$1" "$UI_KEY_W")" "$C_RESET" "$C_SECRET" "$2" "$C_RESET"
+}
+
+# Rótulo + caminho longo em duas linhas (não estoura a largura da moldura).
+ui_path() {
+  printf '   %s%s%s\n' "$C_KEY" "$1" "$C_RESET"
+  printf '     %s%s%s\n' "$C_CMD" "$2" "$C_RESET"
+}
+
+ui_text()   { printf '   %s\n' "$1"; }
+ui_note()   { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
+ui_sub()    { printf '     %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
+ui_bullet() { printf '   %s•%s %s\n' "$C_ACCENT" "$C_RESET" "$1"; }
+ui_warn()   { printf '   %s⚠  %s%s\n' "$C_WARN" "$1" "$C_RESET"; }
+ui_link()   { printf '   %s▸%s %s%s%s\n' "$C_ACCENT" "$C_RESET" "$C_LINK" "$1" "$C_RESET"; }
+ui_secret() { printf '   %s%s%s\n' "$C_SECRET" "$1" "$C_RESET"; }
+
+ui_cmd() {
+  local cmd="$1" indent="${2:-3}"
+  printf '%*s%s$%s %s%s%s\n' "$indent" '' "$C_DIM" "$C_RESET" "$C_CMD" "$cmd" "$C_RESET"
+}
+
+# Passo numerado; ui_step_cont continua o mesmo passo alinhado ao texto.
+ui_step() {
+  printf '   %s%s.%s %s\n' "$C_TITLE" "$1" "$C_RESET" "$2"
+}
+ui_step_cont() { printf '      %s\n' "$1"; }
+
+# Posse de uma dependência de sistema, lida do .install-state: verde = criado
+# por este instalador e removível; âmbar = já existia na VPS e é intocável
+# pelo uninstall.sh.
+ui_own() {
+  local label="$1" value="${!2:-}" mark
+  case "$value" in
+    1) mark="${C_OK}✔${C_RESET} deste projeto ${C_DIM}· uninstall.sh remove${C_RESET}" ;;
+    0) mark="${C_WARN}○${C_RESET} já existia ${C_DIM}· uninstall.sh nunca remove${C_RESET}" ;;
+    *) mark="${C_DIM}— não se aplica${C_RESET}" ;;
+  esac
+  printf '   %s%s%s%s\n' "$C_KEY" "$(ui_pad "$label" 28)" "$C_RESET" "$mark"
+}
+
+ui_own_ours() {
+  printf '   %s%s%s%s✔%s sempre nosso\n' "$C_KEY" "$(ui_pad "$1" 28)" "$C_RESET" "$C_OK" "$C_RESET"
+  if [[ -n "${2:-}" ]]; then
+    ui_sub "$2"
+  fi
 }
 
 STEP="inicialização"
@@ -147,14 +320,6 @@ set_state() {
 
 state_decided() {
   grep -q "^${1}=" "$STATE_FILE" 2>/dev/null
-}
-
-ownership_label() {
-  case "${!1:-}" in
-    1) echo "SIM - pertence a este projeto (uninstall.sh pode remover)" ;;
-    0) echo "NÃO - já existia antes/pertence a outra coisa (uninstall.sh nunca remove)" ;;
-    *) echo "não se aplica" ;;
-  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -960,97 +1125,110 @@ fi
 # Mantém só os 20 logs de instalação mais recentes.
 ls -1t "$LOG_DIR"/install-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
 
-echo ""
-rule '='
-echo " CONCLUÍDO — Mighty DOOM Revival está 100% no ar"
-rule '='
+# ---------------------------------------------------------------------------
+# Resumo final: é o que a pessoa realmente lê depois de 10 minutos de deploy.
+# Cada bloco é uma pergunta que ela vai ter ("como entro?", "cadê o link do
+# APK?", "o que o uninstall pode apagar?"), com os segredos destacados e os
+# links isolados em linha própria para copiar sem cortar caractere.
+ui_banner "CONCLUÍDO — Mighty DOOM Revival está 100% no ar" "https://$DOMAIN"
 
-section "SERVIÇO"
-kv "Domínio"            "https://$DOMAIN"
-kv "Site"               "https://$DOMAIN/"
-kv "Health check"       "https://$DOMAIN/revival/health"
-kv "Health local"       "http://127.0.0.1:8080/revival/health"
-kv "Perfil de recursos" "$RAM_PROFILE (heap ${HEAP_MB}MB, MemoryMax $MEM_MAX, TasksMax $TASKS_MAX)"
-kv "Reverse proxy"      "$PROXY_KIND"
+ui_section "SERVIÇO"
+ui_row "Site"               "https://$DOMAIN/"
+ui_row "Health check"       "https://$DOMAIN/revival/health"
+ui_row "Health local"       "http://127.0.0.1:8080/revival/health"
+ui_row "Perfil de recursos" "$RAM_PROFILE · heap ${HEAP_MB}MB · RAM máx $MEM_MAX · tasks $TASKS_MAX"
+ui_row "Reverse proxy"      "$PROXY_KIND"
 
-section "UPLOAD DO APK PELO NAVEGADOR (opcional)"
-echo "  Para publicar o APK patcheado no botão de download do site, abra"
-echo "  este link TEMPORÁRIO e arraste o arquivo .apk:"
+ui_section "UPLOAD DO APK PELO NAVEGADOR" "opcional"
+ui_text "Para publicar o APK patcheado no botão de download do site, abra"
+ui_text "este link TEMPORÁRIO e arraste o arquivo .apk:"
 echo ""
-echo "    https://$DOMAIN/upload/$UPLOAD_TOKEN"
+ui_link "https://$DOMAIN/upload/$UPLOAD_TOKEN"
 echo ""
-kv "Válido até" "$UPLOAD_EXPIRES_LABEL (24 horas)"
-echo "  Links gerados por instalações anteriores foram invalidados."
+ui_row  "Válido até" "$UPLOAD_EXPIRES_LABEL · 24 horas"
+ui_note "Links gerados por instalações anteriores foram invalidados."
 echo ""
-echo "  Quer ELIMINAR este link de upload imediatamente, antes das 24h?"
-echo "  Basta abrir o link abaixo no navegador:"
+ui_text "Quer ELIMINAR este link agora, antes das 24h? Abra no navegador:"
 echo ""
-echo "    https://$DOMAIN/upload-cancel/$UPLOAD_TOKEN"
+ui_link "https://$DOMAIN/upload-cancel/$UPLOAD_TOKEN"
 echo ""
-echo "  Depois de eliminado, ninguém consegue enviar ou substituir o APK"
-echo "  sem rodar este instalador de novo. O APK já publicado continua"
-echo "  no ar normalmente em:"
-echo "    https://$DOMAIN/download/mighty-doom-revival.apk"
+ui_note "Depois de eliminado, ninguém consegue enviar ou substituir o APK"
+ui_note "sem rodar este instalador de novo. O APK já publicado continua no"
+ui_note "ar normalmente em:"
+ui_link "https://$DOMAIN/download/mighty-doom-revival.apk"
 
-section "PAINEL DO SLAYER (conta, progresso e administração)"
-kv "Login / criar conta" "https://$DOMAIN/account"
-kv "Painel (após login)" "https://$DOMAIN/slayer"
+ui_section "PAINEL DO SLAYER" "conta · progresso · administração"
+ui_row "Login / criar conta" "https://$DOMAIN/account"
+ui_row "Painel (após login)" "https://$DOMAIN/slayer"
 echo ""
 if [[ "$ADMIN_FIRST_ACCESS" == "1" ]]; then
-  echo "  Primeiro acesso criado por ESTA instalação (guarde bem):"
-  kv "e-mail do Super Admin" "$ADMIN_EMAIL"
-  kv "senha do Super Admin"  "$ADMIN_PASSWORD"
+  ui_text "${C_BOLD}Primeiro acesso criado por ESTA instalação${C_RESET} (guarde bem):"
+  ui_row_hi "e-mail do Super Admin" "$ADMIN_EMAIL"
+  ui_row_hi "senha do Super Admin"  "$ADMIN_PASSWORD"
 else
-  echo "  Super Admin já cadastrado neste servidor (senha inalterada):"
+  ui_text "Super Admin já cadastrado neste servidor (senha inalterada):"
   while IFS= read -r admin_line; do
-    [[ -n "$admin_line" ]] && echo "    - $admin_line"
+    if [[ -n "$admin_line" ]]; then
+      ui_bullet "$admin_line"
+    fi
   done <<< "$ADMIN_EMAILS"
 fi
 echo ""
-echo "  Esqueceu o e-mail/senha do Super Admin? Abra este link TEMPORÁRIO"
-echo "  para trocar os dois:"
+ui_text "Esqueceu o e-mail/senha do Super Admin? Abra este link TEMPORÁRIO"
+ui_text "para trocar os dois:"
 echo ""
-echo "    https://$DOMAIN/admin-recover/$ADMIN_RECOVER_TOKEN"
+ui_link "https://$DOMAIN/admin-recover/$ADMIN_RECOVER_TOKEN"
 echo ""
-kv "Validade do link" "até $ADMIN_RECOVER_EXPIRES_LABEL (10 minutos, uso único)"
-echo "  Depois de concluir a troca, o link é revogado na hora e todas as"
-echo "  sessões do painel são encerradas. Se expirar, rode este instalador"
-echo "  de novo para gerar um novo."
+ui_row  "Validade do link" "até $ADMIN_RECOVER_EXPIRES_LABEL · 10 min · uso único"
+ui_note "Concluída a troca, o link é revogado na hora e todas as sessões do"
+ui_note "painel são encerradas. Se expirar, rode o instalador de novo."
 
-section "TOKEN ADMIN DA API"
-echo "  $(get_env_var REVIVAL_ADMIN_TOKEN)"
-echo "  (guarde este token; ele autoriza as operações técnicas do servidor)"
-echo "  CLI local: REVIVAL_ADMIN_TOKEN='este-token' python3 scripts/revival_admin.py overview"
+ui_section "TOKEN ADMIN DA API"
+ui_secret "$(get_env_var REVIVAL_ADMIN_TOKEN)"
+echo ""
+ui_note "Guarde este token: é ele que autoriza as operações técnicas do"
+ui_note "servidor. Uso na CLI local:"
+ui_cmd "export REVIVAL_ADMIN_TOKEN='<token acima>'"
+ui_cmd "python3 scripts/revival_admin.py overview"
 
-section "OPERAÇÃO E LOGS"
-echo "  systemctl status $SERVICE_NAME"
-echo "  systemctl status $PROXY_KIND"
-echo "  journalctl -u $SERVICE_NAME -f"
-kv "Log da instalação" "$LOG_FILE"
-kv "Log do servidor"   "$SERVER_LOG"
+ui_section "OPERAÇÃO E LOGS"
+ui_cmd "systemctl status $SERVICE_NAME"
+ui_cmd "systemctl status $PROXY_KIND"
+ui_cmd "journalctl -u $SERVICE_NAME -f"
+echo ""
+ui_path "Log desta instalação" "$LOG_FILE"
+ui_path "Log do servidor"      "$SERVER_LOG"
 
-section "PROPRIEDADE (VPS compartilhada com outros projetos)"
-kv "Node.js instalado por este instalador" "$(ownership_label NODE_INSTALLED_BY_SCRIPT)"
+ui_section "PROPRIEDADE" "VPS compartilhada com outros projetos"
+ui_own "Node.js" NODE_INSTALLED_BY_SCRIPT
 if [[ "$PROXY_KIND" == "nginx" ]]; then
-  kv "Site nginx deste projeto" "sempre nosso ($NGINX_SITE_FILE)"
-  kv "Certificado Let's Encrypt de $DOMAIN" "sempre nosso (domínio do projeto)"
-  kv "Pacote 'certbot' instalado por este instalador" "$(ownership_label CERTBOT_INSTALLED_BY_SCRIPT)"
-  kv "Cron de renovação (/etc/cron.d/certbot-renew)" "$(ownership_label CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT)"
+  ui_own_ours "Site nginx deste projeto" "$NGINX_SITE_FILE"
+  ui_own_ours "Certificado Let's Encrypt" "domínio $DOMAIN, emitido para este projeto"
+  ui_own "Pacote 'certbot'"          CERTBOT_INSTALLED_BY_SCRIPT
+  ui_own "Cron de renovação certbot" CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT
+  ui_sub "/etc/cron.d/certbot-renew"
 else
-  kv "Pacote 'caddy' instalado por este instalador" "$(ownership_label CADDY_PACKAGE_INSTALLED_BY_SCRIPT)"
-  kv "/etc/caddy/Caddyfile criado por este instalador" "$(ownership_label CADDYFILE_CREATED_BY_SCRIPT)"
-  kv "Linha 'import' acrescentada por este instalador" "$(ownership_label CADDY_IMPORT_LINE_ADDED_BY_SCRIPT)"
-  kv "Site do Caddy deste projeto" "sempre nosso ($CADDY_SITE_FILE)"
+  ui_own "Pacote 'caddy'"              CADDY_PACKAGE_INSTALLED_BY_SCRIPT
+  ui_own "/etc/caddy/Caddyfile"        CADDYFILE_CREATED_BY_SCRIPT
+  ui_own "Linha 'import' no Caddyfile" CADDY_IMPORT_LINE_ADDED_BY_SCRIPT
+  ui_own_ours "Site do Caddy deste projeto" "$CADDY_SITE_FILE"
 fi
-kv "Serviço systemd $SERVICE_NAME" "sempre nosso"
+ui_own_ours "Serviço systemd" "$SERVICE_NAME"
 echo ""
-kv "Registro de posse" "$STATE_FILE"
-echo "  Para remover só o que é deste projeto (sem afetar outros projetos"
-echo "  na mesma VPS): sudo ./scripts/uninstall.sh"
+ui_path "Registro de posse" "$STATE_FILE"
+echo ""
+ui_note "Para remover só o que é deste projeto, sem afetar outros projetos"
+ui_note "na mesma VPS:"
+ui_cmd "sudo ./scripts/uninstall.sh"
 
-section "PRÓXIMOS PASSOS"
-echo "  1. Gere o APK local no Revival Studio (scripts/revival-studio),"
-echo "     menu 'APK -> Aplicar endpoint', informando '$DOMAIN' como servidor."
-echo "  2. Para atualizar depois de mudanças no código:"
-echo "     git pull && sudo ./scripts/install.sh"
+ui_section "PRÓXIMOS PASSOS"
+ui_step 1 "Gere o APK local no Revival Studio (scripts/revival-studio),"
+ui_step_cont "menu 'APK -> Aplicar endpoint', informando '$DOMAIN'"
+ui_step_cont "como servidor."
+echo ""
+ui_step 2 "Para atualizar depois de mudanças no código:"
+ui_cmd "git pull && sudo ./scripts/install.sh" 6
+
+echo ""
+printf '%s%s%s\n' "$C_DIM" "$(ui_repeat '─' "$UI_WIDTH")" "$C_RESET"
 echo ""
