@@ -1,7 +1,7 @@
 {
   "endpoint": "game/daily-rewards/get-state",
   "provenance": "client",
-  "captured_at": "2026-08-20T23:42:07Z",
+  "captured_at": "2026-08-21T00:23:59Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
@@ -16,8 +16,8 @@
       "uts": "<uts>",
       "code": 1000,
       "state": {
-        "day_start": 1787184000,
-        "day_end": 1787270400,
+        "day_start": 1787270400,
+        "day_end": 1787356800,
         "day": 1,
         "last_claim": 0,
         "pending": [],

@@ -1,14 +1,14 @@
 {
   "endpoint": "game/auth/login-device",
   "provenance": "client",
-  "captured_at": "2026-08-20T23:42:07Z",
+  "captured_at": "2026-08-21T00:23:59Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
     "method": "POST",
     "path": "/game/auth/login-device",
     "body": {
-      "user_id": 12,
+      "user_id": 18,
       "device_id": "<device-id>",
       "password": "<password>",
       "platform_id": 4,
@@ -16,22 +16,11 @@
     }
   },
   "response": {
-    "status": 200,
-    "code": 1000,
+    "status": 403,
+    "code": 2101,
     "body": {
       "uts": "<uts>",
-      "code": 1000,
-      "token": "<token>",
-      "session_id": 1,
-      "puuid": "<puuid>",
-      "legal": {
-        "tos_version": 1,
-        "pp_version": 1,
-        "eula_version": 1,
-        "allow_personalization": false,
-        "allow_sharing": false
-      },
-      "playfab_session_ticket": null
+      "code": 2101
     }
   }
 }

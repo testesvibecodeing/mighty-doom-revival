@@ -1,7 +1,7 @@
 {
   "endpoint": "game/inbox/get-messages",
   "provenance": "client",
-  "captured_at": "2026-08-20T23:42:07Z",
+  "captured_at": "2026-08-21T00:23:59Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {

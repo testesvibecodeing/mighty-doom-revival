@@ -1,7 +1,7 @@
 {
   "endpoint": "game/auth/register",
   "provenance": "client",
-  "captured_at": "2026-08-19T22:26:18Z",
+  "captured_at": "2026-08-21T00:23:59Z",
   "sanitized": true,
   "source": "client_harness.py (request_log pareado do servidor)",
   "request": {
@@ -19,7 +19,7 @@
     "body": {
       "uts": "<uts>",
       "code": 1000,
-      "user_id": 8,
+      "user_id": 13,
       "device_id": "<device-id>",
       "password": "<password>",
       "recovery_code": "<recovery-code>",
