@@ -2,10 +2,14 @@
 # Mighty DOOM Revival - instalador completo para VPS (Debian/Ubuntu)
 #
 # Uso:
-#   git pull
 #   sudo ./scripts/install.sh
 #
-# O script é idempotente: pode ser executado de novo a cada "git pull" para
+# O próprio instalador faz o "git pull" no começo (e se reexecuta caso o pull
+# tenha trocado este arquivo). Alterações locais em arquivos versionados fazem
+# ele PULAR o pull, nunca descartar o trabalho; SKIP_GIT_PULL=1 desliga a
+# atualização e instala o código como está no disco.
+#
+# O script é idempotente: pode ser executado de novo a cada atualização para
 # atualizar o servidor em produção. Ele instala o Node.js se faltar, escolhe
 # um perfil de recursos conforme a RAM da VPS (1 GB / 4 GB / 8 GB ou mais),
 # roda os testes automatizados como gate de deploy, sobe o servidor via
@@ -88,17 +92,20 @@ if [[ "$UI_COLOR" == "1" ]]; then
   if (( TERM_COLORS >= 256 )); then
     C_ACCENT=$'\033[38;5;202m'; C_TITLE=$'\033[1;38;5;208m'
     C_OK=$'\033[38;5;77m';      C_WARN=$'\033[38;5;214m'
-    C_LINK=$'\033[1;38;5;45m';  C_KEY=$'\033[38;5;245m'
-    C_SECRET=$'\033[1;38;5;220m'; C_CMD=$'\033[38;5;151m'
+    C_ERR=$'\033[1;38;5;196m';  C_LINK=$'\033[1;38;5;45m'
+    C_KEY=$'\033[38;5;245m';    C_SECRET=$'\033[1;38;5;220m'
+    C_CMD=$'\033[38;5;151m'
   else
     C_ACCENT=$'\033[31m';    C_TITLE=$'\033[1;31m'
     C_OK=$'\033[32m';        C_WARN=$'\033[33m'
-    C_LINK=$'\033[1;36m';    C_KEY=$'\033[90m'
-    C_SECRET=$'\033[1;33m';  C_CMD=$'\033[36m'
+    C_ERR=$'\033[1;31m';     C_LINK=$'\033[1;36m'
+    C_KEY=$'\033[90m';       C_SECRET=$'\033[1;33m'
+    C_CMD=$'\033[36m'
   fi
 else
   C_RESET=''; C_BOLD=''; C_DIM=''; C_ACCENT=''; C_TITLE=''
-  C_OK='';    C_WARN=''; C_LINK=''; C_KEY='';   C_SECRET=''; C_CMD=''
+  C_OK='';    C_WARN=''; C_ERR=''; C_LINK=''; C_KEY=''
+  C_SECRET=''; C_CMD=''
 fi
 
 # Largura das molduras: acompanha o terminal, com piso e teto para o texto não
@@ -129,14 +136,16 @@ else
   exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$LOG_FILE" >&2)
 fi
 
-rule() {
-  printf '%*s\n' "$UI_WIDTH" '' | tr ' ' "${1:-=}"
-}
-
-kv() {
-  printf '  %-25s %s\n' "$1:" "$2"
-}
-
+# --- Blocos de saída (molduras, ícones e alinhamento) ----------------------
+#
+# ÍCONES: só glifos de texto puro (sem propriedade Emoji no Unicode), para o
+# terminal nunca trocá-los por um desenho colorido de largura dupla, que
+# quebraria o alinhamento. Cada um tem um significado fixo no instalador:
+#
+#   ✓ feito/no ar      ✗ falhou           ▲ atenção, não impede seguir
+#   ● decisão de posse ○ não é nosso      ▸ link para abrir no navegador
+#   » prompt/passo     • item de lista    $ comando para copiar e colar
+#
 # --- Blocos do resumo final ------------------------------------------------
 # Contagem de caracteres à prova de locale: em locale C o bash conta BYTES, e
 # uma única palavra acentuada ("SERVIÇO") desalinharia a moldura inteira. Aqui
@@ -170,12 +179,13 @@ ui_box_row() {
   printf '%s║%s%s%*s%s║%s\n' "$C_ACCENT" "$C_RESET" "$colored" "$pad" '' "$C_ACCENT" "$C_RESET"
 }
 
+# Moldura de abertura/fechamento: ui_banner "<ícone>" "<cor do ícone>" "título" "subtítulo"
 ui_banner() {
-  local title="$1" sub="${2:-}" line
+  local icon="$1" icon_color="$2" title="$3" sub="${4:-}" line
   line="$(ui_repeat '═' $(( UI_WIDTH - 2 )))"
   echo ""
   printf '%s╔%s╗%s\n' "$C_ACCENT" "$line" "$C_RESET"
-  ui_box_row "  ✔  $title" "  ${C_OK}✔${C_RESET}  ${C_BOLD}${title}${C_RESET}"
+  ui_box_row "  $icon  $title" "  ${icon_color}${icon}${C_RESET}  ${C_BOLD}${title}${C_RESET}"
   if [[ -n "$sub" ]]; then
     ui_box_row "     $sub" "     ${C_LINK}${sub}${C_RESET}"
   fi
@@ -214,7 +224,6 @@ ui_text()   { printf '   %s\n' "$1"; }
 ui_note()   { printf '   %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 ui_sub()    { printf '     %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
 ui_bullet() { printf '   %s•%s %s\n' "$C_ACCENT" "$C_RESET" "$1"; }
-ui_warn()   { printf '   %s⚠  %s%s\n' "$C_WARN" "$1" "$C_RESET"; }
 ui_link()   { printf '   %s▸%s %s%s%s\n' "$C_ACCENT" "$C_RESET" "$C_LINK" "$1" "$C_RESET"; }
 ui_secret() { printf '   %s%s%s\n' "$C_SECRET" "$1" "$C_RESET"; }
 
@@ -235,7 +244,7 @@ ui_step_cont() { printf '      %s\n' "$1"; }
 ui_own() {
   local label="$1" value="${!2:-}" mark
   case "$value" in
-    1) mark="${C_OK}✔${C_RESET} deste projeto ${C_DIM}· uninstall.sh remove${C_RESET}" ;;
+    1) mark="${C_OK}✓${C_RESET} deste projeto ${C_DIM}· uninstall.sh remove${C_RESET}" ;;
     0) mark="${C_WARN}○${C_RESET} já existia ${C_DIM}· uninstall.sh nunca remove${C_RESET}" ;;
     *) mark="${C_DIM}— não se aplica${C_RESET}" ;;
   esac
@@ -243,23 +252,69 @@ ui_own() {
 }
 
 ui_own_ours() {
-  printf '   %s%s%s%s✔%s sempre nosso\n' "$C_KEY" "$(ui_pad "$1" 28)" "$C_RESET" "$C_OK" "$C_RESET"
+  printf '   %s%s%s%s✓%s sempre nosso\n' "$C_KEY" "$(ui_pad "$1" 28)" "$C_RESET" "$C_OK" "$C_RESET"
   if [[ -n "${2:-}" ]]; then
     ui_sub "$2"
   fi
 }
 
+# --- Mensagens do passo a passo --------------------------------------------
+# Um ícone por significado, sempre na primeira coluna, para o olho achar na
+# rolagem o que exige ação. As variantes _cont continuam a mesma mensagem
+# alinhadas sob o texto, sem repetir o ícone.
+ok()        { printf '%s✓%s %s\n'  "$C_OK"     "$C_RESET" "$1"; }
+ok_cont()   { printf '  %s\n' "$1"; }
+warn()      { printf '%s▲%s %s\n'  "$C_WARN"   "$C_RESET" "$1"; }
+warn_cont() { printf '  %s\n' "$1"; }
+err()       { printf '%s✗ %s%s\n'  "$C_ERR"    "$1" "$C_RESET" >&2; }
+err_cont()  { printf '%s  %s%s\n'  "$C_ERR"    "$1" "$C_RESET" >&2; }
+info()      { printf '%s·%s %s\n'  "$C_ACCENT" "$C_RESET" "$1"; }
+info_cont() { printf '  %s%s%s\n'  "$C_DIM"    "$1" "$C_RESET"; }
+
+# Decisão de posse (o que é deste projeto e o que já existia na VPS): fica em
+# tom secundário porque é registro, não ação — mas com ícone próprio, já que é
+# o que o uninstall.sh vai obedecer depois.
+own() {
+  printf '%s●%s %s%s%s\n' "$C_LINK" "$C_RESET" "$C_DIM" "$1" "$C_RESET"
+}
+own_cont() { printf '  %s%s%s\n' "$C_DIM" "$1" "$C_RESET"; }
+
+# Saída crua de outro programa (JSON do health, journalctl, versões): recuada
+# e apagada, para não competir com as mensagens do instalador.
+raw_header() {
+  printf '  %s── %s %s%s\n' "$C_DIM" "$1" "$(ui_repeat '─' 6)" "$C_RESET"
+}
+raw_block() {
+  local line
+  # '|| [[ -n "$line" ]]': resposta HTTP não termina em newline, e sem isso o
+  # read descartaria justamente a última linha (o JSON inteiro do health).
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    printf '  %s%s%s\n' "$C_DIM" "$line" "$C_RESET"
+  done
+}
+
+# Texto do prompt interativo: o "»" marca o que espera resposta.
+ask() {
+  printf '%s»%s %s' "$C_ACCENT" "$C_RESET" "$1"
+}
+
 STEP="inicialização"
 on_error() {
   local exit_code=$?
-  echo ""
-  rule '='
-  echo "[ERRO] Falha na etapa: $STEP"
-  echo "Comando que falhou: ${BASH_COMMAND}"
-  echo "Linha: ${BASH_LINENO[0]} em $0"
-  echo "Código de saída: $exit_code"
-  echo "Log completo desta execução: $LOG_FILE"
-  rule '='
+  # Tudo num bloco só, redirecionado de uma vez: stdout e stderr passam por
+  # dois 'tee' independentes e sairiam intercalados, picotando a moldura.
+  {
+    echo ""
+    printf '%s%s%s\n' "$C_ERR" "$(ui_repeat '═' "$UI_WIDTH")" "$C_RESET"
+    printf '%s✗ FALHOU na etapa: %s%s\n' "$C_ERR" "$STEP" "$C_RESET"
+    echo ""
+    ui_row "Comando"         "${BASH_COMMAND}"
+    ui_row "Linha"           "${BASH_LINENO[0]} em $0"
+    ui_row "Código de saída" "$exit_code"
+    echo ""
+    ui_path "Log completo desta execução" "$LOG_FILE"
+    printf '%s%s%s\n' "$C_ERR" "$(ui_repeat '═' "$UI_WIDTH")" "$C_RESET"
+  } >&2
   exit "$exit_code"
 }
 trap on_error ERR
@@ -269,35 +324,33 @@ step() {
   STEP="$1"
   STEP_COUNT=$((STEP_COUNT + 1))
   echo ""
-  rule '='
-  printf ' [%02d] %s\n' "$STEP_COUNT" "$1"
-  rule '='
+  printf '%s%s%s\n' "$C_DIM" "$(ui_repeat '─' "$UI_WIDTH")" "$C_RESET"
+  printf '%s▌%s %s[%02d]%s %s%s%s\n' \
+    "$C_ACCENT" "$C_RESET" "$C_ACCENT" "$STEP_COUNT" "$C_RESET" "$C_TITLE" "$1" "$C_RESET"
 }
 
 fail() {
-  echo "[ERRO] $1" >&2
-  echo "Log completo desta execução: $LOG_FILE" >&2
+  err "$1"
+  err_cont "Log completo desta execução: $LOG_FILE"
   exit "${2:-1}"
 }
 
-rule '='
-echo " Mighty DOOM Revival — instalador VPS"
-rule '='
-kv "Log desta execução" "$LOG_FILE"
+ui_banner "»" "$C_ACCENT" "MIGHTY DOOM REVIVAL · instalador VPS" ""
+ui_path "Log desta execução" "$LOG_FILE"
 echo ""
-echo "Este instalador é seguro para VPS compartilhada com outros projetos:"
-echo "  - Detecta o reverse proxy: se já existe um nginx servindo 80/443"
-echo "    (de outros projetos), o Revival vira apenas MAIS UM site dele em"
-echo "    arquivo próprio + certbot; senão instala/usa o Caddy. Nunca briga"
-echo "    pelas portas nem edita sites de outros projetos."
-echo "  - Pergunta (ou detecta sozinho) o perfil de recursos da VPS:"
-echo "    1gb / 4gb / 8gb+ - o serviço systemd nasce otimizado para ele."
-echo "  - Só assume posse de pacotes (Node.js/Caddy/certbot) se ele mesmo"
-echo "    instalar porque estavam ausentes. Se já existiam, ficam marcados"
-echo "    como 'não é deste projeto' e scripts/uninstall.sh nunca os remove."
-echo "  - Cada decisão de posse é registrada permanentemente em:"
-echo "      $STATE_FILE"
-echo "    e reaproveitada nas próximas execuções (git pull && install.sh)."
+ui_text "Seguro para VPS compartilhada com outros projetos:"
+ui_bullet "Detecta o reverse proxy: se já existe um nginx servindo 80/443"
+ui_sub    "(de outros projetos), o Revival vira apenas MAIS UM site dele"
+ui_sub    "em arquivo próprio + certbot; senão instala/usa o Caddy. Nunca"
+ui_sub    "briga pelas portas nem edita sites de outros projetos."
+ui_bullet "Pergunta (ou detecta sozinho) o perfil de recursos da VPS:"
+ui_sub    "1gb / 4gb / 8gb+ — o serviço systemd nasce otimizado para ele."
+ui_bullet "Só assume posse de pacotes (Node.js/Caddy/certbot) se ele mesmo"
+ui_sub    "instalar porque estavam ausentes. Se já existiam, ficam marcados"
+ui_sub    "como 'não é deste projeto' e scripts/uninstall.sh nunca os remove."
+ui_bullet "Cada decisão de posse (●) é registrada permanentemente em:"
+ui_sub    "$STATE_FILE"
+ui_sub    "e reaproveitada nas próximas execuções."
 
 # Registro persistente de posse (deploy/.install-state): guarda, para sempre,
 # se cada dependência de sistema (Node.js, pacote Caddy, ...) foi instalada
@@ -334,8 +387,79 @@ if ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 RUN_USER="${SUDO_USER:-root}"
-echo "Usuário que vai rodar o serviço: $RUN_USER"
-echo "Diretório do repositório: $ROOT"
+ui_row "Usuário do serviço" "$RUN_USER"
+ui_row "Repositório" "$ROOT"
+
+# ---------------------------------------------------------------------------
+step "Atualizando o código do repositório (git pull)"
+
+# Rodar o instalador significa, na prática, "quero a versão nova no ar" — então
+# ele mesmo busca o código antes de qualquer outra coisa. Regras:
+#   - NUNCA descarta trabalho local: se há alteração em arquivo versionado, o
+#     pull é pulado com aviso, não com --force/--reset.
+#   - --ff-only: se o histórico divergiu, falha em vez de criar merge commit
+#     silencioso numa VPS de produção.
+#   - Sem prompt de credencial: um remoto privado falha na hora, em vez de
+#     travar o deploy num prompt invisível esperando senha.
+#   - Se o pull trocar este próprio arquivo, o script se reexecuta (o bash lê
+#     o script em pedaços conforme executa; seguir com o arquivo trocado no
+#     disco embaralha a execução).
+git_repo() {
+  git -c "safe.directory=$ROOT" -C "$ROOT" "$@"
+}
+
+GIT_PULL_CHANGED=0
+GIT_HEAD_BEFORE=""
+GIT_HEAD_AFTER=""
+
+if [[ "${SKIP_GIT_PULL:-0}" == "1" ]]; then
+  info "SKIP_GIT_PULL=1: atualização pulada a pedido; usando o código do disco."
+elif ! command -v git >/dev/null 2>&1; then
+  warn "git não está instalado nesta VPS: seguindo com o código que já está no disco."
+elif ! git_repo rev-parse --git-dir >/dev/null 2>&1; then
+  warn "$ROOT não é um clone git: seguindo com o código que já está no disco."
+elif ! git_repo remote get-url origin >/dev/null 2>&1; then
+  warn "O repositório não tem 'origin' configurado: nada para atualizar."
+elif [[ -n "$(git_repo status --porcelain --untracked-files=no)" ]]; then
+  warn "Há alterações locais em arquivos versionados. O pull foi PULADO para"
+  warn_cont "não sobrescrever seu trabalho:"
+  git_repo status --short --untracked-files=no | raw_block
+  warn_cont "Resolva (git stash / git checkout -- <arquivo>) ou rode de novo"
+  warn_cont "com SKIP_GIT_PULL=1 para instalar o código como está."
+else
+  GIT_BRANCH="$(git_repo rev-parse --abbrev-ref HEAD)"
+  GIT_HEAD_BEFORE="$(git_repo rev-parse HEAD)"
+  info "Branch '$GIT_BRANCH' em ${GIT_HEAD_BEFORE:0:7}; buscando atualizações no origin..."
+
+  if GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" \
+     git_repo pull --ff-only >>"$LOG_FILE" 2>&1; then
+    GIT_HEAD_AFTER="$(git_repo rev-parse HEAD)"
+    if [[ "$GIT_HEAD_BEFORE" == "$GIT_HEAD_AFTER" ]]; then
+      ok "Já estava na versão mais recente ($GIT_BRANCH @ ${GIT_HEAD_BEFORE:0:7})."
+    else
+      GIT_PULL_CHANGED=1
+      ok "Atualizado: ${GIT_HEAD_BEFORE:0:7} → ${GIT_HEAD_AFTER:0:7}"
+      # -n 8 no próprio git (e não '| head -n 8'): com pipefail, o head fecharia
+      # o cano antes da hora e o SIGPIPE no git derrubaria o instalador.
+      git_repo log --oneline --no-decorate -n 8 "$GIT_HEAD_BEFORE..$GIT_HEAD_AFTER" | raw_block
+    fi
+  else
+    warn "O 'git pull' falhou (histórico divergente, rede ou credencial)."
+    warn_cont "Seguindo com o código que já está no disco. Detalhes no log:"
+    warn_cont "$LOG_FILE"
+  fi
+fi
+
+# O pull trouxe uma versão nova DESTE script? Reexecuta uma única vez, para o
+# resto da instalação rodar sob o código novo do começo ao fim.
+if [[ "$GIT_PULL_CHANGED" == "1" && "${REVIVAL_INSTALL_RESTARTED:-0}" != "1" ]]; then
+  if ! git_repo diff --quiet "$GIT_HEAD_BEFORE" "$GIT_HEAD_AFTER" -- scripts/install.sh; then
+    warn "O pull trouxe uma versão nova de scripts/install.sh."
+    info "Reiniciando o instalador com o código novo (um log novo será aberto)."
+    export REVIVAL_INSTALL_RESTARTED=1
+    exec bash "$ROOT/scripts/install.sh" "$@"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 step "Instalando dependências base do sistema (apt)"
@@ -356,23 +480,26 @@ fi
 
 if ! state_decided NODE_INSTALLED_BY_SCRIPT; then
   if [[ "$NEED_NODE_INSTALL" == "1" ]]; then
-    echo "[OWNERSHIP] Node.js compatível ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
+    own "Node.js compatível ausente nesta VPS: será instalado agora e passa a"
+    own_cont "pertencer a este projeto."
     set_state NODE_INSTALLED_BY_SCRIPT 1
   else
-    echo "[OWNERSHIP] Node.js compatível já estava instalado nesta VPS antes deste projeto: NÃO é nosso, uninstall.sh nunca vai removê-lo."
+    own "Node.js compatível já estava instalado nesta VPS antes deste projeto:"
+    own_cont "NÃO é nosso, uninstall.sh nunca vai removê-lo."
     set_state NODE_INSTALLED_BY_SCRIPT 0
   fi
 fi
 
 if [[ "$NEED_NODE_INSTALL" == "1" ]]; then
-  echo "Instalando Node.js 24 LTS via NodeSource..."
+  info "Instalando Node.js 24 LTS via NodeSource..."
   curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   apt-get install -y nodejs
 fi
 
-node --version
-node -e "const s=require('node:sqlite'); const db=new s.DatabaseSync(':memory:'); db.exec('select 1'); db.close(); console.log('node:sqlite OK')" \
+ok "Node.js $(node --version) — $(command -v node)"
+node -e "const s=require('node:sqlite'); const db=new s.DatabaseSync(':memory:'); db.exec('select 1'); db.close()" \
   || fail "Node instalado não possui node:sqlite funcional."
+ok "node:sqlite funcional (o servidor usa o SQLite embutido do Node)"
 
 # ---------------------------------------------------------------------------
 step "Detectando o reverse proxy desta VPS (nginx compartilhado ou Caddy)"
@@ -383,32 +510,32 @@ step "Detectando o reverse proxy desta VPS (nginx compartilhado ou Caddy)"
 PROXY_KIND=""
 if systemctl is-active --quiet nginx 2>/dev/null; then
   PROXY_KIND="nginx"
-  echo "nginx ativo nesta VPS (possivelmente servindo outros projetos):"
-  echo "  o Revival será apenas mais um site dele, em arquivo próprio."
+  info "nginx ativo nesta VPS (possivelmente servindo outros projetos):"
+  info_cont "o Revival será apenas mais um site dele, em arquivo próprio."
 elif systemctl is-active --quiet caddy 2>/dev/null; then
   PROXY_KIND="caddy"
-  echo "Caddy ativo nesta VPS: o Revival será mais um domínio dele (arquivo próprio)."
+  info "Caddy ativo nesta VPS: o Revival será mais um domínio dele (arquivo próprio)."
 elif command -v nginx >/dev/null 2>&1; then
   PROXY_KIND="nginx"
-  echo "nginx instalado (inativo): será habilitado para servir o Revival."
+  info "nginx instalado (inativo): será habilitado para servir o Revival."
 elif command -v caddy >/dev/null 2>&1; then
   PROXY_KIND="caddy"
-  echo "Caddy instalado (inativo): será habilitado para servir o Revival."
+  info "Caddy instalado (inativo): será habilitado para servir o Revival."
 else
   # Nenhum dos dois instalado: antes de instalar, garantir que 80/443 não
   # pertencem a outro serviço desconhecido desta VPS.
   PORT80_LISTENER="$(ss -ltnp 2>/dev/null | awk '$4 ~ /:80$/  {print; exit}')"
   PORT443_LISTENER="$(ss -ltnp 2>/dev/null | awk '$4 ~ /:443$/ {print; exit}')"
   if [[ -n "$PORT80_LISTENER$PORT443_LISTENER" ]]; then
-    echo "----- quem escuta em 80/443 nesta VPS -----"
-    [[ -n "$PORT80_LISTENER" ]] && echo "$PORT80_LISTENER"
-    [[ -n "$PORT443_LISTENER" ]] && echo "$PORT443_LISTENER"
+    raw_header "quem escuta em 80/443 nesta VPS"
+    [[ -n "$PORT80_LISTENER" ]] && printf '%s\n' "$PORT80_LISTENER" | raw_block
+    [[ -n "$PORT443_LISTENER" ]] && printf '%s\n' "$PORT443_LISTENER" | raw_block
     fail "As portas 80/443 já estão ocupadas por um serviço que não é nginx nem Caddy. Decida qual proxy esta VPS usa (ou desative o serviço acima) antes de rodar o instalador de novo."
   fi
   PROXY_KIND="caddy"
-  echo "Nenhum proxy instalado: o Caddy será instalado (leve, HTTPS automático)."
+  info "Nenhum proxy instalado: o Caddy será instalado (leve, HTTPS automático)."
 fi
-echo "Reverse proxy escolhido: $PROXY_KIND"
+ok "Reverse proxy escolhido: $PROXY_KIND"
 set_state PROXY_KIND "$PROXY_KIND"
 
 if [[ "$PROXY_KIND" == "caddy" ]]; then
@@ -417,10 +544,12 @@ if [[ "$PROXY_KIND" == "caddy" ]]; then
 
   if ! state_decided CADDY_PACKAGE_INSTALLED_BY_SCRIPT; then
     if [[ "$CADDY_ALREADY_PRESENT" == "0" ]]; then
-      echo "[OWNERSHIP] Pacote 'caddy' ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
+      own "Pacote 'caddy' ausente nesta VPS: será instalado agora e passa a"
+      own_cont "pertencer a este projeto."
       set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 1
     else
-      echo "[OWNERSHIP] Pacote 'caddy' já estava instalado nesta VPS (pode ser de outro projeto): NÃO é nosso, uninstall.sh nunca vai remover o pacote."
+      own "Pacote 'caddy' já estava instalado nesta VPS (pode ser de outro"
+      own_cont "projeto): NÃO é nosso, uninstall.sh nunca vai remover o pacote."
       set_state CADDY_PACKAGE_INSTALLED_BY_SCRIPT 0
     fi
   fi
@@ -435,7 +564,7 @@ if [[ "$PROXY_KIND" == "caddy" ]]; then
     apt-get install -y caddy
   fi
 
-  caddy version
+  ok "Caddy $(caddy version | head -n1)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -472,14 +601,14 @@ DOMAIN="${DOMAIN:-}"
 if [[ -z "$DOMAIN" ]]; then
   if [[ -t 0 ]]; then
     if [[ -n "$DEFAULT_DOMAIN" ]]; then
-      read -rp "Domínio HTTPS do Revival (o mesmo que você vai usar no patcher) [$DEFAULT_DOMAIN]: " DOMAIN_INPUT
+      read -rp "$(ask "Domínio HTTPS do Revival (o mesmo que você vai usar no patcher) [$DEFAULT_DOMAIN]: ")" DOMAIN_INPUT
       DOMAIN="${DOMAIN_INPUT:-$DEFAULT_DOMAIN}"
     else
-      read -rp "Domínio HTTPS do Revival (o mesmo que você vai usar no patcher, ex: d.seudominio.com.br): " DOMAIN
+      read -rp "$(ask "Domínio HTTPS do Revival (o mesmo que você vai usar no patcher, ex: d.seudominio.com.br): ")" DOMAIN
     fi
   elif [[ -n "$DEFAULT_DOMAIN" ]]; then
     DOMAIN="$DEFAULT_DOMAIN"
-    echo "Sem terminal interativo; reutilizando domínio salvo: $DOMAIN"
+    info "Sem terminal interativo; reutilizando domínio salvo: $DOMAIN"
   fi
 fi
 
@@ -493,7 +622,7 @@ if ! [[ "$DOMAIN" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,
   fail "Domínio inválido: '$DOMAIN'. Use um hostname (ex: d.seudominio.com.br), sem http(s):// e sem caminho."
 fi
 
-echo "Domínio configurado: $DOMAIN"
+ok "Domínio configurado: $DOMAIN"
 set_env_var PUBLIC_DOMAIN "$DOMAIN"
 
 # Checagem opcional de DNS (não bloqueia o deploy: propagação pode demorar).
@@ -505,8 +634,9 @@ except Exception:
     print('')" "$DOMAIN" 2>/dev/null || true)"
   PUBLIC_IP="$(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
   if [[ -n "$RESOLVED_IP" && -n "$PUBLIC_IP" && "$RESOLVED_IP" != "$PUBLIC_IP" ]]; then
-    echo "[AVISO] $DOMAIN resolve para $RESOLVED_IP, mas o IP público deste servidor parece ser $PUBLIC_IP."
-    echo "[AVISO] Se o DNS ainda não propagou, a emissão do certificado abaixo pode falhar temporariamente."
+    warn "$DOMAIN resolve para $RESOLVED_IP, mas o IP público deste servidor"
+    warn_cont "parece ser $PUBLIC_IP. Se o DNS ainda não propagou, a emissão do"
+    warn_cont "certificado abaixo pode falhar temporariamente."
   fi
 fi
 
@@ -531,7 +661,7 @@ CURRENT_TOKEN="$(get_env_var REVIVAL_ADMIN_TOKEN)"
 if [[ -z "$CURRENT_TOKEN" || "$CURRENT_TOKEN" == "change-me" ]]; then
   NEW_TOKEN="$(openssl rand -hex 32)"
   set_env_var REVIVAL_ADMIN_TOKEN "$NEW_TOKEN"
-  echo "REVIVAL_ADMIN_TOKEN gerado automaticamente (veja o resumo final)."
+  ok "REVIVAL_ADMIN_TOKEN gerado automaticamente (veja o resumo final)."
 fi
 
 # ---------------------------------------------------------------------------
@@ -552,7 +682,7 @@ else
   DETECTED_PROFILE="8gb"
 fi
 
-echo "Detectado: ${TOTAL_MEM_MB} MB de RAM, ${CPU_COUNT} CPU(s) -> perfil '${DETECTED_PROFILE}'"
+info "Detectado: ${TOTAL_MEM_MB} MB de RAM, ${CPU_COUNT} CPU(s) — perfil '${DETECTED_PROFILE}'"
 
 # Prioridade: variável de ambiente RAM_PROFILE > perfil salvo no .install-state
 # > menu interativo (com o detectado como padrão) > detectado.
@@ -562,11 +692,12 @@ fi
 
 if [[ -z "$RAM_PROFILE" && -t 0 ]]; then
   echo ""
-  echo "Perfis disponíveis:"
-  echo "  [1] 1gb  - VPS pequena (~1-2 GB RAM): heap 256MB, limites rígidos de RAM"
-  echo "  [2] 4gb  - VPS média   (~4 GB RAM):    heap 768MB, limites folgados"
-  echo "  [3] 8gb+ - VPS grande  (8 GB+ RAM):    heap 2GB, limites amplos"
-  read -rp "Escolha o perfil para esta VPS [${DETECTED_PROFILE}]: " PROFILE_INPUT
+  ui_text "Perfis disponíveis:"
+  ui_row "[1] 1gb" "VPS pequena (~1-2 GB RAM) · heap 256MB, limites rígidos"
+  ui_row "[2] 4gb" "VPS média (~4 GB RAM) · heap 768MB, limites folgados"
+  ui_row "[3] 8gb+" "VPS grande (8 GB+ RAM) · heap 2GB, limites amplos"
+  echo ""
+  read -rp "$(ask "Escolha o perfil para esta VPS [${DETECTED_PROFILE}]: ")" PROFILE_INPUT
   RAM_PROFILE="${PROFILE_INPUT:-$DETECTED_PROFILE}"
 fi
 
@@ -593,22 +724,23 @@ case "$RAM_PROFILE" in
     ;;
 esac
 
-echo "Perfil escolhido: $RAM_PROFILE"
-echo "  Node --max-old-space-size=${HEAP_MB}MB (heap do V8)"
-echo "  systemd MemoryHigh=$MEM_HIGH / MemoryMax=$MEM_MAX / TasksMax=$TASKS_MAX"
-echo "  UV_THREADPOOL=$UV_TP (pools de I/O concorrentes com ${CPU_COUNT} CPU(s))"
+ok "Perfil escolhido: $RAM_PROFILE"
+ui_row "heap do V8" "${HEAP_MB}MB (--max-old-space-size)"
+ui_row "limites systemd" "MemoryHigh=$MEM_HIGH · MemoryMax=$MEM_MAX · TasksMax=$TASKS_MAX"
+ui_row "UV_THREADPOOL" "$UV_TP (I/O concorrente com ${CPU_COUNT} CPU(s))"
 set_state RAM_PROFILE_STATE "$RAM_PROFILE"
 
 # Em VPS pequena, swap é o que separa um pico de memória de um OOM-kill.
 if [[ "$RAM_PROFILE" == "1gb" ]]; then
   SWAP_MB="$(( $(awk '/^SwapTotal/ {print $2}' /proc/meminfo) / 1024 ))"
   if (( SWAP_MB == 0 )); then
-    echo "[AVISO] Esta VPS NÃO tem swap. Em uma VPS de ~1 GB isso costuma causar"
-    echo "[AVISO] OOM-kill sob pico. Considere criar 1-2 GB de swap, ex.:"
-    echo "[AVISO]   fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
-    echo "[AVISO]   (echo '/swapfile none swap sw 0 0' >> /etc/fstab)"
+    warn "Esta VPS NÃO tem swap. Em uma VPS de ~1 GB isso costuma causar"
+    warn_cont "OOM-kill sob pico. Considere criar 1-2 GB de swap:"
+    ui_cmd "fallocate -l 2G /swapfile && chmod 600 /swapfile" 2
+    ui_cmd "mkswap /swapfile && swapon /swapfile" 2
+    ui_cmd "echo '/swapfile none swap sw 0 0' >> /etc/fstab" 2
   else
-    echo "Swap presente: ${SWAP_MB} MB (bom para picos de memória)."
+    ok "Swap presente: ${SWAP_MB} MB (bom para picos de memória)."
   fi
 fi
 
@@ -616,14 +748,15 @@ fi
 step "GameData local (bootstrap opcional)"
 
 if [[ ! -f "$SERVER_DIR/data/game-data.json" ]]; then
-  echo "server/data/game-data.json ausente; tentando importar snapshot comunitário..."
+  info "server/data/game-data.json ausente; tentando importar snapshot comunitário..."
   if ! python3 "$ROOT/scripts/fetch-community-gamedata.py"; then
-    echo "[AVISO] Não foi possível baixar o GameData automaticamente."
-    echo "[AVISO] O servidor sobe mesmo assim, mas /revival/health reportará game_data_loaded=false"
-    echo "[AVISO] até você colocar um server/data/game-data.json válido e reiniciar o serviço."
+    warn "Não foi possível baixar o GameData automaticamente."
+    warn_cont "O servidor sobe mesmo assim, mas /revival/health vai reportar"
+    warn_cont "game_data_loaded=false até você colocar um server/data/game-data.json"
+    warn_cont "válido e reiniciar o serviço."
   fi
 else
-  echo "server/data/game-data.json já existe; mantendo."
+  ok "server/data/game-data.json já existe; mantendo."
 fi
 
 # ---------------------------------------------------------------------------
@@ -686,9 +819,9 @@ fi
 
 ADMIN_FIRST_ACCESS=0
 if [[ -f "$ADMIN_DB" && "$ADMIN_DB_READ_OK" != "1" ]]; then
-  echo "[AVISO] Não foi possível ler o banco ($ADMIN_DB) para conferir os"
-  echo "[AVISO] admins existentes. Por segurança NENHUMA senha foi alterada"
-  echo "[AVISO] agora; use o link de recuperação abaixo se precisar trocá-la."
+  warn "Não foi possível ler o banco ($ADMIN_DB) para conferir os admins"
+  warn_cont "existentes. Por segurança NENHUMA senha foi alterada agora; use o"
+  warn_cont "link de recuperação abaixo se precisar trocá-la."
   ADMIN_EMAILS="(banco ilegível — nada foi alterado)"
 elif [[ -z "$ADMIN_EMAILS" ]]; then
   ADMIN_FIRST_ACCESS=1
@@ -698,7 +831,7 @@ if [[ "$ADMIN_FIRST_ACCESS" == "1" ]]; then
   ADMIN_EMAIL="$(get_env_var REVIVAL_ADMIN_EMAIL || true)"
   [[ -z "$ADMIN_EMAIL" ]] && ADMIN_EMAIL="admin@revival.local"
   if [[ -t 0 ]]; then
-    read -rp "E-mail do Super Admin do painel (primeiro acesso) [$ADMIN_EMAIL]: " ADMIN_EMAIL_INPUT
+    read -rp "$(ask "E-mail do Super Admin do painel (primeiro acesso) [$ADMIN_EMAIL]: ")" ADMIN_EMAIL_INPUT
     [[ -n "${ADMIN_EMAIL_INPUT:-}" ]] && ADMIN_EMAIL="$ADMIN_EMAIL_INPUT"
   fi
   ADMIN_EMAIL="$(echo "$ADMIN_EMAIL" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
@@ -710,7 +843,7 @@ if [[ "$ADMIN_FIRST_ACCESS" == "1" ]]; then
     "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$(date +%s)" > "$ADMIN_CREDENTIALS_FILE"
   chown "$RUN_USER":"$RUN_USER" "$ADMIN_CREDENTIALS_FILE" 2>/dev/null || true
   chmod 600 "$ADMIN_CREDENTIALS_FILE"
-  echo "Primeiro acesso: Super Admin '$ADMIN_EMAIL' criado (senha no resumo final)."
+  ok "Primeiro acesso: Super Admin '$ADMIN_EMAIL' criado (senha no resumo final)."
 
   # Se o serviço já está rodando (reinstalação com banco novo), reinicia para
   # aplicar as credenciais no boot; se nunca subiu, elas já são consumidas no
@@ -722,13 +855,13 @@ if [[ "$ADMIN_FIRST_ACCESS" == "1" ]]; then
         sleep 1
       done
     else
-      echo "[AVISO] Não consegui reiniciar $SERVICE_NAME; o Super Admin nasce no próximo boot."
+      warn "Não consegui reiniciar $SERVICE_NAME; o Super Admin nasce no próximo boot."
     fi
   fi
 else
-  echo "Super Admin já cadastrado neste servidor (senha preservada):"
+  info "Super Admin já cadastrado neste servidor (senha preservada):"
   while IFS= read -r admin_line; do
-    [[ -n "$admin_line" ]] && echo "  - $admin_line"
+    [[ -n "$admin_line" ]] && ui_bullet "$admin_line"
   done <<< "$ADMIN_EMAILS"
 fi
 
@@ -745,7 +878,7 @@ printf '{\n  "token": "%s",\n  "expires_at": %d,\n  "created_at": %d\n}\n' \
 chown "$RUN_USER":"$RUN_USER" "$ADMIN_RECOVER_TOKEN_FILE" 2>/dev/null || true
 chmod 600 "$ADMIN_RECOVER_TOKEN_FILE"
 ADMIN_RECOVER_EXPIRES_LABEL="$(date -d "@$ADMIN_RECOVER_EXPIRES_AT" '+%H:%M:%S' 2>/dev/null || echo "daqui a 10 minutos")"
-echo "Link de recuperação do Super Admin gerado (válido até $ADMIN_RECOVER_EXPIRES_LABEL; veja o resumo final)."
+ok "Link de recuperação do Super Admin gerado (válido até $ADMIN_RECOVER_EXPIRES_LABEL; veja o resumo final)."
 
 # ---------------------------------------------------------------------------
 step "Rodando testes automatizados do servidor (gate de deploy)"
@@ -801,16 +934,15 @@ verify_service_active() {
   local tries=0
   while (( tries < 10 )); do
     if systemctl is-active --quiet "$svc"; then
-      echo "[OK] $svc ativo."
+      ok "$svc ativo."
       return 0
     fi
     sleep 1
     tries=$((tries + 1))
   done
-  echo "[ERRO] Serviço $svc não está ativo." >&2
-  echo "----- journalctl -u $svc (últimas 80 linhas) -----" >&2
-  journalctl -u "$svc" -n 80 --no-pager >&2 || true
-  echo "----------------------------------------------------" >&2
+  err "Serviço $svc não está ativo."
+  raw_header "journalctl -u $svc (últimas 80 linhas)" >&2
+  journalctl -u "$svc" -n 80 --no-pager 2>&1 | raw_block >&2 || true
   return 1
 }
 
@@ -823,7 +955,7 @@ verify_service_active "$SERVICE_NAME" || fail "O serviço $SERVICE_NAME não sub
 # uninstall): outros serviços/domínios da VPS também costumam precisar de
 # 80/443.
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
-  echo "ufw ativo: liberando portas 80/tcp e 443/tcp..."
+  info "ufw ativo: liberando portas 80/tcp e 443/tcp..."
   ufw allow 80/tcp >/dev/null || true
   ufw allow 443/tcp >/dev/null || true
 fi
@@ -849,9 +981,11 @@ fi
 CERT_RENEWAL_CONF="/etc/letsencrypt/renewal/$DOMAIN.conf"
 
 if [[ -f "$NGINX_SITE_FILE" ]] && grep -q "ssl_certificate" "$NGINX_SITE_FILE" && [[ -f "$CERT_RENEWAL_CONF" ]]; then
-  echo "Site nginx do Revival já existe com HTTPS ativo (gerenciado pelo certbot): mantendo $NGINX_SITE_FILE intacto."
+  ok "Site nginx do Revival já existe com HTTPS ativo (gerenciado pelo certbot):"
+  ok_cont "mantendo $NGINX_SITE_FILE intacto."
 else
-  echo "[OWNERSHIP] Escrevendo somente o site deste projeto em $NGINX_SITE_FILE - nenhum outro site/domínio do nginx é tocado."
+  own "Escrevendo somente o site deste projeto em $NGINX_SITE_FILE —"
+  own_cont "nenhum outro site/domínio do nginx é tocado."
   cat > "$NGINX_SITE_FILE" <<EOF
 # Site do Mighty DOOM Revival (criado por scripts/install.sh).
 # O HTTPS é ativado abaixo pelo certbot --nginx, que edita APENAS este arquivo.
@@ -883,7 +1017,7 @@ fi
 
 if systemctl is-active --quiet nginx; then
   systemctl reload nginx
-  echo "[OK] nginx recarregado (reload; conexões de outros sites não caem)."
+  ok "nginx recarregado (reload; conexões de outros sites não caem)."
 else
   systemctl enable nginx >/dev/null
   systemctl restart nginx
@@ -894,22 +1028,25 @@ verify_service_active "nginx" || fail "O serviço nginx não subiu. Veja o journ
 # --- certbot: emissor/renovador do certificado Let's Encrypt ---
 if ! command -v certbot >/dev/null 2>&1; then
   if ! state_decided CERTBOT_INSTALLED_BY_SCRIPT; then
-    echo "[OWNERSHIP] certbot ausente nesta VPS: será instalado agora e passa a pertencer a este projeto."
+    own "certbot ausente nesta VPS: será instalado agora e passa a pertencer"
+    own_cont "a este projeto."
     set_state CERTBOT_INSTALLED_BY_SCRIPT 1
   fi
   apt-get install -y --no-install-recommends certbot python3-certbot-nginx
 else
   if ! state_decided CERTBOT_INSTALLED_BY_SCRIPT; then
-    echo "[OWNERSHIP] certbot já existia nesta VPS (pode ser de outro projeto): NÃO é nosso, uninstall.sh nunca vai removê-lo."
+    own "certbot já existia nesta VPS (pode ser de outro projeto): NÃO é"
+    own_cont "nosso, uninstall.sh nunca vai removê-lo."
     set_state CERTBOT_INSTALLED_BY_SCRIPT 0
   fi
 fi
-certbot --version
+ok "$(certbot --version 2>&1 | head -n1)"
 
 if [[ -f "$CERT_RENEWAL_CONF" ]]; then
-  echo "Certificado Let's Encrypt de $DOMAIN já existe; pulando emissão (a renovação é automática; ver etapa abaixo)."
+  ok "Certificado Let's Encrypt de $DOMAIN já existe; pulando emissão"
+  ok_cont "(a renovação é automática; ver etapa abaixo)."
 else
-  echo "Emitindo certificado Let's Encrypt para $DOMAIN (certbot --nginx --redirect)..."
+  info "Emitindo certificado Let's Encrypt para $DOMAIN (certbot --nginx --redirect)..."
   if ! certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect --register-unsafely-without-email >>"$LOG_FILE" 2>&1; then
     tail -n 30 "$LOG_FILE" >&2 || true
     fail "O certbot não conseguiu emitir o certificado de $DOMAIN. Confira se o DNS do domínio aponta para o IP público desta VPS e se as portas 80/443 estão liberadas no firewall da VPS/provedor."
@@ -923,11 +1060,13 @@ fi
 # pode remover). Se já houver qualquer mecanismo (nosso ou de outro projeto),
 # não tocamos nele.
 if systemctl list-timers --all --no-legend 2>/dev/null | grep -q 'certbot'; then
-  echo "Timer do certbot já existe nesta VPS: renovação já é automática, nada a instalar."
+  ok "Timer do certbot já existe nesta VPS: renovação já é automática, nada a instalar."
 elif [[ -f /etc/cron.d/certbot-renew ]] || crontab -l 2>/dev/null | grep -q 'certbot renew'; then
-  echo "Já existe automação de renovação do certbot nesta VPS (cron): nada a instalar."
+  ok "Já existe automação de renovação do certbot nesta VPS (cron): nada a instalar."
   if ! state_decided CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT; then
-    echo "[OWNERSHIP] Essa automação não foi criada por nós (ou é compartilhada com outros certificados da VPS): fica marcada como NÃO nossa e o uninstall.sh não vai removê-la."
+    own "Essa automação não foi criada por nós (ou é compartilhada com outros"
+    own_cont "certificados da VPS): fica marcada como NÃO nossa e o uninstall.sh"
+    own_cont "não vai removê-la."
     set_state CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT 0
   fi
 else
@@ -938,7 +1077,7 @@ else
 0 3,15 * * * root $CERTBOT_BIN renew --quiet --deploy-hook "systemctl reload nginx"
 EOF
   chmod 644 /etc/cron.d/certbot-renew
-  echo "[OK] Cron de renovação instalado: /etc/cron.d/certbot-renew (2x ao dia)."
+  ok "Cron de renovação instalado: /etc/cron.d/certbot-renew (2x ao dia)."
   set_state CERTBOT_RENEW_CRON_INSTALLED_BY_SCRIPT 1
 fi
 
@@ -957,7 +1096,8 @@ CADDY_SITE_FILE="$CADDY_CONF_DIR/mighty-doom-revival.caddy"
 mkdir -p "$CADDY_CONF_DIR"
 
 if [[ ! -f "$CADDYFILE" ]]; then
-  echo "[OWNERSHIP] /etc/caddy/Caddyfile não existia: criando um Caddyfile global mínimo que só importa $CADDY_CONF_DIR/*.caddy."
+  own "/etc/caddy/Caddyfile não existia: criando um Caddyfile global mínimo"
+  own_cont "que só importa $CADDY_CONF_DIR/*.caddy."
   cat > "$CADDYFILE" <<EOF
 # Caddyfile global desta VPS. Cada site/domínio deve ficar em seu próprio
 # arquivo dentro de $CADDY_CONF_DIR/ (importado abaixo), nunca editado
@@ -970,13 +1110,16 @@ EOF
   fi
 else
   if ! state_decided CADDYFILE_CREATED_BY_SCRIPT; then
-    echo "[OWNERSHIP] /etc/caddy/Caddyfile já existia nesta VPS (não foi criado por nós; pode ter blocos de outros projetos). Este instalador NUNCA sobrescreve esse arquivo."
+    own "/etc/caddy/Caddyfile já existia nesta VPS (não foi criado por nós;"
+    own_cont "pode ter blocos de outros projetos). Este instalador NUNCA"
+    own_cont "sobrescreve esse arquivo."
     set_state CADDYFILE_CREATED_BY_SCRIPT 0
   fi
   if grep -qE "^[[:space:]]*import[[:space:]]+${CADDY_CONF_DIR}/\*\.caddy[[:space:]]*\$" "$CADDYFILE"; then
-    echo "[OWNERSHIP] Caddyfile já importa $CADDY_CONF_DIR/*.caddy; nada a alterar nele."
+    own "Caddyfile já importa $CADDY_CONF_DIR/*.caddy; nada a alterar nele."
   else
-    echo "[OWNERSHIP] Acrescentando só a linha 'import $CADDY_CONF_DIR/*.caddy' ao final do Caddyfile existente (100% do conteúdo atual é preservado)."
+    own "Acrescentando só a linha 'import $CADDY_CONF_DIR/*.caddy' ao final do"
+    own_cont "Caddyfile existente (100% do conteúdo atual é preservado)."
     {
       echo ""
       echo "# Acrescentado por mighty-doom-revival scripts/install.sh (idempotente):"
@@ -989,7 +1132,8 @@ else
   fi
 fi
 
-echo "[OWNERSHIP] Escrevendo somente o site deste projeto em $CADDY_SITE_FILE - nenhum outro arquivo/domínio é tocado."
+own "Escrevendo somente o site deste projeto em $CADDY_SITE_FILE —"
+own_cont "nenhum outro arquivo/domínio é tocado."
 cat > "$CADDY_SITE_FILE" <<EOF
 $DOMAIN {
 	encode gzip
@@ -1005,7 +1149,8 @@ fi
 
 systemctl enable caddy >/dev/null
 if systemctl is-active --quiet caddy; then
-  echo "Caddy já estava ativo (pode estar servindo outros domínios): usando 'reload' em vez de 'restart' para não derrubar as conexões deles."
+  info "Caddy já estava ativo (pode estar servindo outros domínios): usando"
+  info_cont "'reload' em vez de 'restart' para não derrubar as conexões deles."
   systemctl reload caddy
 else
   systemctl restart caddy
@@ -1029,11 +1174,11 @@ for _ in $(seq 1 20); do
 done
 
 if [[ "$LOCAL_OK" != "1" ]]; then
-  echo "----- journalctl -u $SERVICE_NAME (últimas 80 linhas) -----" >&2
-  journalctl -u "$SERVICE_NAME" -n 80 --no-pager >&2 || true
+  raw_header "journalctl -u $SERVICE_NAME (últimas 80 linhas)" >&2
+  journalctl -u "$SERVICE_NAME" -n 80 --no-pager 2>&1 | raw_block >&2 || true
   fail "O servidor Node não respondeu em http://127.0.0.1:8080/revival/health."
 fi
-cat "$LOCAL_HEALTH"
+raw_block < "$LOCAL_HEALTH"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -1050,16 +1195,44 @@ for _ in $(seq 1 60); do
 done
 
 if [[ "$PUBLIC_OK" != "1" ]]; then
-  echo "----- journalctl -u $PROXY_KIND (últimas 80 linhas) -----" >&2
-  journalctl -u "$PROXY_KIND" -n 80 --no-pager >&2 || true
+  raw_header "journalctl -u $PROXY_KIND (últimas 80 linhas)" >&2
+  journalctl -u "$PROXY_KIND" -n 80 --no-pager 2>&1 | raw_block >&2 || true
   fail "Não foi possível validar https://$DOMAIN/revival/health. Confira se o DNS de $DOMAIN aponta para o IP público deste servidor e se as portas 80/443 estão liberadas no firewall da VPS/provedor de nuvem (ex: AWS Security Group, painel da hospedagem)."
 fi
-cat "$PUBLIC_HEALTH"
+raw_block < "$PUBLIC_HEALTH"
 echo ""
 
-python3 - "$PUBLIC_HEALTH" <<'PYEOF' || fail "O health check público não atende o gate de produção (versão, research_mode, contract_revision ou identidade). Veja os erros acima."
+C_ERR="$C_ERR" C_WARN="$C_WARN" C_OK="$C_OK" C_RESET="$C_RESET" \
+  python3 - "$PUBLIC_HEALTH" <<'PYEOF' || fail "O health check público não atende o gate de produção (versão, research_mode, contract_revision ou identidade). Veja os erros acima."
 import json
+import os
 import sys
+
+# Mesmos icones/cores do instalador, herdados por ambiente.
+ERR = os.environ.get("C_ERR", "")
+WARN = os.environ.get("C_WARN", "")
+OK = os.environ.get("C_OK", "")
+RESET = os.environ.get("C_RESET", "")
+
+# Um gate de deploy nao pode morrer por causa de um icone: se a saida nao
+# aceita UTF-8 (locale exotico, PYTHONIOENCODING antigo), cai para ASCII.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
+
+def icon(glyph, fallback):
+    try:
+        glyph.encode(sys.stdout.encoding or "ascii")
+        return glyph
+    except Exception:
+        return fallback
+
+
+I_OK = icon("✓", "OK")
+I_ERR = icon("✗", "X")
+I_WARN = icon("▲", "!")
 
 path = sys.argv[1]
 with open(path, encoding="utf-8") as handle:
@@ -1086,15 +1259,15 @@ if not payload.get("build_id"):
     errors.append("health sem build_id: os bytes em execução não estão identificados")
 
 if errors:
-    print("[ERRO] health incompatível com o patcher: " + "; ".join(errors))
+    print(ERR + I_ERR + " health incompatível com o patcher: " + "; ".join(errors) + RESET)
     sys.exit(1)
 
 if payload.get("game_data_loaded") is not True:
-    print("[AVISO] game_data_loaded=false: coloque um server/data/game-data.json real e rode")
-    print("[AVISO]   sudo systemctl restart mighty-doom-revival")
-    print("[AVISO] antes de gerar o APK final com o patcher.")
+    print(WARN + I_WARN + RESET + " game_data_loaded=false: coloque um server/data/game-data.json")
+    print("  real, rode 'sudo systemctl restart mighty-doom-revival' e só então")
+    print("  gere o APK final com o patcher.")
 
-print("Revival HTTPS validado: client_version/api_version compatíveis com o patcher.")
+print(OK + I_OK + RESET + " Revival HTTPS validado: client_version/api_version batem com o patcher.")
 PYEOF
 
 # ---------------------------------------------------------------------------
@@ -1130,7 +1303,7 @@ ls -1t "$LOG_DIR"/install-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
 # Cada bloco é uma pergunta que ela vai ter ("como entro?", "cadê o link do
 # APK?", "o que o uninstall pode apagar?"), com os segredos destacados e os
 # links isolados em linha própria para copiar sem cortar caractere.
-ui_banner "CONCLUÍDO — Mighty DOOM Revival está 100% no ar" "https://$DOMAIN"
+ui_banner "✓" "$C_OK" "CONCLUÍDO — Mighty DOOM Revival está 100% no ar" "https://$DOMAIN"
 
 ui_section "SERVIÇO"
 ui_row "Site"               "https://$DOMAIN/"
@@ -1226,8 +1399,9 @@ ui_step 1 "Gere o APK local no Revival Studio (scripts/revival-studio),"
 ui_step_cont "menu 'APK -> Aplicar endpoint', informando '$DOMAIN'"
 ui_step_cont "como servidor."
 echo ""
-ui_step 2 "Para atualizar depois de mudanças no código:"
-ui_cmd "git pull && sudo ./scripts/install.sh" 6
+ui_step 2 "Para atualizar depois de mudanças no código (o instalador já"
+ui_step_cont "faz o git pull sozinho):"
+ui_cmd "sudo ./scripts/install.sh" 6
 
 echo ""
 printf '%s%s%s\n' "$C_DIM" "$(ui_repeat '─' "$UI_WIDTH")" "$C_RESET"
